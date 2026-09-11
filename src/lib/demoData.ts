@@ -207,13 +207,13 @@ const restoreListeners = new Set<(event: RestoreProgressEvent) => void>()
 export const demoBridge: LisDiscordBridge = {
   async connectBot() {
     await delay()
-    return { connected: true, botTag: 'LisDiscord Bot#0421', botAvatarUrl: null, guildCount: guilds.length }
+    return { connected: true, botTag: 'LisDiscord Bot#0421', botAvatarUrl: null, guildCount: guilds.length, messageContentEnabled: true }
   },
   async disconnectBot() {
     await delay()
   },
   async getStatus() {
-    return { connected: true, botTag: 'LisDiscord Bot#0421', botAvatarUrl: null, guildCount: guilds.length }
+    return { connected: true, botTag: 'LisDiscord Bot#0421', botAvatarUrl: null, guildCount: guilds.length, messageContentEnabled: true }
   },
   async listGuilds() {
     await delay()

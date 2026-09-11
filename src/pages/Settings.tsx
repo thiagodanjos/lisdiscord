@@ -16,7 +16,7 @@ export default function Settings({ status, onStatusChange }: { status: BotStatus
 
   async function disconnect() {
     await bridge.disconnectBot()
-    onStatusChange({ connected: false, botTag: null, botAvatarUrl: null, guildCount: 0 })
+    onStatusChange({ connected: false, botTag: null, botAvatarUrl: null, guildCount: 0, messageContentEnabled: false })
   }
 
   return (
@@ -29,7 +29,10 @@ export default function Settings({ status, onStatusChange }: { status: BotStatus
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-text">{status.botTag}</p>
-              <p className="text-xs text-muted">{status.guildCount} servidores</p>
+              <p className="text-xs text-muted">
+                {status.guildCount} servidores
+                {!status.messageContentEnabled && ' · sem Message Content Intent (transcripts sem texto)'}
+              </p>
             </div>
             <Button variant="dark" onClick={disconnect}>
               <LogOut size={14} />

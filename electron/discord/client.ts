@@ -16,15 +16,31 @@ import { handleGameInteraction, registerCommandsForGuild } from './games'
  */
 class DiscordManager {
   private client: Client | null = null
+  private messageContentEnabled = false
 
   async connect(token: string): Promise<BotStatus> {
     if (this.client) {
       await this.disconnect()
     }
 
-    const client = new Client({
-      intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
-    })
+    // A Message Content Intent é privilegiada — só funciona se tiveres ativado o
+    // interruptor no Developer Portal. Se não tiveres, tentar pedi-la faz o login
+    // inteiro falhar ("Used disallowed intents"), não só os transcripts. Por
+    // isso tentamos primeiro com ela e, se for recusada, voltamos a tentar sem —
+    // o resto da app continua a funcionar, só os transcripts ficam sem conteúdo.
+    let client: Client
+    try {
+      client = await this.tryLogin(token, true)
+      this.messageContentEnabled = true
+    } catch (err) {
+      if (!isDisallowedIntentsError(err)) throw asFriendlyError(err)
+      try {
+        client = await this.tryLogin(token, false)
+        this.messageContentEnabled = false
+      } catch (err2) {
+        throw asFriendlyError(err2)
+      }
+    }
 
     client.on(Events.InteractionCreate, async (interaction) => {
       if (!interaction.isChatInputCommand()) return
@@ -37,17 +53,23 @@ class DiscordManager {
       await registerCommandsForGuild(guild, enabledGameIds(guild.id)).catch(() => undefined)
     })
 
-    try {
-      await client.login(token)
-    } catch (err) {
-      await client.destroy().catch(() => undefined)
-      const message = err instanceof Error ? err.message : String(err)
-      throw new Error(`Não foi possível ligar com este token: ${message}`)
-    }
-
     this.client = client
     await this.registerAllCommands()
     return this.getStatus()
+  }
+
+  private async tryLogin(token: string, withMessageContent: boolean): Promise<Client> {
+    const intents = withMessageContent
+      ? [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+      : [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+    const client = new Client({ intents })
+    try {
+      await client.login(token)
+      return client
+    } catch (err) {
+      await client.destroy().catch(() => undefined)
+      throw err
+    }
   }
 
   async disconnect(): Promise<void> {
@@ -67,13 +89,14 @@ class DiscordManager {
 
   async getStatus(): Promise<BotStatus> {
     if (!this.client || !this.client.isReady() || !this.client.user) {
-      return { connected: false, botTag: null, botAvatarUrl: null, guildCount: 0 }
+      return { connected: false, botTag: null, botAvatarUrl: null, guildCount: 0, messageContentEnabled: false }
     }
     return {
       connected: true,
       botTag: this.client.user.tag,
       botAvatarUrl: this.client.user.displayAvatarURL({ size: 128 }),
       guildCount: this.client.guilds.cache.size,
+      messageContentEnabled: this.messageContentEnabled,
     }
   }
 
@@ -107,6 +130,16 @@ class DiscordManager {
       })
     }
   }
+}
+
+function isDisallowedIntentsError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return /disallowed intents/i.test(message)
+}
+
+function asFriendlyError(err: unknown): Error {
+  const message = err instanceof Error ? err.message : String(err)
+  return new Error(`Não foi possível ligar com este token: ${message}`)
 }
 
 export const discordManager = new DiscordManager()

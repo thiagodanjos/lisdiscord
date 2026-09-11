@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FileText, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, FileText, Plus, Trash2 } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatRelativeDate } from '../lib/format'
 import { Button, Card, ConfirmDialog, EmptyState, Modal, SectionHeading } from '../components/ui'
@@ -14,6 +14,7 @@ export default function Transcripts() {
   const [creating, setCreating] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [toDelete, setToDelete] = useState<TranscriptSummary | null>(null)
+  const [messageContentEnabled, setMessageContentEnabled] = useState(true)
 
   const [guildId, setGuildId] = useState('')
   const [channelId, setChannelId] = useState('')
@@ -21,6 +22,7 @@ export default function Transcripts() {
 
   useEffect(() => {
     load()
+    bridge.getStatus().then((s) => setMessageContentEnabled(s.messageContentEnabled))
   }, [])
 
   useEffect(() => {
@@ -71,6 +73,17 @@ export default function Transcripts() {
           </Button>
         }
       />
+
+      {!messageContentEnabled && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-warning/30 bg-warning/5 px-3.5 py-3 text-xs text-warning">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+          <span>
+            A Message Content Intent não está ativada no bot, por isso os transcripts saem sem o texto das mensagens
+            (só autor, data e anexos). Ativa-a em Bot → Privileged Gateway Intents no Developer Portal e volta a
+            ligar o bot para teres o conteúdo completo.
+          </span>
+        </div>
+      )}
 
       {!loading && transcripts.length === 0 && (
         <EmptyState title="Sem transcripts" description="Exporta o histórico de um canal para arquivares ou consultares mais tarde." />
