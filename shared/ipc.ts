@@ -6,11 +6,19 @@ import type {
   BotStatus,
   ChannelPickerEntry,
   DiffEntry,
+  EmbedDraft,
+  GameId,
+  GameInfo,
+  GameSettings,
+  Giveaway,
   GuildSummary,
+  MemberSearchResult,
+  ModerationLogEntry,
   RestoreOptions,
   RestoreProgressEvent,
   ScheduleConfig,
   ScheduleFrequency,
+  TimeoutDuration,
   Transcript,
   TranscriptSummary,
 } from './types'
@@ -39,6 +47,26 @@ export const IPC = {
   deleteSchedule: 'schedules:delete',
   getSettings: 'settings:get',
   openDataDir: 'settings:openDataDir',
+
+  sendEmbed: 'messaging:sendEmbed',
+
+  searchMembers: 'moderation:searchMembers',
+  banMember: 'moderation:ban',
+  kickMember: 'moderation:kick',
+  timeoutMember: 'moderation:timeout',
+  removeTimeout: 'moderation:removeTimeout',
+  lockChannel: 'moderation:lockChannel',
+  unlockChannel: 'moderation:unlockChannel',
+  listModerationLog: 'moderation:log',
+
+  createGiveaway: 'giveaways:create',
+  listGiveaways: 'giveaways:list',
+  endGiveaway: 'giveaways:end',
+  deleteGiveaway: 'giveaways:delete',
+
+  listGames: 'games:list',
+  getGameSettings: 'games:settings:get',
+  setGameSettings: 'games:settings:set',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -69,4 +97,24 @@ export interface LisDiscordBridge {
 
   getSettings(): Promise<AppSettings>
   openDataDir(): Promise<void>
+
+  sendEmbed(guildId: string, channelId: string, embed: EmbedDraft): Promise<void>
+
+  searchMembers(guildId: string, query: string): Promise<MemberSearchResult[]>
+  banMember(guildId: string, userId: string, reason: string, deleteMessageSeconds: number): Promise<void>
+  kickMember(guildId: string, userId: string, reason: string): Promise<void>
+  timeoutMember(guildId: string, userId: string, durationMs: TimeoutDuration, reason: string): Promise<void>
+  removeTimeout(guildId: string, userId: string): Promise<void>
+  lockChannel(guildId: string, channelId: string): Promise<void>
+  unlockChannel(guildId: string, channelId: string): Promise<void>
+  listModerationLog(): Promise<ModerationLogEntry[]>
+
+  createGiveaway(guildId: string, channelId: string, prize: string, durationMs: number, winnerCount: number): Promise<Giveaway>
+  listGiveaways(): Promise<Giveaway[]>
+  endGiveaway(id: string): Promise<Giveaway>
+  deleteGiveaway(id: string): Promise<void>
+
+  listGames(): Promise<GameInfo[]>
+  getGameSettings(guildId: string): Promise<GameSettings>
+  setGameSettings(guildId: string, gameId: GameId, enabled: boolean): Promise<GameSettings>
 }

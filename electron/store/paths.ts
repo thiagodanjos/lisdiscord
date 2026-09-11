@@ -11,6 +11,9 @@ export const paths = {
   settingsFile: path.join(root, 'settings.json'),
   schedulesFile: path.join(root, 'schedules.json'),
   tokenFile: path.join(root, 'token.enc'),
+  giveawaysFile: path.join(root, 'giveaways.json'),
+  gameSettingsFile: path.join(root, 'game-settings.json'),
+  moderationLogFile: path.join(root, 'moderation-log.json'),
 }
 
 export function ensureDataDirs(): void {

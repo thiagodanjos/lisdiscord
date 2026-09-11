@@ -1,14 +1,18 @@
-import { Client, GatewayIntentBits, PermissionsBitField } from 'discord.js'
+import { Client, Events, GatewayIntentBits, PermissionsBitField } from 'discord.js'
 import type { BotStatus, GuildSummary } from '../../shared/types'
+import { enabledGameIds } from '../store/gameSettings'
+import { handleGameInteraction, registerCommandsForGuild } from './games'
 
 /**
  * Envolve o Client do discord.js num singleton simples: liga, desliga e dá
- * acesso ao client ativo aos outros módulos (backup, restore, transcript).
+ * acesso ao client ativo aos outros módulos (backup, restore, transcript,
+ * moderação, sorteios, jogos).
  *
  * Intents pedidos de propósito ao mínimo: `Guilds` (obrigatório para o cache
  * de servidores/canais/cargos funcionar) e `GuildMessages` + `MessageContent`
  * (só usados para os transcripts). Sem `GuildMembers` — não precisamos da
- * lista de membros, só da contagem aproximada que já vem com o servidor.
+ * lista de membros, só da contagem aproximada que já vem com o servidor
+ * (e a pesquisa de membros usa a REST API, que não exige este intent).
  */
 class DiscordManager {
   private client: Client | null = null
@@ -22,6 +26,17 @@ class DiscordManager {
       intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
     })
 
+    client.on(Events.InteractionCreate, async (interaction) => {
+      if (!interaction.isChatInputCommand()) return
+      await handleGameInteraction(interaction).catch((err) => {
+        console.error('Erro a processar comando de jogo:', err)
+      })
+    })
+
+    client.on(Events.GuildCreate, async (guild) => {
+      await registerCommandsForGuild(guild, enabledGameIds(guild.id)).catch(() => undefined)
+    })
+
     try {
       await client.login(token)
     } catch (err) {
@@ -31,6 +46,7 @@ class DiscordManager {
     }
 
     this.client = client
+    await this.registerAllCommands()
     return this.getStatus()
   }
 
@@ -80,6 +96,16 @@ class DiscordManager {
     }
 
     return out.sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /** Regista os slash commands (jogos) em todos os servidores, de acordo com as preferências guardadas de cada um. */
+  async registerAllCommands(): Promise<void> {
+    const client = this.getClient()
+    for (const guild of client.guilds.cache.values()) {
+      await registerCommandsForGuild(guild, enabledGameIds(guild.id)).catch((err) => {
+        console.error(`Falha a registar comandos em ${guild.name}:`, err)
+      })
+    }
   }
 }
 

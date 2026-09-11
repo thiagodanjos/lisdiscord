@@ -1,6 +1,6 @@
 import { AlertTriangle, Loader2, X } from 'lucide-react'
 import { type ButtonHTMLAttributes, type ReactNode, forwardRef, useEffect } from 'react'
-import { cn } from '../lib/utils'
+import { cn, initials } from '../lib/utils'
 
 export function Logo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   const text = { sm: 'text-lg', md: 'text-2xl', lg: 'text-4xl' }[size]
@@ -61,6 +61,15 @@ export function Badge({ children, tone = 'default' }: { children: ReactNode; ton
     <span className={cn('inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold', styles)}>
       {children}
     </span>
+  )
+}
+
+export function Avatar({ name, color = '#5865F2', size = 'md' }: { name: string; color?: string; size?: 'sm' | 'md' | 'lg' }) {
+  const dims = { sm: 'size-8 text-xs', md: 'size-10 text-sm', lg: 'size-16 text-xl' }[size]
+  return (
+    <div className={cn('flex shrink-0 items-center justify-center rounded-full font-bold text-white', dims)} style={{ backgroundColor: color }}>
+      {initials(name)}
+    </div>
   )
 }
 

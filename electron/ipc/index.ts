@@ -7,10 +7,18 @@ import type {
   ChannelKind,
   ChannelPickerEntry,
   DiffEntry,
+  EmbedDraft,
+  GameId,
+  GameInfo,
+  GameSettings,
+  Giveaway,
   GuildSummary,
+  MemberSearchResult,
+  ModerationLogEntry,
   RestoreOptions,
   ScheduleConfig,
   ScheduleFrequency,
+  TimeoutDuration,
   TranscriptSummary,
 } from '../../shared/types'
 import { IPC } from '../../shared/ipc'
@@ -19,9 +27,16 @@ import { createBackup } from '../discord/backup'
 import { restoreBackup } from '../discord/restore'
 import { diffBackups } from '../discord/diff'
 import { exportTranscript, newTranscriptId } from '../discord/transcript'
+import { sendEmbedMessage } from '../discord/messaging'
+import * as moderation from '../discord/moderation'
+import { concludeGiveaway, postGiveawayMessage } from '../discord/giveaways'
+import { GAMES, registerCommandsForGuild } from '../discord/games'
 import * as backupsStore from '../store/backups'
 import * as transcriptsStore from '../store/transcripts'
 import * as schedulesStore from '../store/schedules'
+import * as giveawaysStore from '../store/giveaways'
+import * as gameSettingsStore from '../store/gameSettings'
+import * as moderationLogStore from '../store/moderationLog'
 import { getAppSettings, loadToken, openDataDir, saveToken } from '../store/settings'
 
 const CHANNEL_KIND_MAP: Record<number, ChannelKind | undefined> = {
@@ -126,7 +141,126 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
 
   ipcMain.handle(IPC.getSettings, async (): Promise<AppSettings> => getAppSettings())
   ipcMain.handle(IPC.openDataDir, async (): Promise<void> => openDataDir())
+
+  // ---- Mensagens ----
+  ipcMain.handle(IPC.sendEmbed, async (_e, guildId: string, channelId: string, embed: EmbedDraft): Promise<void> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    await sendEmbedMessage(guild, channelId, embed)
+  })
+
+  // ---- Moderação ----
+  ipcMain.handle(IPC.searchMembers, async (_e, guildId: string, query: string): Promise<MemberSearchResult[]> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    return moderation.searchMembers(guild, query)
+  })
+
+  ipcMain.handle(
+    IPC.banMember,
+    async (_e, guildId: string, userId: string, reason: string, deleteMessageSeconds: number): Promise<void> => {
+      const guild = await discordManager.getClient().guilds.fetch(guildId)
+      const member = await guild.members.fetch(userId).catch(() => null)
+      await moderation.banMember(guild, userId, reason, deleteMessageSeconds)
+      moderationLogStore.logModerationAction({ guildId, guildName: guild.name, action: 'ban', targetTag: member?.user.tag ?? userId, reason: reason || null })
+    },
+  )
+
+  ipcMain.handle(IPC.kickMember, async (_e, guildId: string, userId: string, reason: string): Promise<void> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    const member = await guild.members.fetch(userId)
+    const tag = member.user.tag
+    await moderation.kickMember(guild, userId, reason)
+    moderationLogStore.logModerationAction({ guildId, guildName: guild.name, action: 'kick', targetTag: tag, reason: reason || null })
+  })
+
+  ipcMain.handle(
+    IPC.timeoutMember,
+    async (_e, guildId: string, userId: string, durationMs: TimeoutDuration, reason: string): Promise<void> => {
+      const guild = await discordManager.getClient().guilds.fetch(guildId)
+      const member = await guild.members.fetch(userId)
+      const tag = member.user.tag
+      await moderation.timeoutMember(guild, userId, durationMs, reason)
+      moderationLogStore.logModerationAction({ guildId, guildName: guild.name, action: 'timeout', targetTag: tag, reason: reason || null })
+    },
+  )
+
+  ipcMain.handle(IPC.removeTimeout, async (_e, guildId: string, userId: string): Promise<void> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    const member = await guild.members.fetch(userId)
+    const tag = member.user.tag
+    await moderation.removeTimeout(guild, userId)
+    moderationLogStore.logModerationAction({ guildId, guildName: guild.name, action: 'removeTimeout', targetTag: tag, reason: null })
+  })
+
+  ipcMain.handle(IPC.lockChannel, async (_e, guildId: string, channelId: string): Promise<void> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    const channel = await guild.channels.fetch(channelId)
+    await moderation.lockChannel(guild, channelId)
+    moderationLogStore.logModerationAction({ guildId, guildName: guild.name, action: 'lockChannel', targetTag: `#${channel?.name ?? channelId}`, reason: null })
+  })
+
+  ipcMain.handle(IPC.unlockChannel, async (_e, guildId: string, channelId: string): Promise<void> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    const channel = await guild.channels.fetch(channelId)
+    await moderation.unlockChannel(guild, channelId)
+    moderationLogStore.logModerationAction({ guildId, guildName: guild.name, action: 'unlockChannel', targetTag: `#${channel?.name ?? channelId}`, reason: null })
+  })
+
+  ipcMain.handle(IPC.listModerationLog, async (): Promise<ModerationLogEntry[]> => moderationLogStore.listModerationLog())
+
+  // ---- Sorteios ----
+  ipcMain.handle(
+    IPC.createGiveaway,
+    async (_e, guildId: string, channelId: string, prize: string, durationMs: number, winnerCount: number): Promise<Giveaway> => {
+      const guild = await discordManager.getClient().guilds.fetch(guildId)
+      const channel = await guild.channels.fetch(channelId)
+      const endsAt = new Date(Date.now() + durationMs).toISOString()
+      const messageId = await postGiveawayMessage(guild, channelId, prize, endsAt, winnerCount)
+      return giveawaysStore.createGiveaway({
+        guildId,
+        guildName: guild.name,
+        channelId,
+        channelName: channel?.name ?? channelId,
+        messageId,
+        prize,
+        winnerCount,
+        endsAt,
+      })
+    },
+  )
+
+  ipcMain.handle(IPC.listGiveaways, async (): Promise<Giveaway[]> => giveawaysStore.listGiveaways())
+
+  ipcMain.handle(IPC.endGiveaway, async (_e, id: string): Promise<Giveaway> => concludeGiveawayById(id))
+
+  ipcMain.handle(IPC.deleteGiveaway, async (_e, id: string): Promise<void> => giveawaysStore.deleteGiveaway(id))
+
+  // ---- Jogos ----
+  ipcMain.handle(IPC.listGames, async (): Promise<GameInfo[]> => GAMES)
+  ipcMain.handle(IPC.getGameSettings, async (_e, guildId: string): Promise<GameSettings> => gameSettingsStore.getGameSettings(guildId))
+  ipcMain.handle(IPC.setGameSettings, async (_e, guildId: string, gameId: GameId, enabled: boolean): Promise<GameSettings> => {
+    const updated = gameSettingsStore.setGameSetting(guildId, gameId, enabled)
+    if (discordManager.isConnected()) {
+      const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
+      if (guild) await registerCommandsForGuild(guild, gameSettingsStore.enabledGameIds(guildId)).catch(() => undefined)
+    }
+    return updated
+  })
 }
+
+async function concludeGiveawayById(id: string): Promise<Giveaway> {
+  const giveaway = giveawaysStore.getGiveaway(id)
+  if (!giveaway) throw new Error('Sorteio não encontrado.')
+  if (giveaway.ended) return giveaway
+  if (!giveaway.messageId) throw new Error('Sorteio sem mensagem associada.')
+
+  const guild = await discordManager.getClient().guilds.fetch(giveaway.guildId)
+  const winners = await concludeGiveaway(guild, giveaway.channelId, giveaway.messageId, giveaway.prize, giveaway.winnerCount)
+  const updated = giveawaysStore.markConcluded(id, winners)
+  if (!updated) throw new Error('Falha ao guardar o resultado do sorteio.')
+  return updated
+}
+
+const GIVEAWAY_CHECK_INTERVAL_MS = 30_000
 
 /** Corre à parte do registo dos handlers: religa agendamentos e, se houver token guardado, liga o bot sozinho. */
 export async function bootstrap(): Promise<void> {
@@ -145,4 +279,15 @@ export async function bootstrap(): Promise<void> {
     backupsStore.saveBackup(backup, 'scheduled')
     backupsStore.pruneOldBackups(schedule.guildId, schedule.keepLast)
   })
+
+  setInterval(() => {
+    if (!discordManager.isConnected()) return
+    for (const giveaway of giveawaysStore.listGiveaways()) {
+      if (giveaway.ended) continue
+      if (new Date(giveaway.endsAt).getTime() > Date.now()) continue
+      concludeGiveawayById(giveaway.id).catch((err) => {
+        console.error(`Falha a concluir o sorteio "${giveaway.prize}":`, err)
+      })
+    }
+  }, GIVEAWAY_CHECK_INTERVAL_MS)
 }

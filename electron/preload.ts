@@ -36,6 +36,29 @@ const bridge: LisDiscordBridge = {
 
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   openDataDir: () => ipcRenderer.invoke(IPC.openDataDir),
+
+  sendEmbed: (guildId, channelId, embed) => ipcRenderer.invoke(IPC.sendEmbed, guildId, channelId, embed),
+
+  searchMembers: (guildId, query) => ipcRenderer.invoke(IPC.searchMembers, guildId, query),
+  banMember: (guildId, userId, reason, deleteMessageSeconds) =>
+    ipcRenderer.invoke(IPC.banMember, guildId, userId, reason, deleteMessageSeconds),
+  kickMember: (guildId, userId, reason) => ipcRenderer.invoke(IPC.kickMember, guildId, userId, reason),
+  timeoutMember: (guildId, userId, durationMs, reason) =>
+    ipcRenderer.invoke(IPC.timeoutMember, guildId, userId, durationMs, reason),
+  removeTimeout: (guildId, userId) => ipcRenderer.invoke(IPC.removeTimeout, guildId, userId),
+  lockChannel: (guildId, channelId) => ipcRenderer.invoke(IPC.lockChannel, guildId, channelId),
+  unlockChannel: (guildId, channelId) => ipcRenderer.invoke(IPC.unlockChannel, guildId, channelId),
+  listModerationLog: () => ipcRenderer.invoke(IPC.listModerationLog),
+
+  createGiveaway: (guildId, channelId, prize, durationMs, winnerCount) =>
+    ipcRenderer.invoke(IPC.createGiveaway, guildId, channelId, prize, durationMs, winnerCount),
+  listGiveaways: () => ipcRenderer.invoke(IPC.listGiveaways),
+  endGiveaway: (id) => ipcRenderer.invoke(IPC.endGiveaway, id),
+  deleteGiveaway: (id) => ipcRenderer.invoke(IPC.deleteGiveaway, id),
+
+  listGames: () => ipcRenderer.invoke(IPC.listGames),
+  getGameSettings: (guildId) => ipcRenderer.invoke(IPC.getGameSettings, guildId),
+  setGameSettings: (guildId, gameId, enabled) => ipcRenderer.invoke(IPC.setGameSettings, guildId, gameId, enabled),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

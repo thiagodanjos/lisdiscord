@@ -12,6 +12,10 @@ import Diff from './pages/Diff'
 import Scheduler from './pages/Scheduler'
 import Transcripts from './pages/Transcripts'
 import TranscriptDetail from './pages/TranscriptDetail'
+import Messaging from './pages/Messaging'
+import Moderation from './pages/Moderation'
+import Giveaways from './pages/Giveaways'
+import Games from './pages/Games'
 import SettingsPage from './pages/Settings'
 import type { BotStatus } from '../shared/types'
 
@@ -44,6 +48,10 @@ export default function App() {
         <Route path="/agendamentos" element={<Scheduler />} />
         <Route path="/transcripts" element={<Transcripts />} />
         <Route path="/transcripts/:id" element={<TranscriptDetail />} />
+        <Route path="/mensagens" element={<Messaging />} />
+        <Route path="/moderacao" element={<Moderation />} />
+        <Route path="/sorteios" element={<Giveaways />} />
+        <Route path="/jogos" element={<Games />} />
         <Route path="/definicoes" element={<SettingsPage status={status} onStatusChange={setStatus} />} />
       </Routes>
     </AppShell>

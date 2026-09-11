@@ -5,13 +5,26 @@ import type {
   ChannelBackup,
   DiffEntry,
   EmojiBackup,
+  GameId,
+  GameSettings,
+  Giveaway,
   GuildSummary,
+  MemberSearchResult,
+  ModerationLogEntry,
   RestoreProgressEvent,
   RoleBackup,
   ScheduleConfig,
   Transcript,
   TranscriptSummary,
 } from '../../shared/types'
+
+const DEMO_GAMES = [
+  { id: 'dado' as const, name: 'Dado', command: '/dado', description: 'Lança um dado (padrão 6 lados, configurável).' },
+  { id: 'moeda' as const, name: 'Cara ou Coroa', command: '/moeda', description: 'Atira uma moeda ao ar.' },
+  { id: 'ppt' as const, name: 'Pedra, Papel ou Tesoura', command: '/ppt', description: 'Joga contra o bot.' },
+  { id: 'oitobola' as const, name: 'Bola 8 Mágica', command: '/oitobola', description: 'Faz uma pergunta e recebe uma resposta misteriosa.' },
+  { id: 'trivia' as const, name: 'Trivia', command: '/trivia', description: 'Responde a uma pergunta de escolha múltipla contra o relógio.' },
+]
 
 // Tudo neste ficheiro é fictício — nomes, servidores, mensagens. Serve para
 // navegar a app sem precisar de um bot real ligado (modo demonstração).
@@ -110,6 +123,39 @@ let schedulesData: ScheduleConfig[] = [
     keepLast: 10,
   },
 ]
+
+const membersData: MemberSearchResult[] = [
+  { id: 'u10', tag: 'ana.dev#0001', avatarUrl: null, isTimedOut: false, isBot: false },
+  { id: 'u11', tag: 'ricardo_c#4521', avatarUrl: null, isTimedOut: false, isBot: false },
+  { id: 'u12', tag: 'sofia_gamer#7788', avatarUrl: null, isTimedOut: false, isBot: false },
+  { id: 'u13', tag: 'joao99#0420', avatarUrl: null, isTimedOut: true, isBot: false },
+  { id: 'u14', tag: 'trouble_maker#6969', avatarUrl: null, isTimedOut: false, isBot: false },
+  { id: 'u15', tag: 'LisDiscord Bot#0421', avatarUrl: null, isTimedOut: false, isBot: true },
+]
+
+let moderationLogData: ModerationLogEntry[] = [
+  { id: 'ml1', guildId: 'g1', guildName: 'Comunidade LisDiscord', action: 'timeout', targetTag: 'joao99#0420', reason: 'Spam repetido no #geral', date: daysAgo(0) },
+  { id: 'ml2', guildId: 'g1', guildName: 'Comunidade LisDiscord', action: 'lockChannel', targetTag: '#memes', reason: null, date: daysAgo(1) },
+]
+
+let giveawaysData: Giveaway[] = [
+  {
+    id: 'giv1',
+    guildId: 'g1',
+    guildName: 'Comunidade LisDiscord',
+    channelId: 'c4',
+    channelName: 'geral',
+    messageId: 'demo-msg-1',
+    prize: 'Nitro de 1 mês',
+    winnerCount: 1,
+    createdAt: daysAgo(2),
+    endsAt: daysAgo(1),
+    ended: true,
+    winners: ['sofia_gamer#7788'],
+  },
+]
+
+const gameSettingsData = new Map<string, GameSettings>()
 
 const transcriptsData: Transcript[] = [
   {
@@ -292,5 +338,110 @@ export const demoBridge: LisDiscordBridge = {
   },
   async openDataDir() {
     await delay()
+  },
+
+  async sendEmbed() {
+    await delay(500)
+  },
+
+  async searchMembers(_guildId, query) {
+    await delay()
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+    return membersData.filter((m) => m.tag.toLowerCase().includes(q))
+  },
+  async banMember(guildId, userId, reason) {
+    await delay(400)
+    const member = membersData.find((m) => m.id === userId)
+    const guild = guilds.find((g) => g.id === guildId)
+    moderationLogData = [{ id: crypto.randomUUID(), guildId, guildName: guild?.name ?? 'Servidor', action: 'ban', targetTag: member?.tag ?? userId, reason: reason || null, date: new Date().toISOString() }, ...moderationLogData]
+  },
+  async kickMember(guildId, userId, reason) {
+    await delay(400)
+    const member = membersData.find((m) => m.id === userId)
+    const guild = guilds.find((g) => g.id === guildId)
+    moderationLogData = [{ id: crypto.randomUUID(), guildId, guildName: guild?.name ?? 'Servidor', action: 'kick', targetTag: member?.tag ?? userId, reason: reason || null, date: new Date().toISOString() }, ...moderationLogData]
+  },
+  async timeoutMember(guildId, userId, _durationMs, reason) {
+    await delay(400)
+    const member = membersData.find((m) => m.id === userId)
+    const guild = guilds.find((g) => g.id === guildId)
+    if (member) member.isTimedOut = true
+    moderationLogData = [{ id: crypto.randomUUID(), guildId, guildName: guild?.name ?? 'Servidor', action: 'timeout', targetTag: member?.tag ?? userId, reason: reason || null, date: new Date().toISOString() }, ...moderationLogData]
+  },
+  async removeTimeout(guildId, userId) {
+    await delay(300)
+    const member = membersData.find((m) => m.id === userId)
+    const guild = guilds.find((g) => g.id === guildId)
+    if (member) member.isTimedOut = false
+    moderationLogData = [{ id: crypto.randomUUID(), guildId, guildName: guild?.name ?? 'Servidor', action: 'removeTimeout', targetTag: member?.tag ?? userId, reason: null, date: new Date().toISOString() }, ...moderationLogData]
+  },
+  async lockChannel(guildId, channelId) {
+    await delay(300)
+    const guild = guilds.find((g) => g.id === guildId)
+    const channel = makeChannels().find((c) => c.id === channelId)
+    moderationLogData = [{ id: crypto.randomUUID(), guildId, guildName: guild?.name ?? 'Servidor', action: 'lockChannel', targetTag: `#${channel?.name ?? channelId}`, reason: null, date: new Date().toISOString() }, ...moderationLogData]
+  },
+  async unlockChannel(guildId, channelId) {
+    await delay(300)
+    const guild = guilds.find((g) => g.id === guildId)
+    const channel = makeChannels().find((c) => c.id === channelId)
+    moderationLogData = [{ id: crypto.randomUUID(), guildId, guildName: guild?.name ?? 'Servidor', action: 'unlockChannel', targetTag: `#${channel?.name ?? channelId}`, reason: null, date: new Date().toISOString() }, ...moderationLogData]
+  },
+  async listModerationLog() {
+    await delay()
+    return moderationLogData
+  },
+
+  async createGiveaway(guildId, channelId, prize, durationMs, winnerCount) {
+    await delay(500)
+    const guild = guilds.find((g) => g.id === guildId)
+    const channel = makeChannels().find((c) => c.id === channelId)
+    const giveaway: Giveaway = {
+      id: crypto.randomUUID(),
+      guildId,
+      guildName: guild?.name ?? 'Servidor',
+      channelId,
+      channelName: channel?.name ?? channelId,
+      messageId: `demo-msg-${crypto.randomUUID().slice(0, 6)}`,
+      prize,
+      winnerCount,
+      createdAt: new Date().toISOString(),
+      endsAt: new Date(Date.now() + durationMs).toISOString(),
+      ended: false,
+      winners: [],
+    }
+    giveawaysData = [giveaway, ...giveawaysData]
+    return giveaway
+  },
+  async listGiveaways() {
+    await delay()
+    return giveawaysData
+  },
+  async endGiveaway(id) {
+    await delay(500)
+    const winners = membersData.filter((m) => !m.isBot).slice(0, 1).map((m) => m.tag)
+    giveawaysData = giveawaysData.map((g) => (g.id === id ? { ...g, ended: true, winners } : g))
+    return giveawaysData.find((g) => g.id === id) as Giveaway
+  },
+  async deleteGiveaway(id) {
+    await delay()
+    giveawaysData = giveawaysData.filter((g) => g.id !== id)
+  },
+
+  async listGames() {
+    await delay()
+    return DEMO_GAMES
+  },
+  async getGameSettings(guildId) {
+    await delay()
+    return gameSettingsData.get(guildId) ?? { enabled: Object.fromEntries(DEMO_GAMES.map((g) => [g.id, true])) as Record<GameId, boolean> }
+  },
+  async setGameSettings(guildId, gameId, enabled) {
+    await delay()
+    const current = gameSettingsData.get(guildId) ?? { enabled: Object.fromEntries(DEMO_GAMES.map((g) => [g.id, true])) as Record<GameId, boolean> }
+    const updated = { enabled: { ...current.enabled, [gameId]: enabled } }
+    gameSettingsData.set(guildId, updated)
+    return updated
   },
 }

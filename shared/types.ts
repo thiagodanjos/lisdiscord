@@ -190,3 +190,87 @@ export interface AppSettings {
   theme: 'dark' | 'light'
   dataDir: string
 }
+
+// ==========================================================================
+// Mensagens (embeds)
+// ==========================================================================
+
+export interface EmbedField {
+  name: string
+  value: string
+  inline: boolean
+}
+
+export interface EmbedDraft {
+  title: string
+  description: string
+  color: string // hex, ex: "#5865F2"
+  imageUrl: string
+  thumbnailUrl: string
+  footer: string
+  authorName: string
+  fields: EmbedField[]
+  timestamp: boolean
+}
+
+// ==========================================================================
+// Moderação
+// ==========================================================================
+
+export interface MemberSearchResult {
+  id: string
+  tag: string
+  avatarUrl: string | null
+  isTimedOut: boolean
+  isBot: boolean
+}
+
+export type ModerationAction = 'ban' | 'kick' | 'timeout' | 'removeTimeout'
+
+export type TimeoutDuration = 60_000 | 300_000 | 600_000 | 3_600_000 | 86_400_000 | 604_800_000
+
+export interface ModerationLogEntry {
+  id: string
+  guildId: string
+  guildName: string
+  action: ModerationAction | 'lockChannel' | 'unlockChannel'
+  targetTag: string
+  reason: string | null
+  date: string
+}
+
+// ==========================================================================
+// Sorteios
+// ==========================================================================
+
+export interface Giveaway {
+  id: string
+  guildId: string
+  guildName: string
+  channelId: string
+  channelName: string
+  messageId: string | null
+  prize: string
+  winnerCount: number
+  createdAt: string
+  endsAt: string
+  ended: boolean
+  winners: string[]
+}
+
+// ==========================================================================
+// Jogos (slash commands)
+// ==========================================================================
+
+export type GameId = 'dado' | 'moeda' | 'ppt' | 'oitobola' | 'trivia'
+
+export interface GameInfo {
+  id: GameId
+  name: string
+  command: string
+  description: string
+}
+
+export interface GameSettings {
+  enabled: Record<GameId, boolean>
+}
