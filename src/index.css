@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   LisDiscord — identidade dark + blurple (própria, distinta do LisFilms)
+   ========================================================================== */
+@theme {
+  --color-bg: #0e0f18;
+  --color-sidebar: #0a0b12;
+  --color-raised: #14151f;
+  --color-card: #181a26;
+  --color-card-hover: #1f2130;
+  --color-border: #262838;
+  --color-border-strong: #343650;
+
+  --color-text: #f2f3f8;
+  --color-muted: #9497ad;
+  --color-faint: #61637a;
+
+  --color-accent: #5865f2;
+  --color-accent-hover: #717cf4;
+  --color-accent-soft: #1c1f3d;
+  --color-danger: #ed4245;
+  --color-warning: #f0b232;
+  --color-success: #3ba55c;
+
+  --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
+
+  --shadow-glow: 0 0 24px 0 rgb(88 101 242 / 0.35);
+  --shadow-card: 0 8px 30px rgb(0 0 0 / 0.4);
+
+  --radius-2xl: 1.25rem;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  overflow: hidden;
+}
+
+::selection {
+  background: rgb(88 101 242 / 0.3);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2b2d40;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #3a3d58;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.text-brand-gradient {
+  background: linear-gradient(92deg, #5865f2 0%, #a4acf7 55%, #5865f2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
