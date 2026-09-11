@@ -1,4 +1,4 @@
-# LisDiscord 🤖
+# LisDiscord - feito por Thiago Souza (é nois)
 
 App desktop para **gerir servidores Discord** — backups, restauro, moderação, mensagens, sorteios e mini-jogos — tudo a correr no teu computador, com o teu próprio bot. Sem hospedagem, sem servidor externo, sem conta a criar: os dados ficam só na tua máquina.
 
