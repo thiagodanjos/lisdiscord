@@ -1,4 +1,4 @@
-# LisDiscord 🤖
+# LisDiscord 
 
 App desktop para fazer **backup, restauro e gestão de servidores Discord** — corre inteiramente no teu computador, com o teu próprio bot. Sem hospedagem, sem servidor externo, sem conta a criar: os dados ficam só na tua máquina.
 
