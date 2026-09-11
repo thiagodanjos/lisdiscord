@@ -65,6 +65,12 @@ class DiscordManager {
     const client = new Client({ intents })
     try {
       await client.login(token)
+      // `login()` resolve assim que a ligação ao gateway é estabelecida — não
+      // espera que os servidores cheguem (isso só acontece com o evento
+      // 'ready'). Sem isto, listGuilds() logo a seguir podia devolver uma
+      // lista vazia ou incompleta, sobretudo num servidor onde o bot acabou
+      // de entrar.
+      await waitForReady(client)
       return client
     } catch (err) {
       await client.destroy().catch(() => undefined)
@@ -130,6 +136,23 @@ class DiscordManager {
       })
     }
   }
+}
+
+function waitForReady(client: Client, timeoutMs = 20_000): Promise<void> {
+  if (client.isReady()) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      client.off(Events.ClientReady, onReady)
+      reject(new Error('A Discord demorou demasiado tempo a enviar a lista de servidores. Tenta ligar outra vez.'))
+    }, timeoutMs)
+
+    function onReady() {
+      clearTimeout(timeout)
+      resolve()
+    }
+
+    client.once(Events.ClientReady, onReady)
+  })
 }
 
 function isDisallowedIntentsError(err: unknown): boolean {
