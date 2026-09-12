@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-electron
+dist-ssr
+release
+data
+.env
+.env.*
+src
+public
+docs
+*.md
+.git

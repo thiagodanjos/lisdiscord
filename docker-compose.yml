@@ -1,0 +1,15 @@
+# Corre o bot autónomo com "docker compose up -d". Cria um ficheiro .env
+# ao lado deste ficheiro (ver .env.example) com o teu DISCORD_TOKEN antes
+# de arrancar — ver docs/deploy-oracle.md para o guia passo a passo.
+services:
+  lisdiscord-bot:
+    build: .
+    container_name: lisdiscord-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - lisdiscord-data:/app/data
+
+volumes:
+  lisdiscord-data:

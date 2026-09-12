@@ -19,6 +19,8 @@ npm run dev
 
 Isto abre a app já em modo demonstração — dá para navegar tudo sem preparar nada.
 
+**Queres o bot online 24/7, sem depender do teu computador estar ligado?** Há um bot autónomo (`server/`) que corre sem Electron nem interface, pronto a pôr num servidor grátis (Oracle Cloud Always Free) com Docker — ver **[docs/deploy-oracle.md](docs/deploy-oracle.md)**.
+
 ## O que é (e o que não é)
 
 O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidores — nunca uma conta de utilizador automatizada. Só consegue aceder ao que um bot normal consegue: estrutura do servidor, mensagens de canais onde está presente (com a Message Content Intent ativada) e ações de moderação para as quais lhe deste permissão. Não mexe em DMs nem em servidores onde não foi convidado, e não faz nada sem seres tu a pedir.
@@ -87,6 +89,8 @@ npm run dev             # app em modo desenvolvimento (Vite + Electron)
 npm run lint             # ESLint
 npm run build             # build de produção + instalador (electron-builder)
 npm run build:unpacked  # build de produção sem gerar instalador
+npm run bot               # bot autónomo, sem Electron (precisa de DISCORD_TOKEN no ambiente)
+npm run bot:dev           # o mesmo, mas reinicia sozinho quando o código muda
 ```
 
 Os executáveis para Windows, macOS e Linux são construídos automaticamente por GitHub Actions a cada versão (ver `.github/workflows/release.yml`) e publicados em [Releases](https://github.com/thiagodanjos/lisdiscord/releases).
@@ -120,11 +124,18 @@ src/
 ├── pages/                 # uma página por rota
 ├── lib/                    # bridge (IPC real vs. modo demonstração), formatação
 └── store/                   # estado da interface (Zustand)
+
+server/
+└── index.ts             # bot autónomo — a mesma lógica de electron/discord e
+                          # electron/store, sem Electron nem interface (ver
+                          # docs/deploy-oracle.md)
 ```
+
+Na raiz, `Dockerfile` e `docker-compose.yml` empacotam o `server/` para correr num servidor 24/7.
 
 ## Dados locais
 
-Tudo fica na pasta de dados da app (acessível em Definições → Abrir pasta): backups em JSON, transcripts em JSON, agendamentos, sorteios, registo de moderação e o token do bot (encriptado). Nada sai do teu computador exceto os pedidos normais à API da Discord.
+Na app desktop, tudo fica na pasta de dados da app (acessível em Definições → Abrir pasta): backups em JSON, transcripts em JSON, agendamentos, sorteios, registo de moderação e o token do bot (encriptado). No bot autónomo (`server/`), os mesmos dados ficam em `LISDISCORD_DATA_DIR` (por omissão `./data`, ou a Docker volume `lisdiscord-data` ao correr com Docker Compose) e o token vem só da variável de ambiente `DISCORD_TOKEN`, nunca gravado em disco. Nada sai do teu computador ou servidor exceto os pedidos normais à API da Discord.
 
 ## Autor
 

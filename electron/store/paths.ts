@@ -1,8 +1,31 @@
-import { app } from 'electron'
+import { createRequire } from 'node:module'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 
-const root = app.getPath('userData')
+/**
+ * A pasta de dados vem de três sítios, por esta ordem: a variável de
+ * ambiente `LISDISCORD_DATA_DIR` (usada pelo bot autónomo em servidor),
+ * o `app.getPath('userData')` do Electron quando estamos mesmo a correr
+ * dentro dele, ou `./data` como último recurso (nunca deve acontecer em
+ * produção, só é útil em scripts avulsos).
+ *
+ * `electron` só é pedido dentro do ramo `process.versions.electron` — em
+ * Node puro (o bot autónomo em Docker) esse pacote pode nem estar
+ * instalado (é devDependency), por isso uma `import` estática no topo do
+ * ficheiro rebentaria já no arranque. `createRequire` adia a resolução
+ * para dentro da condição, onde nunca chega a ser tentada fora do Electron.
+ */
+function resolveRoot(): string {
+  if (process.env.LISDISCORD_DATA_DIR) return process.env.LISDISCORD_DATA_DIR
+  if (process.versions.electron) {
+    const require = createRequire(import.meta.url)
+    const { app } = require('electron') as typeof import('electron')
+    return app.getPath('userData')
+  }
+  return path.join(process.cwd(), 'data')
+}
+
+const root = resolveRoot()
 
 export const paths = {
   root,

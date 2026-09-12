@@ -14,6 +14,12 @@ dist-ssr
 release
 *.local
 
+# Bot autónomo (server/) — token e dados locais nunca vão para o repositório
+.env
+.env.*
+!.env.example
+data/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -31,9 +31,10 @@ import { diffBackups } from '../discord/diff'
 import { exportTranscript, newTranscriptId } from '../discord/transcript'
 import { sendEmbedMessage } from '../discord/messaging'
 import * as moderation from '../discord/moderation'
-import { concludeGiveaway, postGiveawayMessage } from '../discord/giveaways'
+import { postGiveawayMessage } from '../discord/giveaways'
 import { GAMES, registerCommandsForGuild } from '../discord/games'
 import { refreshBoard } from '../discord/movcall'
+import { concludeGiveawayById, startGiveawayScheduler, startScheduledBackups } from '../discord/automation'
 import * as backupsStore from '../store/backups'
 import * as transcriptsStore from '../store/transcripts'
 import * as schedulesStore from '../store/schedules'
@@ -289,21 +290,6 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   })
 }
 
-async function concludeGiveawayById(id: string): Promise<Giveaway> {
-  const giveaway = giveawaysStore.getGiveaway(id)
-  if (!giveaway) throw new Error('Sorteio não encontrado.')
-  if (giveaway.ended) return giveaway
-  if (!giveaway.messageId) throw new Error('Sorteio sem mensagem associada.')
-
-  const guild = await discordManager.getClient().guilds.fetch(giveaway.guildId)
-  const winners = await concludeGiveaway(guild, giveaway.channelId, giveaway.messageId, giveaway.prize, giveaway.winnerCount)
-  const updated = giveawaysStore.markConcluded(id, winners)
-  if (!updated) throw new Error('Falha ao guardar o resultado do sorteio.')
-  return updated
-}
-
-const GIVEAWAY_CHECK_INTERVAL_MS = 30_000
-
 /** Corre à parte do registo dos handlers: religa agendamentos e, se houver token guardado, liga o bot sozinho. */
 export async function bootstrap(): Promise<void> {
   const token = loadToken()
@@ -313,23 +299,6 @@ export async function bootstrap(): Promise<void> {
     })
   }
 
-  schedulesStore.initSchedules(async (schedule) => {
-    if (!discordManager.isConnected()) return
-    const guild = await discordManager.getClient().guilds.fetch(schedule.guildId).catch(() => null)
-    if (!guild) return
-    const backup = await createBackup(guild, { includeBans: schedule.includeBans, origin: 'scheduled' })
-    backupsStore.saveBackup(backup, 'scheduled')
-    backupsStore.pruneOldBackups(schedule.guildId, schedule.keepLast)
-  })
-
-  setInterval(() => {
-    if (!discordManager.isConnected()) return
-    for (const giveaway of giveawaysStore.listGiveaways()) {
-      if (giveaway.ended) continue
-      if (new Date(giveaway.endsAt).getTime() > Date.now()) continue
-      concludeGiveawayById(giveaway.id).catch((err) => {
-        console.error(`Falha a concluir o sorteio "${giveaway.prize}":`, err)
-      })
-    }
-  }, GIVEAWAY_CHECK_INTERVAL_MS)
+  startScheduledBackups()
+  startGiveawayScheduler()
 }

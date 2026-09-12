@@ -16,7 +16,9 @@
     "build": "tsc && vite build && electron-builder",
     "build:unpacked": "tsc && vite build && electron-builder --dir",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "bot": "tsx server/index.ts",
+    "bot:dev": "tsx watch server/index.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -27,6 +29,7 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.18.3",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.13",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
