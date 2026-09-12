@@ -19,7 +19,7 @@ npm run dev
 
 Isto abre a app já em modo demonstração — dá para navegar tudo sem preparar nada.
 
-**Queres o bot online 24/7, sem depender do teu computador estar ligado?** Há um bot autónomo (`server/`) que corre sem Electron nem interface, pronto a pôr num servidor grátis (Oracle Cloud Always Free) com Docker — ver **[docs/deploy-oracle.md](docs/deploy-oracle.md)**.
+**Queres o bot online 24/7, sem depender do teu computador estar ligado?** Há um bot autónomo (`server/`) que corre sem Electron nem interface, pronto a pôr num servidor grátis com Docker — dois guias à escolha: **[Oracle Cloud Always Free](docs/deploy-oracle.md)** (máquina maior, mas por vezes sem capacidade disponível) ou **[Google Cloud Always Free](docs/deploy-gcp.md)** (máquina mais pequena, mas quase sempre disponível na hora).
 
 ## O que é (e o que não é)
 
