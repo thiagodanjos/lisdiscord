@@ -132,12 +132,20 @@ export async function runBlackjack(interaction: ChatInputCommandInteraction): Pr
   }
 
   async function loop(msg: Message): Promise<void> {
+    let click
     try {
-      const click = await msg.awaitMessageComponent({
+      click = await msg.awaitMessageComponent({
         time: TURN_SECONDS * 1000,
         filter: (i) => i.user.id === interaction.user.id,
       })
+    } catch {
+      await interaction
+        .editReply({ embeds: [buildEmbed(true, '⏱️ Tempo esgotado — perdeste a aposta.', 0xed4245)], components: [] })
+        .catch(() => undefined)
+      return
+    }
 
+    try {
       if (click.customId === 'bj:hit') {
         player.push(deck.pop()!)
         if (handValue(player) >= 21) {
@@ -152,8 +160,12 @@ export async function runBlackjack(interaction: ChatInputCommandInteraction): Pr
 
       await click.update({ embeds: [buildEmbed(false, 'A resolver...', 0x5865f2)], components: [] })
       await finish()
-    } catch {
-      await interaction.editReply({ embeds: [buildEmbed(true, '⏱️ Tempo esgotado — perdeste a aposta.', 0xed4245)], components: [] })
+    } catch (err) {
+      console.error('Erro no blackjack:', err)
+      addCoins(guildId, interaction.user.id, interaction.user.tag, bet)
+      await interaction
+        .editReply({ embeds: [buildEmbed(true, '⚠️ Ocorreu um erro inesperado — a tua aposta foi devolvida.', 0xed4245)], components: [] })
+        .catch(() => undefined)
     }
   }
 

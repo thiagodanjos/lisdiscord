@@ -90,54 +90,63 @@ export async function runTicTacToe(interaction: ChatInputCommandInteraction): Pr
 
   await new Promise<void>((resolve) => {
     collector.on('collect', async (click) => {
-      const currentPlayer = players[turn]
-      if (click.user.id !== currentPlayer.id) {
-        await click.reply({ content: `Não é a tua vez — é a vez de ${currentPlayer.username}.`, ephemeral: true })
-        return
+      try {
+        const currentPlayer = players[turn]
+        if (click.user.id !== currentPlayer.id) {
+          await click.reply({ content: `Não é a tua vez — é a vez de ${currentPlayer.username}.`, ephemeral: true })
+          return
+        }
+
+        const idx = Number(click.customId.split(':')[1])
+        if (board[idx] !== null) {
+          await click.deferUpdate()
+          return
+        }
+
+        board[idx] = turn === 0 ? 'X' : 'O'
+        const result = winner()
+
+        if (result === 'X' || result === 'O') {
+          const winningPlayer = result === 'X' ? players[0] : players[1]
+          addCoins(guildId, winningPlayer.id, winningPlayer.tag, REWARD)
+          const finalRows = buildRows().map((row) => {
+            row.components.forEach((btn) => btn.setDisabled(true))
+            return row
+          })
+          await click.update({
+            embeds: [buildEmbed(`🎉 ${winningPlayer.username} venceu! +${REWARD} moedas`, 0x3ba55c)],
+            components: finalRows,
+          })
+          collector.stop('done')
+          return
+        }
+
+        if (result === 'draw') {
+          const finalRows = buildRows().map((row) => {
+            row.components.forEach((btn) => btn.setDisabled(true))
+            return row
+          })
+          await click.update({ embeds: [buildEmbed('🤝 Empate!', 0xf0b232)], components: finalRows })
+          collector.stop('done')
+          return
+        }
+
+        turn = turn === 0 ? 1 : 0
+        const nextPlayer = players[turn]
+        const mark = turn === 0 ? '❌' : '⭕'
+        await click.update({ embeds: [buildEmbed(`Vez de ${nextPlayer.username} (${mark})`, 0x5865f2)], components: buildRows() })
+      } catch (err) {
+        console.error('Erro no jogo do galo:', err)
+        collector.stop('error')
       }
-
-      const idx = Number(click.customId.split(':')[1])
-      if (board[idx] !== null) {
-        await click.deferUpdate()
-        return
-      }
-
-      board[idx] = turn === 0 ? 'X' : 'O'
-      const result = winner()
-
-      if (result === 'X' || result === 'O') {
-        const winningPlayer = result === 'X' ? players[0] : players[1]
-        addCoins(guildId, winningPlayer.id, winningPlayer.tag, REWARD)
-        const finalRows = buildRows().map((row) => {
-          row.components.forEach((btn) => btn.setDisabled(true))
-          return row
-        })
-        await click.update({
-          embeds: [buildEmbed(`🎉 ${winningPlayer.username} venceu! +${REWARD} moedas`, 0x3ba55c)],
-          components: finalRows,
-        })
-        collector.stop('done')
-        return
-      }
-
-      if (result === 'draw') {
-        const finalRows = buildRows().map((row) => {
-          row.components.forEach((btn) => btn.setDisabled(true))
-          return row
-        })
-        await click.update({ embeds: [buildEmbed('🤝 Empate!', 0xf0b232)], components: finalRows })
-        collector.stop('done')
-        return
-      }
-
-      turn = turn === 0 ? 1 : 0
-      const nextPlayer = players[turn]
-      const mark = turn === 0 ? '❌' : '⭕'
-      await click.update({ embeds: [buildEmbed(`Vez de ${nextPlayer.username} (${mark})`, 0x5865f2)], components: buildRows() })
     })
 
     collector.on('end', (_collected, reason) => {
-      if (reason !== 'done') {
+      if (reason === 'error') {
+        interaction
+          .editReply({ embeds: [buildEmbed('⚠️ Ocorreu um erro inesperado — jogo cancelado.', 0xed4245)], components: [] })
+          .catch(() => undefined)
+      } else if (reason !== 'done') {
         interaction.editReply({ embeds: [buildEmbed('⏱️ Tempo esgotado — jogo cancelado.', 0xed4245)], components: [] }).catch(() => undefined)
       }
       resolve()

@@ -36,28 +36,36 @@ export async function runRoleta(interaction: ChatInputCommandInteraction): Promi
     return
   }
 
-  await interaction.reply({ content: '🎡 A roleta está a girar…' })
-  await new Promise((r) => setTimeout(r, 1500))
+  try {
+    await interaction.reply({ content: '🎡 A roleta está a girar…' })
+    await new Promise((r) => setTimeout(r, 1500))
 
-  const number = Math.floor(Math.random() * 37) // 0-36
-  const color: BetChoice = number === 0 ? 'verde' : RED_NUMBERS.has(number) ? 'vermelho' : 'preto'
-  const colorEmoji = { vermelho: '🔴', preto: '⚫', verde: '🟢' }[color]
-  const won = choice === color
+    const number = Math.floor(Math.random() * 37) // 0-36
+    const color: BetChoice = number === 0 ? 'verde' : RED_NUMBERS.has(number) ? 'vermelho' : 'preto'
+    const colorEmoji = { vermelho: '🔴', preto: '⚫', verde: '🟢' }[color]
+    const won = choice === color
 
-  let footer: string
-  if (won) {
-    const prize = bet * PAYOUT_MULTIPLIER[choice]
-    addCoins(guildId, interaction.user.id, interaction.user.tag, prize)
-    footer = `🎉 Ganhaste! +${prize} moedas.`
-  } else {
-    footer = `Perdeste a aposta de ${bet} moedas.`
+    let footer: string
+    if (won) {
+      const prize = bet * PAYOUT_MULTIPLIER[choice]
+      addCoins(guildId, interaction.user.id, interaction.user.tag, prize)
+      footer = `🎉 Ganhaste! +${prize} moedas.`
+    } else {
+      footer = `Perdeste a aposta de ${bet} moedas.`
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor(won ? 0x3ba55c : 0xed4245)
+      .setTitle('🎡 Roleta')
+      .setDescription(`Saiu o número **${number}** ${colorEmoji}\n\nApostaste em **${choice}**.`)
+      .setFooter({ text: footer })
+
+    await interaction.editReply({ content: '', embeds: [embed] })
+  } catch (err) {
+    console.error('Erro na roleta:', err)
+    addCoins(guildId, interaction.user.id, interaction.user.tag, bet)
+    await interaction
+      .editReply({ content: '⚠️ Ocorreu um erro inesperado — a tua aposta foi devolvida.', embeds: [] })
+      .catch(() => undefined)
   }
-
-  const embed = new EmbedBuilder()
-    .setColor(won ? 0x3ba55c : 0xed4245)
-    .setTitle('🎡 Roleta')
-    .setDescription(`Saiu o número **${number}** ${colorEmoji}\n\nApostaste em **${choice}**.`)
-    .setFooter({ text: footer })
-
-  await interaction.editReply({ content: '', embeds: [embed] })
 }

@@ -54,37 +54,45 @@ export async function runRace(interaction: ChatInputCommandInteraction): Promise
     }).join('\n')
   }
 
-  await interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('🏁 Corrida').setDescription(renderTrack())] })
+  try {
+    await interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('🏁 Corrida').setDescription(renderTrack())] })
 
-  let winnerIndex = -1
-  while (winnerIndex === -1) {
-    await new Promise((r) => setTimeout(r, TICK_MS))
-    for (let i = 0; i < RACERS.length; i++) {
-      const r = RACERS[i]
-      positions[i] += r.minStep + Math.floor(Math.random() * (r.maxStep - r.minStep + 1))
+    let winnerIndex = -1
+    while (winnerIndex === -1) {
+      await new Promise((r) => setTimeout(r, TICK_MS))
+      for (let i = 0; i < RACERS.length; i++) {
+        const r = RACERS[i]
+        positions[i] += r.minStep + Math.floor(Math.random() * (r.maxStep - r.minStep + 1))
+      }
+      const maxPos = Math.max(...positions)
+      if (maxPos >= TRACK_LENGTH) {
+        winnerIndex = positions.indexOf(maxPos)
+      }
+      await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('🏁 Corrida').setDescription(renderTrack())] })
     }
-    const maxPos = Math.max(...positions)
-    if (maxPos >= TRACK_LENGTH) {
-      winnerIndex = positions.indexOf(maxPos)
+
+    const winner = RACERS[winnerIndex]
+    const won = winner.id === pick
+    let footer: string
+    if (won) {
+      const prize = Math.round(bet * PAYOUT_MULTIPLIER)
+      addCoins(guildId, interaction.user.id, interaction.user.tag, prize)
+      footer = `🎉 ${winner.emoji} ${winner.name} venceu — acertaste! +${prize} moedas.`
+    } else {
+      footer = `${winner.emoji} ${winner.name} venceu. Perdeste a aposta de ${bet} moedas.`
     }
-    await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('🏁 Corrida').setDescription(renderTrack())] })
-  }
 
-  const winner = RACERS[winnerIndex]
-  const won = winner.id === pick
-  let footer: string
-  if (won) {
-    const prize = Math.round(bet * PAYOUT_MULTIPLIER)
-    addCoins(guildId, interaction.user.id, interaction.user.tag, prize)
-    footer = `🎉 ${winner.emoji} ${winner.name} venceu — acertaste! +${prize} moedas.`
-  } else {
-    footer = `${winner.emoji} ${winner.name} venceu. Perdeste a aposta de ${bet} moedas.`
+    const finalEmbed = new EmbedBuilder()
+      .setColor(won ? 0x3ba55c : 0xed4245)
+      .setTitle('🏁 Corrida — resultado')
+      .setDescription(renderTrack())
+      .setFooter({ text: footer })
+    await interaction.editReply({ embeds: [finalEmbed] })
+  } catch (err) {
+    console.error('Erro na corrida:', err)
+    addCoins(guildId, interaction.user.id, interaction.user.tag, bet)
+    await interaction
+      .editReply({ content: '⚠️ Ocorreu um erro inesperado — a tua aposta foi devolvida.', embeds: [] })
+      .catch(() => undefined)
   }
-
-  const finalEmbed = new EmbedBuilder()
-    .setColor(won ? 0x3ba55c : 0xed4245)
-    .setTitle('🏁 Corrida — resultado')
-    .setDescription(renderTrack())
-    .setFooter({ text: footer })
-  await interaction.editReply({ embeds: [finalEmbed] })
 }

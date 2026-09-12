@@ -44,7 +44,10 @@ export function triviaCommandDef() {
 export async function runTrivia(interaction: ChatInputCommandInteraction): Promise<void> {
   const q = TRIVIA_BANK[Math.floor(Math.random() * TRIVIA_BANK.length)]
   const guildId = interaction.guildId
-  if (!guildId) return
+  if (!guildId) {
+    await interaction.reply({ content: '❌ Este comando só funciona dentro de um servidor.', ephemeral: true })
+    return
+  }
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     q.options.map((opt, i) => new ButtonBuilder().setCustomId(`trivia:${i}`).setLabel(opt).setStyle(ButtonStyle.Secondary)),
@@ -56,10 +59,20 @@ export async function runTrivia(interaction: ChatInputCommandInteraction): Promi
     withResponse: true,
   })
   const message = reply.resource?.message
-  if (!message) return
+  if (!message) {
+    await interaction.editReply({ content: '⚠️ Ocorreu um erro ao iniciar a trivia — tenta outra vez.' }).catch(() => undefined)
+    return
+  }
+
+  let click
+  try {
+    click = await message.awaitMessageComponent({ time: TURN_SECONDS * 1000 })
+  } catch {
+    await interaction.editReply({ content: `⏱️ Tempo esgotado! A resposta era **${q.options[q.correct]}**.`, components: [] }).catch(() => undefined)
+    return
+  }
 
   try {
-    const click = await message.awaitMessageComponent({ time: TURN_SECONDS * 1000 })
     const chosen = Number(click.customId.split(':')[1])
     const correct = chosen === q.correct
     const result = registerTriviaResult(guildId, click.user.id, click.user.tag, correct)
@@ -70,7 +83,10 @@ export async function runTrivia(interaction: ChatInputCommandInteraction): Promi
         : `❌ **${click.user.username}** errou. A resposta certa era **${q.options[q.correct]}**.`,
       components: [],
     })
-  } catch {
-    await interaction.editReply({ content: `⏱️ Tempo esgotado! A resposta era **${q.options[q.correct]}**.`, components: [] })
+  } catch (err) {
+    console.error('Erro na trivia:', err)
+    await interaction
+      .editReply({ content: '⚠️ Ocorreu um erro inesperado a processar a tua resposta.', components: [] })
+      .catch(() => undefined)
   }
 }

@@ -102,13 +102,28 @@ export async function runDuel(interaction: ChatInputCommandInteraction): Promise
   }
 
   await new Promise<void>((resolve) => {
+    async function refundAndCancel(reason: string): Promise<void> {
+      if (wager > 0) {
+        addCoins(guildId, players[0].id, players[0].tag, wager)
+        addCoins(guildId, players[1].id, players[1].tag, wager)
+      }
+      await interaction.editReply({ embeds: [buildEmbed(reason, 0xed4245)], components: [] }).catch(() => undefined)
+      resolve()
+    }
+
     async function nextTurn(msg: Message): Promise<void> {
+      let click
       try {
-        const click = await msg.awaitMessageComponent({
+        click = await msg.awaitMessageComponent({
           time: TURN_SECONDS * 1000,
           filter: (i) => i.user.id === players[turn].id,
         })
+      } catch {
+        await refundAndCancel('⏱️ Tempo esgotado — duelo cancelado, apostas devolvidas.')
+        return
+      }
 
+      try {
         const target = turn === 0 ? 1 : 0
         let status = ''
 
@@ -153,13 +168,9 @@ export async function runDuel(interaction: ChatInputCommandInteraction): Promise
 
         await click.update({ embeds: [buildEmbed(`${status} Vez de ${players[turn].username}.`, 0x5865f2)], components: [buildRow(turn)] })
         await nextTurn(msg)
-      } catch {
-        if (wager > 0) {
-          addCoins(guildId, players[0].id, players[0].tag, wager)
-          addCoins(guildId, players[1].id, players[1].tag, wager)
-        }
-        await interaction.editReply({ embeds: [buildEmbed('⏱️ Tempo esgotado — duelo cancelado, apostas devolvidas.', 0xed4245)], components: [] })
-        resolve()
+      } catch (err) {
+        console.error('Erro no duelo:', err)
+        await refundAndCancel('⚠️ Ocorreu um erro inesperado — duelo cancelado, apostas devolvidas.')
       }
     }
 

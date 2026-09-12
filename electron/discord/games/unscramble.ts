@@ -1,5 +1,16 @@
-import { type ChatInputCommandInteraction, EmbedBuilder, PartialGroupDMChannel, SlashCommandBuilder } from 'discord.js'
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  type ChatInputCommandInteraction,
+  EmbedBuilder,
+  ModalBuilder,
+  SlashCommandBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} from 'discord.js'
 import { addCoins } from '../../store/economy'
+import { updateFromModal } from './interactionUtils'
 
 interface WordEntry {
   word: string
@@ -26,7 +37,8 @@ const WORD_BANK: WordEntry[] = [
   { word: 'CROCODILO', category: 'Animais' },
 ]
 
-const TIME_LIMIT_MS = 30_000
+const TIME_LIMIT_MS = 45_000
+const MODAL_TIMEOUT_MS = 60_000
 
 export function unscrambleCommandDef() {
   return new SlashCommandBuilder()
@@ -52,48 +64,82 @@ export async function runUnscramble(interaction: ChatInputCommandInteraction): P
   const entry = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
   const scrambled = scramble(entry.word)
   const guildId = interaction.guildId ?? 'dm'
+  let finished = false
 
-  const channel = interaction.channel
-  if (!channel || !channel.isTextBased() || channel instanceof PartialGroupDMChannel) return
+  function buildEmbed(status?: string): EmbedBuilder {
+    return new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle('🔀 Desembaralha a Palavra')
+      .setDescription(`Categoria: **${entry.category}**\n\n# ${scrambled.split('').join(' ')}`)
+      .setFooter({ text: status ?? 'Clica em "Responder" e escreve a palavra certa. Quem acertar primeiro ganha moedas.' })
+  }
 
-  const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle('🔀 Desembaralha a Palavra')
-    .setDescription(`Categoria: **${entry.category}**\n\n# ${scrambled.split('').join(' ')}\n\nEscreve a palavra certa no chat! Tens ${TIME_LIMIT_MS / 1000}s.`)
+  function buildRow(): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('unscramble:answer').setLabel('Responder').setStyle(ButtonStyle.Primary).setEmoji('✍️'),
+    )
+  }
 
-  await interaction.reply({ embeds: [embed] })
+  const reply = await interaction.reply({ embeds: [buildEmbed()], components: [buildRow()], withResponse: true })
+  const message = reply.resource?.message
+  if (!message) {
+    await interaction.editReply({ content: '⚠️ Ocorreu um erro ao iniciar o jogo — tenta outra vez.' }).catch(() => undefined)
+    return
+  }
+
+  const collector = message.createMessageComponentCollector({ time: TIME_LIMIT_MS })
 
   await new Promise<void>((resolve) => {
-    const collector = channel.createMessageCollector({
-      filter: (m) => !m.author.bot && m.content.trim().toUpperCase() === entry.word,
-      time: TIME_LIMIT_MS,
-      max: 1,
+    collector.on('collect', async (click) => {
+      if (finished) {
+        await click.deferUpdate().catch(() => undefined)
+        return
+      }
+
+      try {
+        const modal = new ModalBuilder()
+          .setCustomId('unscramble:modal')
+          .setTitle('A tua resposta')
+          .addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder().setCustomId('resposta').setLabel('Escreve a palavra').setStyle(TextInputStyle.Short).setRequired(true),
+            ),
+          )
+        await click.showModal(modal)
+
+        const submitted = await click
+          .awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === click.user.id })
+          .catch(() => null)
+        if (!submitted) return
+
+        if (finished) {
+          await submitted.reply({ content: 'Alguém já acertou antes de ti — mais sorte para a próxima!', ephemeral: true }).catch(() => undefined)
+          return
+        }
+
+        const guess = submitted.fields.getTextInputValue('resposta').trim().toUpperCase()
+        if (guess !== entry.word) {
+          await submitted.reply({ content: '❌ Não é essa a palavra. Tenta outra vez!', ephemeral: true }).catch(() => undefined)
+          return
+        }
+
+        finished = true
+        const reward = 30 + entry.word.length * 5
+        addCoins(guildId, submitted.user.id, submitted.user.tag, reward)
+        await updateFromModal(submitted, interaction, {
+          embeds: [buildEmbed(`🎉 **${submitted.user.username}** acertou! A palavra era **${entry.word}**. +${reward} moedas`).setColor(0x3ba55c)],
+          components: [],
+        })
+        collector.stop('done')
+      } catch (err) {
+        console.error('Erro no desembaralhar:', err)
+      }
     })
 
-    collector.on('collect', async (msg) => {
-      const reward = 30 + entry.word.length * 5
-      addCoins(guildId, msg.author.id, msg.author.tag, reward)
-      await interaction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x3ba55c)
-            .setTitle('🔀 Desembaralha a Palavra')
-            .setDescription(`🎉 **${msg.author.username}** acertou! A palavra era **${entry.word}**.\n💰 +${reward} moedas`),
-        ],
-      })
-    })
-
-    collector.on('end', (collected) => {
-      if (collected.size === 0) {
+    collector.on('end', () => {
+      if (!finished) {
         interaction
-          .editReply({
-            embeds: [
-              new EmbedBuilder()
-                .setColor(0xed4245)
-                .setTitle('🔀 Desembaralha a Palavra')
-                .setDescription(`⏱️ Tempo esgotado! A palavra era **${entry.word}**.`),
-            ],
-          })
+          .editReply({ embeds: [buildEmbed(`⏱️ Tempo esgotado! A palavra era **${entry.word}**.`).setColor(0xed4245)], components: [] })
           .catch(() => undefined)
       }
       resolve()
