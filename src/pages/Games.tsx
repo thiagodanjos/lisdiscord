@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Brain, Coins, Dice5, Gamepad2, Grid3x3, Hand, HelpCircle, Skull, Spade, Swords, Wallet } from 'lucide-react'
+import { Brain, Cherry, Coins, Dice5, Disc3, Flag, Gamepad2, Grid3x3, Hand, Hash, HelpCircle, Shuffle, Skull, Spade, Swords, Wallet } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { Card, SectionHeading, Toggle } from '../components/ui'
 import type { GameId, GameInfo, GameSettings, GuildSummary } from '../../shared/types'
@@ -14,10 +14,16 @@ const GAME_ICONS: Record<GameId, typeof Gamepad2> = {
   blackjack: Spade,
   jogodavelha: Grid3x3,
   duelo: Swords,
+  roleta: Disc3,
+  cacaniqueis: Cherry,
+  corrida: Flag,
+  numero: Hash,
+  desembaralhar: Shuffle,
   economia: Wallet,
 }
 
-const REWARDS_COINS: GameId[] = ['trivia', 'forca', 'blackjack', 'jogodavelha', 'duelo']
+const REWARDS_COINS: GameId[] = ['trivia', 'forca', 'jogodavelha', 'numero', 'desembaralhar']
+const WAGER_GAMES: GameId[] = ['blackjack', 'duelo', 'roleta', 'cacaniqueis', 'corrida']
 
 export default function Games() {
   const [guilds, setGuilds] = useState<GuildSummary[]>([])
@@ -66,6 +72,7 @@ export default function Games() {
         {games.map((game) => {
           const Icon = GAME_ICONS[game.id] ?? Gamepad2
           const rewards = REWARDS_COINS.includes(game.id)
+          const wager = WAGER_GAMES.includes(game.id)
           return (
             <Card key={game.id} className="flex items-center gap-4 p-4">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
@@ -78,6 +85,11 @@ export default function Games() {
                   {rewards && (
                     <span className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
                       <Coins size={11} /> Ganha moedas
+                    </span>
+                  )}
+                  {wager && (
+                    <span className="flex items-center gap-1 rounded-full border border-accent/30 bg-accent-soft px-2 py-0.5 text-[10px] font-semibold text-accent">
+                      <Coins size={11} /> Aposta moedas
                     </span>
                   )}
                 </div>
@@ -95,8 +107,12 @@ export default function Games() {
         <span className="inline-flex items-center gap-1 align-middle text-warning">
           <Coins size={11} /> Ganha moedas
         </span>{' '}
-        alimentam a economia partilhada do servidor — os membros veem o saldo com <code className="text-accent">/saldo</code> e o
-        ranking com <code className="text-accent">/ranking</code>.
+        só rendem moedas; os marcados com{' '}
+        <span className="inline-flex items-center gap-1 align-middle text-accent">
+          <Coins size={11} /> Aposta moedas
+        </span>{' '}
+        também podem fazer perder a aposta. Todos alimentam a mesma economia partilhada do servidor — os membros veem
+        o saldo com <code className="text-accent">/saldo</code> e o ranking com <code className="text-accent">/ranking</code>.
       </p>
     </div>
   )

@@ -273,6 +273,11 @@ export type GameId =
   | 'blackjack'
   | 'jogodavelha'
   | 'duelo'
+  | 'roleta'
+  | 'cacaniqueis'
+  | 'corrida'
+  | 'numero'
+  | 'desembaralhar'
   | 'economia'
 
 export interface GameInfo {
