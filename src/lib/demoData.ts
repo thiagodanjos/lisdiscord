@@ -171,9 +171,10 @@ const gameSettingsData = new Map<string, GameSettings>()
 
 let movPointsData: Record<string, MovPointsEntry[]> = {
   g1: [
-    { userId: 'u10', tag: 'ana.dev#0001', points: 85 },
-    { userId: 'u12', tag: 'sofia_gamer#7788', points: 60 },
-    { userId: 'u11', tag: 'ricardo_c#4521', points: 40 },
+    { userId: 'u10', tag: 'ana.dev#0001', points: 85, totalSeconds: 7200 },
+    { userId: 'u12', tag: 'sofia_gamer#7788', points: 60, totalSeconds: 3600 },
+    { userId: 'u11', tag: 'ricardo_c#4521', points: 40, totalSeconds: 1800 },
+    { userId: 'u13', tag: 'joao99#0420', points: 0, totalSeconds: 5400 },
   ],
 }
 
@@ -182,7 +183,7 @@ let movPointsBoardData: Record<string, MovPointsBoardConfig> = {
 }
 
 function sortMovPoints(entries: MovPointsEntry[]): MovPointsEntry[] {
-  return [...entries].sort((a, b) => b.points - a.points)
+  return [...entries].sort((a, b) => b.points - a.points || b.totalSeconds - a.totalSeconds)
 }
 
 const transcriptsData: Transcript[] = [
@@ -483,7 +484,7 @@ export const demoBridge: LisDiscordBridge = {
     const member = membersData.find((m) => m.id === userId)
     const existing = entries.find((e) => e.userId === userId)
     if (existing) existing.points = Math.max(0, existing.points + amount)
-    else entries.push({ userId, tag: member?.tag ?? userId, points: Math.max(0, amount) })
+    else entries.push({ userId, tag: member?.tag ?? userId, points: Math.max(0, amount), totalSeconds: 0 })
     movPointsData = { ...movPointsData, [guildId]: entries }
     return sortMovPoints(entries)
   },
@@ -493,7 +494,17 @@ export const demoBridge: LisDiscordBridge = {
     const member = membersData.find((m) => m.id === userId)
     const existing = entries.find((e) => e.userId === userId)
     if (existing) existing.points = Math.max(0, existing.points - amount)
-    else entries.push({ userId, tag: member?.tag ?? userId, points: 0 })
+    else entries.push({ userId, tag: member?.tag ?? userId, points: 0, totalSeconds: 0 })
+    movPointsData = { ...movPointsData, [guildId]: entries }
+    return sortMovPoints(entries)
+  },
+  async addMovHours(guildId, userId, seconds) {
+    await delay(300)
+    const entries = movPointsData[guildId] ?? []
+    const member = membersData.find((m) => m.id === userId)
+    const existing = entries.find((e) => e.userId === userId)
+    if (existing) existing.totalSeconds = Math.max(0, existing.totalSeconds + seconds)
+    else entries.push({ userId, tag: member?.tag ?? userId, points: 0, totalSeconds: Math.max(0, seconds) })
     movPointsData = { ...movPointsData, [guildId]: entries }
     return sortMovPoints(entries)
   },

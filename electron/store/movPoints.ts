@@ -5,6 +5,7 @@ import { paths } from './paths'
 interface PlayerRecord {
   tag: string
   points: number
+  totalSeconds: number
 }
 
 interface GuildMovPoints {
@@ -32,31 +33,57 @@ function ensureGuild(data: MovPointsData, guildId: string): GuildMovPoints {
   return data[guildId]
 }
 
-function applyDelta(guildId: string, userId: string, tag: string, delta: number): number {
-  const data = readAll()
-  const guild = ensureGuild(data, guildId)
+function ensurePlayer(guild: GuildMovPoints, userId: string, tag: string): PlayerRecord {
   const existing = guild.players[userId]
-  const points = Math.max(0, (existing?.points ?? 0) + delta)
-  guild.players[userId] = { tag, points }
-  writeAll(data)
-  return points
+  if (existing) {
+    existing.tag = tag
+    return existing
+  }
+  const created: PlayerRecord = { tag, points: 0, totalSeconds: 0 }
+  guild.players[userId] = created
+  return created
 }
 
 export function addPoints(guildId: string, userId: string, tag: string, amount: number): number {
-  return applyDelta(guildId, userId, tag, Math.abs(amount))
+  const data = readAll()
+  const guild = ensureGuild(data, guildId)
+  const player = ensurePlayer(guild, userId, tag)
+  player.points = Math.max(0, player.points + Math.abs(amount))
+  writeAll(data)
+  return player.points
 }
 
 export function removePoints(guildId: string, userId: string, tag: string, amount: number): number {
-  return applyDelta(guildId, userId, tag, -Math.abs(amount))
+  const data = readAll()
+  const guild = ensureGuild(data, guildId)
+  const player = ensurePlayer(guild, userId, tag)
+  player.points = Math.max(0, player.points - Math.abs(amount))
+  writeAll(data)
+  return player.points
 }
 
+/** Acumula segundos de Mov. Call ao total já registado da pessoa (não substitui). */
+export function addHours(guildId: string, userId: string, tag: string, seconds: number): number {
+  const data = readAll()
+  const guild = ensureGuild(data, guildId)
+  const player = ensurePlayer(guild, userId, tag)
+  player.totalSeconds = Math.max(0, player.totalSeconds + Math.abs(seconds))
+  writeAll(data)
+  return player.totalSeconds
+}
+
+/**
+ * Ordenado sempre por pontos (mais alto primeiro); entre pessoas com os
+ * mesmos pontos (incluindo quem tem 0), desempata por quem tem mais horas
+ * acumuladas.
+ */
 export function getLeaderboard(guildId: string): MovPointsEntry[] {
   const data = readAll()
   const guild = data[guildId]
   if (!guild) return []
   return Object.entries(guild.players)
-    .map(([userId, record]) => ({ userId, tag: record.tag, points: record.points }))
-    .sort((a, b) => b.points - a.points)
+    .map(([userId, record]) => ({ userId, tag: record.tag, points: record.points, totalSeconds: record.totalSeconds }))
+    .sort((a, b) => b.points - a.points || b.totalSeconds - a.totalSeconds)
 }
 
 export function getBoardConfig(guildId: string): MovPointsBoardConfig {

@@ -73,6 +73,7 @@ export const IPC = {
   listMovPoints: 'movpoints:list',
   addMovPoints: 'movpoints:add',
   removeMovPoints: 'movpoints:remove',
+  addMovHours: 'movpoints:hours:add',
   getMovPointsBoard: 'movpoints:board:get',
   setMovPointsBoard: 'movpoints:board:set',
 } as const
@@ -129,6 +130,7 @@ export interface LisDiscordBridge {
   listMovPoints(guildId: string): Promise<MovPointsEntry[]>
   addMovPoints(guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]>
   removeMovPoints(guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]>
+  addMovHours(guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]>
   getMovPointsBoard(guildId: string): Promise<MovPointsBoardConfig>
   setMovPointsBoard(guildId: string, channelId: string | null): Promise<MovPointsBoardConfig>
 }

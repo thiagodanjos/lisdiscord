@@ -7,13 +7,16 @@ import {
   EmbedBuilder,
   type Guild,
   type Message,
+  type MessageEditOptions,
   ModalBuilder,
+  type ModalSubmitInteraction,
   PartialGroupDMChannel,
   PermissionFlagsBits,
   type RESTPostAPIChatInputApplicationCommandsJSONBody,
   SlashCommandBuilder,
   TextInputBuilder,
   TextInputStyle,
+  UserSelectMenuBuilder,
 } from 'discord.js'
 import type { MovCallType } from '../../shared/types'
 import * as movPoints from '../store/movPoints'
@@ -21,28 +24,22 @@ import * as movPoints from '../store/movPoints'
 const POINTS_BY_TYPE: Record<MovCallType, number> = { normal: 10, tematica: 15 }
 const SETUP_TIMEOUT_MS = 10 * 60_000
 const MODAL_TIMEOUT_MS = 120_000
+const RESULT_DISPLAY_MS = 6_000
+const CANCEL_DISPLAY_MS = 2_500
 
 export function movCallCommandDef(): RESTPostAPIChatInputApplicationCommandsJSONBody {
   return new SlashCommandBuilder()
     .setName('movcall')
     .setDescription('Regista uma Mov. Call de hoje e atribui pontos a quem participou')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addStringOption((o) =>
-      o
-        .setName('tipo')
-        .setDescription('Tipo de MOV realizada')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Mov. Call Normal — sem temática, 1 hora (10 pontos)', value: 'normal' },
-          { name: 'Mov. Call Temática ou Outras MOVS — 1h ou mais (15 pontos)', value: 'tematica' },
-        ),
-    )
-    .addStringOption((o) =>
-      o
-        .setName('participantes')
-        .setDescription('Cola menções (@pessoa) ou IDs, uma por linha. Deixa vazio para adicionar um a um a seguir.')
-        .setRequired(false),
-    )
+    .toJSON()
+}
+
+export function movHorasCommandDef(): RESTPostAPIChatInputApplicationCommandsJSONBody {
+  return new SlashCommandBuilder()
+    .setName('movhoras')
+    .setDescription('Atribui horas de Mov. Call a um membro')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .toJSON()
 }
 
@@ -95,11 +92,11 @@ export function pontosMovAdminCommandDef(): RESTPostAPIChatInputApplicationComma
 }
 
 export function movCallCommandDefs(): RESTPostAPIChatInputApplicationCommandsJSONBody[] {
-  return [movCallCommandDef(), pontosMovCommandDef(), pontosMovAdminCommandDef()]
+  return [movCallCommandDef(), movHorasCommandDef(), pontosMovCommandDef(), pontosMovAdminCommandDef()]
 }
 
 export async function handleMovCallCommand(interaction: ChatInputCommandInteraction): Promise<boolean> {
-  if (!['movcall', 'pontosmov', 'pontosmovadmin'].includes(interaction.commandName)) return false
+  if (!['movcall', 'movhoras', 'pontosmov', 'pontosmovadmin'].includes(interaction.commandName)) return false
 
   const guild = interaction.guild
   if (!guild) {
@@ -109,6 +106,11 @@ export async function handleMovCallCommand(interaction: ChatInputCommandInteract
 
   if (interaction.commandName === 'movcall') {
     await runMovCall(interaction, guild)
+    return true
+  }
+
+  if (interaction.commandName === 'movhoras') {
+    await runMovHoras(interaction, guild)
     return true
   }
 
@@ -127,65 +129,71 @@ export async function handleMovCallCommand(interaction: ChatInputCommandInteract
 }
 
 // ==========================================================================
-// /movcall
+// /movcall — assistente por botões + modal
 // ==========================================================================
 
 async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
-  const tipo = interaction.options.getString('tipo', true) as MovCallType
-  const participantesRaw = interaction.options.getString('participantes')
   const today = formatBrasiliaDate(new Date())
+  let tipo: MovCallType | null = null
+  let errorText = ''
 
-  if (participantesRaw && participantesRaw.trim()) {
-    const ids = parseParticipantsList(participantesRaw)
-    if (ids.length === 0) {
-      await interaction.reply({ content: '❌ Não encontrei nenhuma menção ou ID válido nessa lista.', ephemeral: true })
-      return
-    }
-    const embed = await processParticipants(guild, tipo, ids, interaction.user.tag, today)
-    await interaction.reply({ embeds: [embed] })
-    return
-  }
-
-  await runInteractiveMovCall(interaction, guild, tipo, today)
-}
-
-async function runInteractiveMovCall(
-  interaction: ChatInputCommandInteraction,
-  guild: Guild,
-  tipo: MovCallType,
-  today: string,
-): Promise<void> {
-  const collected = new Map<string, string>() // userId -> tag
-
-  function buildEmbed(): EmbedBuilder {
-    const lines = [...collected.values()]
+  function chooseTypeEmbed(): EmbedBuilder {
     return new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle(`📋 Nova Mov. Call — ${tipo === 'normal' ? 'Normal' : 'Temática / Outra MOV'}`)
-      .setDescription(
-        `Data: **${today}** (horário de Brasília)\n\n` +
-          'Usa o botão abaixo para ires adicionando participantes um a um, por menção ou ID.\n\n' +
-          (lines.length > 0 ? `**Participantes (${lines.length}):**\n${lines.map((t) => `• ${t}`).join('\n')}` : '_Ainda sem participantes._'),
+      .setTitle('📋 Nova Mov. Call')
+      .setDescription(`Data de hoje: **${today}** (horário de Brasília)\n\nEscolhe que tipo de Mov. Call foi realizada:`)
+      .addFields(
+        { name: '🔵 Normal', value: 'Sem temática, 1 hora — **10 pontos**', inline: true },
+        { name: '🟡 Temática ou Outras MOVS', value: '1 hora ou mais — **15 pontos**', inline: true },
       )
-      .setFooter({ text: `+${POINTS_BY_TYPE[tipo]} pontos por participante · só tu consegues usar estes botões` })
+      .setFooter({ text: 'Só tu consegues usar estes botões.' })
   }
 
-  function buildRow(): ActionRowBuilder<ButtonBuilder> {
+  function chooseTypeRow(): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('movcall:add').setLabel('Adicionar participante').setStyle(ButtonStyle.Primary).setEmoji('➕'),
-      new ButtonBuilder()
-        .setCustomId('movcall:finish')
-        .setLabel('Concluir e atribuir pontos')
-        .setStyle(ButtonStyle.Success)
-        .setEmoji('✅')
-        .setDisabled(collected.size === 0),
+      new ButtonBuilder().setCustomId('movcall:tipo:normal').setLabel('Normal · 10 pontos').setStyle(ButtonStyle.Primary).setEmoji('🔵'),
+      new ButtonBuilder().setCustomId('movcall:tipo:tematica').setLabel('Temática/Outra · 15 pontos').setStyle(ButtonStyle.Success).setEmoji('🟡'),
       new ButtonBuilder().setCustomId('movcall:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
     )
   }
 
-  const reply = await interaction.reply({ embeds: [buildEmbed()], components: [buildRow()], ephemeral: true, withResponse: true })
+  function listEmbed(): EmbedBuilder {
+    return new EmbedBuilder()
+      .setColor(tipo === 'normal' ? 0x5865f2 : 0xf0b232)
+      .setTitle(`📋 Mov. Call ${tipo === 'normal' ? 'Normal' : 'Temática / Outra MOV'}`)
+      .setDescription(
+        'Clica em **Escrever lista** e cola os participantes numa caixa de texto, um por linha — por menção (@pessoa) ou pelo ID.',
+      )
+      .setFooter({ text: `+${POINTS_BY_TYPE[tipo ?? 'normal']} pontos por participante` })
+  }
+
+  function listRow(): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('movcall:writeList').setLabel('Escrever lista').setStyle(ButtonStyle.Primary).setEmoji('📝'),
+      new ButtonBuilder().setCustomId('movcall:back').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
+      new ButtonBuilder().setCustomId('movcall:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
+    )
+  }
+
+  function errorEmbed(): EmbedBuilder {
+    return new EmbedBuilder().setColor(0xed4245).setTitle('❌ Não consegui perceber a lista').setDescription(errorText)
+  }
+
+  function errorRow(): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('movcall:back').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
+      new ButtonBuilder().setCustomId('movcall:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
+    )
+  }
+
+  const reply = await interaction.reply({ embeds: [chooseTypeEmbed()], components: [chooseTypeRow()], ephemeral: true, withResponse: true })
   const message = reply.resource?.message
   if (!message) return
+
+  async function deleteAfter(ms: number): Promise<void> {
+    await new Promise((r) => setTimeout(r, ms))
+    await interaction.deleteReply().catch(() => undefined)
+  }
 
   await loop(message)
 
@@ -194,57 +202,70 @@ async function runInteractiveMovCall(
       const click = await msg.awaitMessageComponent({ time: SETUP_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
 
       if (click.customId === 'movcall:cancel') {
-        await click.update({ content: '❌ Registo de Mov. Call cancelado.', embeds: [], components: [] })
+        await click.update({ embeds: [new EmbedBuilder().setColor(0x99aab5).setTitle('Cancelado').setDescription('Registo de Mov. Call cancelado.')], components: [] })
+        await deleteAfter(CANCEL_DISPLAY_MS)
         return
       }
 
-      if (click.customId === 'movcall:finish') {
-        await click.update({ content: '⏳ A atribuir pontos…', embeds: [], components: [] })
-        const embed = await processParticipants(guild, tipo, [...collected.keys()], interaction.user.tag, today)
-        await interaction.followUp({ embeds: [embed] })
-        await interaction.editReply({ content: '✅ Concluído — vê a mensagem publicada acima.', embeds: [], components: [] })
+      if (click.customId === 'movcall:tipo:normal' || click.customId === 'movcall:tipo:tematica') {
+        tipo = click.customId.endsWith('normal') ? 'normal' : 'tematica'
+        await click.update({ embeds: [listEmbed()], components: [listRow()] })
+        await loop(msg)
         return
       }
 
-      // movcall:add
-      const modal = new ModalBuilder()
-        .setCustomId('movcall:modal')
-        .setTitle('Adicionar participante')
-        .addComponents(
-          new ActionRowBuilder<TextInputBuilder>().addComponents(
-            new TextInputBuilder()
-              .setCustomId('person')
-              .setLabel('Menção (@pessoa) ou ID da pessoa')
-              .setStyle(TextInputStyle.Short)
-              .setRequired(true)
-              .setPlaceholder('Ex.: @nome ou 123456789012345678'),
-          ),
-        )
-      await click.showModal(modal)
+      if (click.customId === 'movcall:back') {
+        tipo = null
+        await click.update({ embeds: [chooseTypeEmbed()], components: [chooseTypeRow()] })
+        await loop(msg)
+        return
+      }
 
-      try {
-        const submitted = await click.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
-        const raw = submitted.fields.getTextInputValue('person').trim()
-        const id = extractUserId(raw)
-        if (!id) {
-          await submitted.reply({ content: '❌ Não reconheci essa menção/ID. Tenta outra vez.', ephemeral: true })
-        } else {
-          const member = await guild.members.fetch(id).catch(() => null)
-          if (!member) {
-            await submitted.reply({ content: '❌ Não encontrei ninguém no servidor com esse ID.', ephemeral: true })
-          } else {
-            collected.set(id, member.user.tag)
-            await submitted.deferUpdate()
+      if (click.customId === 'movcall:writeList') {
+        const modal = new ModalBuilder()
+          .setCustomId('movcall:modal')
+          .setTitle('Lista de participantes')
+          .addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder()
+                .setCustomId('lista')
+                .setLabel('Uma pessoa por linha — menção ou ID')
+                .setStyle(TextInputStyle.Paragraph)
+                .setRequired(true)
+                .setPlaceholder('@pessoa1\n123456789012345678\n@pessoa3'),
+            ),
+          )
+        await click.showModal(modal)
+
+        try {
+          const submitted = await click.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
+          const ids = parseParticipantsList(submitted.fields.getTextInputValue('lista'))
+
+          if (ids.length === 0) {
+            errorText = 'Não encontrei nenhuma menção ou ID válido nessa lista. Confirma que puseste uma pessoa por linha.'
+            await updateFromModal(submitted, interaction, { embeds: [errorEmbed()], components: [errorRow()] })
+            await loop(msg)
+            return
           }
+
+          await updateFromModal(submitted, interaction, { embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏳ A atribuir pontos…')], components: [] })
+          const resultEmbed = await processParticipants(guild, tipo ?? 'normal', ids, interaction.user.tag, today)
+          await interaction.editReply({ embeds: [resultEmbed], components: [] })
+          await deleteAfter(RESULT_DISPLAY_MS)
+        } catch {
+          // modal fechada sem submeter — mantém-se no passo da lista
+          await interaction.editReply({ embeds: [listEmbed()], components: [listRow()] })
+          await loop(msg)
         }
-      } catch {
-        // modal fechada sem submeter — continua o ciclo sem alterar nada
+        return
       }
 
-      await interaction.editReply({ embeds: [buildEmbed()], components: [buildRow()] })
       await loop(msg)
     } catch {
-      await interaction.editReply({ content: '⏱️ Tempo esgotado — registo de Mov. Call cancelado.', embeds: [], components: [] }).catch(() => undefined)
+      await interaction
+        .editReply({ embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('⏱️ Tempo esgotado').setDescription('Registo de Mov. Call cancelado.')], components: [] })
+        .catch(() => undefined)
+      await interaction.deleteReply().catch(() => undefined)
     }
   }
 }
@@ -289,6 +310,157 @@ async function processParticipants(
 }
 
 // ==========================================================================
+// /movhoras — assistente por seletor de membro + modal
+// ==========================================================================
+
+async function runMovHoras(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
+  let targetId: string | null = null
+  let targetTag: string | null = null
+  let errorText = ''
+
+  function selectEmbed(): EmbedBuilder {
+    return new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle('⏱️ Atribuir horas de Mov. Call')
+      .setDescription('Escolhe o membro a quem vais atribuir horas:')
+      .setFooter({ text: 'Só tu consegues usar isto.' })
+  }
+
+  function selectRows(): [ActionRowBuilder<UserSelectMenuBuilder>, ActionRowBuilder<ButtonBuilder>] {
+    return [
+      new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(
+        new UserSelectMenuBuilder().setCustomId('movhoras:pick').setPlaceholder('Escolhe um membro').setMinValues(1).setMaxValues(1),
+      ),
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId('movhoras:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
+      ),
+    ]
+  }
+
+  function timeEmbed(): EmbedBuilder {
+    return new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle('⏱️ Atribuir horas de Mov. Call')
+      .setDescription(`Membro selecionado: **${targetTag}**\n\nClica em **Escrever tempo** para indicar quantas horas, minutos e segundos atribuir.`)
+  }
+
+  function timeRow(): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('movhoras:write').setLabel('Escrever tempo').setStyle(ButtonStyle.Primary).setEmoji('📝'),
+      new ButtonBuilder().setCustomId('movhoras:back').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
+      new ButtonBuilder().setCustomId('movhoras:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
+    )
+  }
+
+  function errorEmbed(): EmbedBuilder {
+    return new EmbedBuilder().setColor(0xed4245).setTitle('❌ Valores inválidos').setDescription(errorText)
+  }
+
+  function errorRow(): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('movhoras:back').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
+      new ButtonBuilder().setCustomId('movhoras:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
+    )
+  }
+
+  const reply = await interaction.reply({ embeds: [selectEmbed()], components: selectRows(), ephemeral: true, withResponse: true })
+  const message = reply.resource?.message
+  if (!message) return
+
+  async function deleteAfter(ms: number): Promise<void> {
+    await new Promise((r) => setTimeout(r, ms))
+    await interaction.deleteReply().catch(() => undefined)
+  }
+
+  await loop(message)
+
+  async function loop(msg: Message): Promise<void> {
+    try {
+      const click = await msg.awaitMessageComponent({ time: SETUP_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
+
+      if (click.customId === 'movhoras:cancel') {
+        await click.update({ embeds: [new EmbedBuilder().setColor(0x99aab5).setTitle('Cancelado')], components: [] })
+        await deleteAfter(CANCEL_DISPLAY_MS)
+        return
+      }
+
+      if (click.isUserSelectMenu() && click.customId === 'movhoras:pick') {
+        const user = click.users.first()
+        if (!user) {
+          await loop(msg)
+          return
+        }
+        targetId = user.id
+        targetTag = user.tag
+        await click.update({ embeds: [timeEmbed()], components: [timeRow()] })
+        await loop(msg)
+        return
+      }
+
+      if (click.customId === 'movhoras:back') {
+        targetId = null
+        targetTag = null
+        await click.update({ embeds: [selectEmbed()], components: selectRows() })
+        await loop(msg)
+        return
+      }
+
+      if (click.customId === 'movhoras:write') {
+        const modal = new ModalBuilder()
+          .setCustomId('movhoras:modal')
+          .setTitle('Tempo de Mov. Call')
+          .addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder().setCustomId('horas').setLabel('Horas').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('0'),
+            ),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder().setCustomId('minutos').setLabel('Minutos').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('0'),
+            ),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder().setCustomId('segundos').setLabel('Segundos').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('0'),
+            ),
+          )
+        await click.showModal(modal)
+
+        try {
+          const submitted = await click.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
+          const h = parseNonNegativeInt(submitted.fields.getTextInputValue('horas'))
+          const m = parseNonNegativeInt(submitted.fields.getTextInputValue('minutos'))
+          const s = parseNonNegativeInt(submitted.fields.getTextInputValue('segundos'))
+
+          if (h === null || m === null || s === null || (h === 0 && m === 0 && s === 0)) {
+            errorText = 'Escreve números válidos (0 ou mais) em pelo menos um dos campos de horas, minutos ou segundos.'
+            await updateFromModal(submitted, interaction, { embeds: [errorEmbed()], components: [errorRow()] })
+            await loop(msg)
+            return
+          }
+
+          const totalSeconds = h * 3600 + m * 60 + s
+          const newTotal = movPoints.addHours(guild.id, targetId as string, targetTag as string, totalSeconds)
+          await refreshBoard(guild)
+
+          const embed = new EmbedBuilder()
+            .setColor(0x3ba55c)
+            .setTitle('⏱️ Horas atribuídas')
+            .setDescription(`**+${formatDuration(totalSeconds)}** de Mov. Call para **${targetTag}**.\nTotal acumulado: **${formatDuration(newTotal)}**.`)
+          await updateFromModal(submitted, interaction, { embeds: [embed], components: [] })
+          await deleteAfter(RESULT_DISPLAY_MS)
+        } catch {
+          await interaction.editReply({ embeds: [timeEmbed()], components: [timeRow()] })
+          await loop(msg)
+        }
+        return
+      }
+
+      await loop(msg)
+    } catch {
+      await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('⏱️ Tempo esgotado')], components: [] }).catch(() => undefined)
+      await interaction.deleteReply().catch(() => undefined)
+    }
+  }
+}
+
+// ==========================================================================
 // /pontosmov (público)
 // ==========================================================================
 
@@ -296,11 +468,12 @@ async function runVerPontos(interaction: ChatInputCommandInteraction, guild: Gui
   const target = interaction.options.getUser('membro') ?? interaction.user
   const entry = movPoints.getLeaderboard(guild.id).find((e) => e.userId === target.id)
   const points = entry?.points ?? 0
+  const totalSeconds = entry?.totalSeconds ?? 0
 
   const embed = new EmbedBuilder()
     .setColor(0xf0b232)
     .setTitle('🏅 Pontos de MOV. Call')
-    .setDescription(`**${target.tag}** tem **${points} pontos** neste servidor.`)
+    .setDescription(`**${target.tag}** tem **${points} pontos** e **${formatDuration(totalSeconds)}** de Mov. Call neste servidor.`)
   await interaction.reply({ embeds: [embed] })
 }
 
@@ -379,7 +552,10 @@ export async function refreshBoard(guild: Guild): Promise<void> {
 function buildBoardEmbed(guild: Guild): EmbedBuilder {
   const leaderboard = movPoints.getLeaderboard(guild.id)
   const medals = ['🥇', '🥈', '🥉']
-  const lines = leaderboard.map((entry, i) => `${medals[i] ?? `${i + 1}.`} **${entry.tag}** — ${entry.points} pontos`)
+  const lines = leaderboard.map((entry, i) => {
+    const hoursText = entry.totalSeconds > 0 ? ` · ${formatDuration(entry.totalSeconds)}` : ''
+    return `${medals[i] ?? `${i + 1}.`} **${entry.tag}** — ${entry.points} pontos${hoursText}`
+  })
 
   return new EmbedBuilder()
     .setColor(0xf0b232)
@@ -408,6 +584,37 @@ function parseParticipantsList(text: string): string[] {
     .map(extractUserId)
     .filter((id): id is string => id !== null)
   return [...new Set(ids)]
+}
+
+function parseNonNegativeInt(raw: string): number | null {
+  const trimmed = raw.trim()
+  if (trimmed === '') return 0
+  if (!/^\d+$/.test(trimmed)) return null
+  return Number(trimmed)
+}
+
+function formatDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  const parts: string[] = []
+  if (h > 0) parts.push(`${h}h`)
+  if (m > 0) parts.push(`${m}m`)
+  if (s > 0 || parts.length === 0) parts.push(`${s}s`)
+  return parts.join(' ')
+}
+
+/** `ModalSubmitInteraction.update()` só existe quando a modal foi aberta a partir de um componente de mensagem — o que é sempre o nosso caso, mas o TS só o sabe depois deste type guard. */
+async function updateFromModal(
+  submitted: ModalSubmitInteraction,
+  parent: ChatInputCommandInteraction,
+  payload: MessageEditOptions,
+): Promise<void> {
+  if (submitted.isFromMessage()) {
+    await submitted.update(payload)
+  } else {
+    await parent.editReply(payload)
+  }
 }
 
 function formatBrasiliaDate(date: Date): string {

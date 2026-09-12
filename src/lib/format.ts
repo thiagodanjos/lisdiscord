@@ -29,6 +29,17 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+export function formatDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  const parts: string[] = []
+  if (h > 0) parts.push(`${h}h`)
+  if (m > 0) parts.push(`${m}m`)
+  if (s > 0 || parts.length === 0) parts.push(`${s}s`)
+  return parts.join(' ')
+}
+
 export const FREQUENCY_LABEL: Record<ScheduleFrequency, string> = {
   hourly6: 'A cada 6 horas',
   hourly12: 'A cada 12 horas',

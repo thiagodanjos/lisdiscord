@@ -269,6 +269,14 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     return movPointsStore.getLeaderboard(guildId)
   })
 
+  ipcMain.handle(IPC.addMovHours, async (_e, guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    const member = await guild.members.fetch(userId)
+    movPointsStore.addHours(guildId, userId, member.user.tag, seconds)
+    await refreshBoard(guild).catch(() => undefined)
+    return movPointsStore.getLeaderboard(guildId)
+  })
+
   ipcMain.handle(IPC.getMovPointsBoard, async (_e, guildId: string): Promise<MovPointsBoardConfig> => movPointsStore.getBoardConfig(guildId))
 
   ipcMain.handle(IPC.setMovPointsBoard, async (_e, guildId: string, channelId: string | null): Promise<MovPointsBoardConfig> => {

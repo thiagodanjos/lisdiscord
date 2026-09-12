@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Medal, Minus, Plus, Radio, Search } from 'lucide-react'
+import { Clock3, Medal, Minus, Plus, Radio, Search } from 'lucide-react'
 import { bridge } from '../lib/bridge'
+import { formatDuration } from '../lib/format'
 import { Avatar, Badge, Button, Card, EmptyState, SectionHeading } from '../components/ui'
 import type { ChannelPickerEntry, GuildSummary, MemberSearchResult, MovPointsBoardConfig, MovPointsEntry } from '../../shared/types'
 
@@ -19,7 +20,11 @@ export default function MovPoints() {
   const [results, setResults] = useState<MemberSearchResult[]>([])
   const [target, setTarget] = useState<MemberSearchResult | null>(null)
   const [amount, setAmount] = useState(10)
+  const [hours, setHours] = useState(0)
+  const [minutes, setMinutes] = useState(0)
+  const [seconds, setSeconds] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [busyHours, setBusyHours] = useState(false)
 
   useEffect(() => {
     bridge.listGuilds().then((g) => {
@@ -82,6 +87,25 @@ export default function MovPoints() {
       setResults([])
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function applyHours() {
+    if (!target) return
+    const totalSeconds = hours * 3600 + minutes * 60 + seconds
+    if (totalSeconds <= 0) return
+    setBusyHours(true)
+    try {
+      const updated = await bridge.addMovHours(guildId, target.id, totalSeconds)
+      setLeaderboard(updated)
+      setTarget(null)
+      setQuery('')
+      setResults([])
+      setHours(0)
+      setMinutes(0)
+      setSeconds(0)
+    } finally {
+      setBusyHours(false)
     }
   }
 
@@ -177,13 +201,14 @@ export default function MovPoints() {
           </div>
 
           {target && (
-            <Card className="flex w-full max-w-xs flex-col gap-3">
+            <Card className="flex w-full max-w-xs flex-col gap-4">
               <div className="flex items-center gap-3">
                 <Avatar name={target.tag} color="#F0B232" size="sm" />
                 <p className="truncate text-sm font-semibold text-text">{target.tag}</p>
               </div>
+
               <div>
-                <label className="text-xs font-semibold tracking-wide text-faint uppercase">Quantidade</label>
+                <label className="text-xs font-semibold tracking-wide text-faint uppercase">Pontos</label>
                 <input
                   type="number"
                   min={1}
@@ -191,15 +216,66 @@ export default function MovPoints() {
                   onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))}
                   className="mt-1.5 w-full rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
                 />
+                <div className="mt-2 flex gap-2">
+                  <Button variant="primary" onClick={() => apply(1)} loading={busy} className="flex-1">
+                    <Plus size={14} />
+                    Adicionar
+                  </Button>
+                  <Button variant="danger" onClick={() => apply(-1)} loading={busy} className="flex-1">
+                    <Minus size={14} />
+                    Remover
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="primary" onClick={() => apply(1)} loading={busy} className="flex-1">
-                  <Plus size={14} />
-                  Adicionar
-                </Button>
-                <Button variant="danger" onClick={() => apply(-1)} loading={busy} className="flex-1">
-                  <Minus size={14} />
-                  Remover
+
+              <div className="border-t border-border pt-4">
+                <label className="text-xs font-semibold tracking-wide text-faint uppercase">Horas de Mov. Call</label>
+                <div className="mt-1.5 grid grid-cols-3 gap-2">
+                  <div>
+                    <input
+                      type="number"
+                      min={0}
+                      value={hours}
+                      onChange={(e) => setHours(Math.max(0, Number(e.target.value)))}
+                      placeholder="h"
+                      className="w-full rounded-lg border border-border bg-raised px-2 py-2 text-center text-sm text-text focus:border-accent focus:outline-none"
+                    />
+                    <p className="mt-0.5 text-center text-[10px] text-faint">horas</p>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={59}
+                      value={minutes}
+                      onChange={(e) => setMinutes(Math.max(0, Number(e.target.value)))}
+                      placeholder="m"
+                      className="w-full rounded-lg border border-border bg-raised px-2 py-2 text-center text-sm text-text focus:border-accent focus:outline-none"
+                    />
+                    <p className="mt-0.5 text-center text-[10px] text-faint">min</p>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={59}
+                      value={seconds}
+                      onChange={(e) => setSeconds(Math.max(0, Number(e.target.value)))}
+                      placeholder="s"
+                      className="w-full rounded-lg border border-border bg-raised px-2 py-2 text-center text-sm text-text focus:border-accent focus:outline-none"
+                    />
+                    <p className="mt-0.5 text-center text-[10px] text-faint">seg</p>
+                  </div>
+                </div>
+                <Button
+                  variant="dark"
+                  onClick={applyHours}
+                  loading={busyHours}
+                  disabled={hours === 0 && minutes === 0 && seconds === 0}
+                  className="mt-2 w-full"
+                >
+                  <Clock3 size={14} />
+                  Atribuir horas
                 </Button>
               </div>
             </Card>
@@ -218,6 +294,11 @@ export default function MovPoints() {
                 <span className="w-8 shrink-0 text-center text-lg">{medals[i] ?? `${i + 1}.`}</span>
                 <Avatar name={entry.tag} color="#F0B232" size="sm" />
                 <p className="min-w-0 flex-1 truncate text-sm font-semibold text-text">{entry.tag}</p>
+                {entry.totalSeconds > 0 && (
+                  <span className="flex shrink-0 items-center gap-1 text-xs text-muted">
+                    <Clock3 size={12} /> {formatDuration(entry.totalSeconds)}
+                  </span>
+                )}
                 <span className="shrink-0 text-sm font-bold text-warning">{entry.points} pontos</span>
               </Card>
             ))}

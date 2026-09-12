@@ -301,6 +301,7 @@ export interface MovPointsEntry {
   userId: string
   tag: string
   points: number
+  totalSeconds: number
 }
 
 export interface MovPointsBoardConfig {
