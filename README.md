@@ -38,6 +38,7 @@ O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidore
 - **Sorteios** — publica um sorteio com reação 🎉, escolhe vencedores automaticamente quando termina (ou manualmente, a qualquer momento)
 - **Jogos** — ativa mini-jogos como comandos que os membros do servidor podem usar: clássicos rápidos (`/dado`, `/moeda`, `/ppt`, `/oitobola`), `/trivia` com 24 perguntas em 6 categorias, `/forca` (adivinha a palavra letra a letra no chat), `/blackjack` (21 contra a casa, com aposta), `/jogodavelha` (galo por turnos entre dois membros) e `/duelo` (combate por turnos com ataque, defesa e ataque especial, também com aposta)
 - **Economia** — os jogos com recompensa alimentam um saldo de moedas por servidor; os membros consultam com `/saldo`, reclamam uma recompensa diária com `/diario` (com bónus por sequência) e veem o `/ranking` de quem tem mais moedas
+- **Pontos de MOV. Call** — regista Mov. Calls com `/movcall` (Normal = 10 pontos, Temática ou Outras MOVS = 15 pontos), indicando os participantes numa lista de menções/IDs (uma por linha) ou adicionando-os um a um por botões; gere os pontos manualmente com `/pontosmovadmin` (adicionar, remover, definir o canal do painel) ou pela página **Pontos MOV** da app; o comando `/pontosmov` deixa qualquer membro consultar os seus pontos ou o ranking; um painel fixo no canal escolhido mostra sempre o ranking atualizado, em tempo real, sempre que os pontos mudam
 
 **Geral**
 - Modo demonstração — explora a app inteira com dados fictícios, sem bot nem token nenhum
@@ -59,6 +60,8 @@ O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidore
 4. Copia o token do bot e cola-o no ecrã inicial da app.
 
 O token fica guardado encriptado localmente (via `safeStorage` do Electron) — nunca é enviado para lado nenhum a não ser para a própria API da Discord.
+
+Os comandos `/movcall` e `/pontosmovadmin` (que atribuem/removem pontos) só aparecem, por omissão, para membros com a permissão **Gerir servidor** — ajustável em **Definições do servidor → Integrações** no Discord. `/pontosmov` (ver pontos e ranking) fica disponível para toda a gente.
 
 ## Capturas de ecrã
 
@@ -103,7 +106,8 @@ electron/
 │   ├── messaging.ts         # enviar mensagens com embed
 │   ├── moderation.ts         # banir, expulsar, mutar, bloquear canais
 │   ├── giveaways.ts           # publicar e concluir sorteios
-│   └── games/                  # slash commands dos mini-jogos (um módulo por jogo) + economia
+│   ├── games/                  # slash commands dos mini-jogos (um módulo por jogo) + economia
+│   └── movcall.ts              # /movcall, /pontosmov, /pontosmovadmin e o painel de pontos em tempo real
 ├── store/               # persistência local (JSON em disco, token encriptado)
 └── ipc/                  # liga os pedidos da interface às funções acima
 

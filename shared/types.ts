@@ -285,3 +285,20 @@ export interface GameInfo {
 export interface GameSettings {
   enabled: Record<GameId, boolean>
 }
+
+// ==========================================================================
+// Pontos de MOV. Call
+// ==========================================================================
+
+export type MovCallType = 'normal' | 'tematica'
+
+export interface MovPointsEntry {
+  userId: string
+  tag: string
+  points: number
+}
+
+export interface MovPointsBoardConfig {
+  channelId: string | null
+  channelName: string | null
+}

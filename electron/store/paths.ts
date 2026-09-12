@@ -15,6 +15,7 @@ export const paths = {
   gameSettingsFile: path.join(root, 'game-settings.json'),
   moderationLogFile: path.join(root, 'moderation-log.json'),
   economyFile: path.join(root, 'economy.json'),
+  movPointsFile: path.join(root, 'mov-points.json'),
 }
 
 export function ensureDataDirs(): void {

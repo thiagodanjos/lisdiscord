@@ -14,6 +14,8 @@ import type {
   GuildSummary,
   MemberSearchResult,
   ModerationLogEntry,
+  MovPointsBoardConfig,
+  MovPointsEntry,
   RestoreOptions,
   RestoreProgressEvent,
   ScheduleConfig,
@@ -67,6 +69,12 @@ export const IPC = {
   listGames: 'games:list',
   getGameSettings: 'games:settings:get',
   setGameSettings: 'games:settings:set',
+
+  listMovPoints: 'movpoints:list',
+  addMovPoints: 'movpoints:add',
+  removeMovPoints: 'movpoints:remove',
+  getMovPointsBoard: 'movpoints:board:get',
+  setMovPointsBoard: 'movpoints:board:set',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -117,4 +125,10 @@ export interface LisDiscordBridge {
   listGames(): Promise<GameInfo[]>
   getGameSettings(guildId: string): Promise<GameSettings>
   setGameSettings(guildId: string, gameId: GameId, enabled: boolean): Promise<GameSettings>
+
+  listMovPoints(guildId: string): Promise<MovPointsEntry[]>
+  addMovPoints(guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]>
+  removeMovPoints(guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]>
+  getMovPointsBoard(guildId: string): Promise<MovPointsBoardConfig>
+  setMovPointsBoard(guildId: string, channelId: string | null): Promise<MovPointsBoardConfig>
 }

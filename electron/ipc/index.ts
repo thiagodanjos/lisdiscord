@@ -15,6 +15,8 @@ import type {
   GuildSummary,
   MemberSearchResult,
   ModerationLogEntry,
+  MovPointsBoardConfig,
+  MovPointsEntry,
   RestoreOptions,
   ScheduleConfig,
   ScheduleFrequency,
@@ -31,12 +33,14 @@ import { sendEmbedMessage } from '../discord/messaging'
 import * as moderation from '../discord/moderation'
 import { concludeGiveaway, postGiveawayMessage } from '../discord/giveaways'
 import { GAMES, registerCommandsForGuild } from '../discord/games'
+import { refreshBoard } from '../discord/movcall'
 import * as backupsStore from '../store/backups'
 import * as transcriptsStore from '../store/transcripts'
 import * as schedulesStore from '../store/schedules'
 import * as giveawaysStore from '../store/giveaways'
 import * as gameSettingsStore from '../store/gameSettings'
 import * as moderationLogStore from '../store/moderationLog'
+import * as movPointsStore from '../store/movPoints'
 import { getAppSettings, loadToken, openDataDir, saveToken } from '../store/settings'
 
 const CHANNEL_KIND_MAP: Record<number, ChannelKind | undefined> = {
@@ -244,6 +248,36 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
       if (guild) await registerCommandsForGuild(guild, gameSettingsStore.enabledGameIds(guildId)).catch(() => undefined)
     }
     return updated
+  })
+
+  // ---- Pontos de MOV. Call ----
+  ipcMain.handle(IPC.listMovPoints, async (_e, guildId: string): Promise<MovPointsEntry[]> => movPointsStore.getLeaderboard(guildId))
+
+  ipcMain.handle(IPC.addMovPoints, async (_e, guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    const member = await guild.members.fetch(userId)
+    movPointsStore.addPoints(guildId, userId, member.user.tag, amount)
+    await refreshBoard(guild).catch(() => undefined)
+    return movPointsStore.getLeaderboard(guildId)
+  })
+
+  ipcMain.handle(IPC.removeMovPoints, async (_e, guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    const member = await guild.members.fetch(userId)
+    movPointsStore.removePoints(guildId, userId, member.user.tag, amount)
+    await refreshBoard(guild).catch(() => undefined)
+    return movPointsStore.getLeaderboard(guildId)
+  })
+
+  ipcMain.handle(IPC.getMovPointsBoard, async (_e, guildId: string): Promise<MovPointsBoardConfig> => movPointsStore.getBoardConfig(guildId))
+
+  ipcMain.handle(IPC.setMovPointsBoard, async (_e, guildId: string, channelId: string | null): Promise<MovPointsBoardConfig> => {
+    if (!channelId) return movPointsStore.setBoardChannel(guildId, null, null)
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    const channel = await guild.channels.fetch(channelId)
+    const config = movPointsStore.setBoardChannel(guildId, channelId, channel?.name ?? channelId)
+    await refreshBoard(guild).catch(() => undefined)
+    return config
   })
 }
 

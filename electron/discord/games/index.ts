@@ -1,5 +1,6 @@
 import type { Guild, Interaction, RESTPostAPIChatInputApplicationCommandsJSONBody } from 'discord.js'
 import type { GameId, GameInfo } from '../../../shared/types'
+import { handleMovCallCommand, movCallCommandDefs } from '../movcall'
 import { blackjackCommandDef, runBlackjack } from './blackjack'
 import { runDuel, duelCommandDef } from './duel'
 import { economyCommandDefs, handleEconomyCommand } from './economyCommands'
@@ -49,7 +50,7 @@ function commandDefsForGame(id: GameId): CommandDef[] {
 }
 
 export function buildCommandDefinitions(enabled: GameId[]): CommandDef[] {
-  return enabled.flatMap((id) => commandDefsForGame(id))
+  return [...enabled.flatMap((id) => commandDefsForGame(id)), ...movCallCommandDefs()]
 }
 
 export async function registerCommandsForGuild(guild: Guild, enabled: GameId[]): Promise<void> {
@@ -61,6 +62,7 @@ export async function handleGameInteraction(interaction: Interaction): Promise<v
 
   if (await handleSimpleCommand(interaction)) return
   if (await handleEconomyCommand(interaction)) return
+  if (await handleMovCallCommand(interaction)) return
 
   switch (interaction.commandName) {
     case 'trivia':

@@ -5,6 +5,7 @@ import {
   Gauge,
   Gift,
   LayoutGrid,
+  Medal,
   MessageSquarePlus,
   Server,
   Settings as SettingsIcon,
@@ -31,6 +32,7 @@ const NAV_SERVER = [
   { to: '/moderacao', label: 'Moderação', icon: ShieldAlert },
   { to: '/sorteios', label: 'Sorteios', icon: Gift },
   { to: '/jogos', label: 'Jogos', icon: Gamepad2 },
+  { to: '/pontos-mov', label: 'Pontos MOV', icon: Medal },
 ]
 
 export function AppShell({ children, status }: { children: ReactNode; status: BotStatus | null }) {

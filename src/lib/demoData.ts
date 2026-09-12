@@ -11,6 +11,8 @@ import type {
   GuildSummary,
   MemberSearchResult,
   ModerationLogEntry,
+  MovPointsBoardConfig,
+  MovPointsEntry,
   RestoreProgressEvent,
   RoleBackup,
   ScheduleConfig,
@@ -161,6 +163,22 @@ let giveawaysData: Giveaway[] = [
 ]
 
 const gameSettingsData = new Map<string, GameSettings>()
+
+let movPointsData: Record<string, MovPointsEntry[]> = {
+  g1: [
+    { userId: 'u10', tag: 'ana.dev#0001', points: 85 },
+    { userId: 'u12', tag: 'sofia_gamer#7788', points: 60 },
+    { userId: 'u11', tag: 'ricardo_c#4521', points: 40 },
+  ],
+}
+
+let movPointsBoardData: Record<string, MovPointsBoardConfig> = {
+  g1: { channelId: 'c4', channelName: 'geral' },
+}
+
+function sortMovPoints(entries: MovPointsEntry[]): MovPointsEntry[] {
+  return [...entries].sort((a, b) => b.points - a.points)
+}
 
 const transcriptsData: Transcript[] = [
   {
@@ -447,6 +465,42 @@ export const demoBridge: LisDiscordBridge = {
     const current = gameSettingsData.get(guildId) ?? { enabled: Object.fromEntries(DEMO_GAMES.map((g) => [g.id, true])) as Record<GameId, boolean> }
     const updated = { enabled: { ...current.enabled, [gameId]: enabled } }
     gameSettingsData.set(guildId, updated)
+    return updated
+  },
+
+  async listMovPoints(guildId) {
+    await delay()
+    return sortMovPoints(movPointsData[guildId] ?? [])
+  },
+  async addMovPoints(guildId, userId, amount) {
+    await delay(300)
+    const entries = movPointsData[guildId] ?? []
+    const member = membersData.find((m) => m.id === userId)
+    const existing = entries.find((e) => e.userId === userId)
+    if (existing) existing.points = Math.max(0, existing.points + amount)
+    else entries.push({ userId, tag: member?.tag ?? userId, points: Math.max(0, amount) })
+    movPointsData = { ...movPointsData, [guildId]: entries }
+    return sortMovPoints(entries)
+  },
+  async removeMovPoints(guildId, userId, amount) {
+    await delay(300)
+    const entries = movPointsData[guildId] ?? []
+    const member = membersData.find((m) => m.id === userId)
+    const existing = entries.find((e) => e.userId === userId)
+    if (existing) existing.points = Math.max(0, existing.points - amount)
+    else entries.push({ userId, tag: member?.tag ?? userId, points: 0 })
+    movPointsData = { ...movPointsData, [guildId]: entries }
+    return sortMovPoints(entries)
+  },
+  async getMovPointsBoard(guildId) {
+    await delay()
+    return movPointsBoardData[guildId] ?? { channelId: null, channelName: null }
+  },
+  async setMovPointsBoard(guildId, channelId) {
+    await delay()
+    const channel = makeChannels().find((c) => c.id === channelId)
+    const updated: MovPointsBoardConfig = { channelId, channelName: channel?.name ?? channelId }
+    movPointsBoardData = { ...movPointsBoardData, [guildId]: updated }
     return updated
   },
 }
