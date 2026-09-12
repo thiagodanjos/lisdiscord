@@ -36,7 +36,8 @@ O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidore
 - **Mensagens** — compositor de embeds com pré-visualização ao vivo (título, descrição, cor, imagem, campos, rodapé) para publicar mensagens bem formatadas num canal
 - **Moderação** — pesquisar membros, banir, expulsar e mutar (timeout), bloquear/desbloquear canais, com registo de todas as ações
 - **Sorteios** — publica um sorteio com reação 🎉, escolhe vencedores automaticamente quando termina (ou manualmente, a qualquer momento)
-- **Jogos** — ativa mini-jogos como comandos (`/dado`, `/moeda`, `/ppt`, `/oitobola`, `/trivia`) que os membros do servidor podem usar
+- **Jogos** — ativa mini-jogos como comandos que os membros do servidor podem usar: clássicos rápidos (`/dado`, `/moeda`, `/ppt`, `/oitobola`), `/trivia` com 24 perguntas em 6 categorias, `/forca` (adivinha a palavra letra a letra no chat), `/blackjack` (21 contra a casa, com aposta), `/jogodavelha` (galo por turnos entre dois membros) e `/duelo` (combate por turnos com ataque, defesa e ataque especial, também com aposta)
+- **Economia** — os jogos com recompensa alimentam um saldo de moedas por servidor; os membros consultam com `/saldo`, reclamam uma recompensa diária com `/diario` (com bónus por sequência) e veem o `/ranking` de quem tem mais moedas
 
 **Geral**
 - Modo demonstração — explora a app inteira com dados fictícios, sem bot nem token nenhum
@@ -102,7 +103,7 @@ electron/
 │   ├── messaging.ts         # enviar mensagens com embed
 │   ├── moderation.ts         # banir, expulsar, mutar, bloquear canais
 │   ├── giveaways.ts           # publicar e concluir sorteios
-│   └── games.ts                # slash commands dos mini-jogos
+│   └── games/                  # slash commands dos mini-jogos (um módulo por jogo) + economia
 ├── store/               # persistência local (JSON em disco, token encriptado)
 └── ipc/                  # liga os pedidos da interface às funções acima
 

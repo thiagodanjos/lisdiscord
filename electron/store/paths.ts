@@ -14,6 +14,7 @@ export const paths = {
   giveawaysFile: path.join(root, 'giveaways.json'),
   gameSettingsFile: path.join(root, 'game-settings.json'),
   moderationLogFile: path.join(root, 'moderation-log.json'),
+  economyFile: path.join(root, 'economy.json'),
 }
 
 export function ensureDataDirs(): void {

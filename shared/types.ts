@@ -263,7 +263,17 @@ export interface Giveaway {
 // Jogos (slash commands)
 // ==========================================================================
 
-export type GameId = 'dado' | 'moeda' | 'ppt' | 'oitobola' | 'trivia'
+export type GameId =
+  | 'dado'
+  | 'moeda'
+  | 'ppt'
+  | 'oitobola'
+  | 'trivia'
+  | 'forca'
+  | 'blackjack'
+  | 'jogodavelha'
+  | 'duelo'
+  | 'economia'
 
 export interface GameInfo {
   id: GameId

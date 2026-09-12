@@ -192,7 +192,7 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
         onClick={() => onChange(!checked)}
         className={cn('relative h-5 w-9 shrink-0 rounded-full transition-colors', checked ? 'bg-accent' : 'bg-border-strong')}
       >
-        <span className={cn('absolute top-0.5 size-4 rounded-full bg-white transition-transform', checked ? 'translate-x-[18px]' : 'translate-x-0.5')} />
+        <span className={cn('absolute top-0.5 left-0.5 size-4 rounded-full bg-white transition-transform', checked ? 'translate-x-4' : 'translate-x-0')} />
       </button>
       {label && <span className="text-sm text-text">{label}</span>}
     </label>

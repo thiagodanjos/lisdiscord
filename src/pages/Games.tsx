@@ -1,8 +1,23 @@
 import { useEffect, useState } from 'react'
-import { Gamepad2 } from 'lucide-react'
+import { Brain, Coins, Dice5, Gamepad2, Grid3x3, Hand, HelpCircle, Skull, Spade, Swords, Wallet } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { Card, SectionHeading, Toggle } from '../components/ui'
 import type { GameId, GameInfo, GameSettings, GuildSummary } from '../../shared/types'
+
+const GAME_ICONS: Record<GameId, typeof Gamepad2> = {
+  dado: Dice5,
+  moeda: Coins,
+  ppt: Hand,
+  oitobola: HelpCircle,
+  trivia: Brain,
+  forca: Skull,
+  blackjack: Spade,
+  jogodavelha: Grid3x3,
+  duelo: Swords,
+  economia: Wallet,
+}
+
+const REWARDS_COINS: GameId[] = ['trivia', 'forca', 'blackjack', 'jogodavelha', 'duelo']
 
 export default function Games() {
   const [guilds, setGuilds] = useState<GuildSummary[]>([])
@@ -48,26 +63,40 @@ export default function Games() {
       </div>
 
       <div className="flex flex-col gap-2">
-        {games.map((game) => (
-          <Card key={game.id} className="flex items-center gap-4 p-4">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
-              <Gamepad2 size={18} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-text">{game.name}</p>
-                <code className="rounded bg-raised px-1.5 py-0.5 text-xs text-accent">{game.command}</code>
+        {games.map((game) => {
+          const Icon = GAME_ICONS[game.id] ?? Gamepad2
+          const rewards = REWARDS_COINS.includes(game.id)
+          return (
+            <Card key={game.id} className="flex items-center gap-4 p-4">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+                <Icon size={18} />
               </div>
-              <p className="mt-0.5 text-xs text-muted">{game.description}</p>
-            </div>
-            <Toggle checked={settings?.enabled[game.id] ?? true} onChange={(v) => toggle(game.id, v)} />
-          </Card>
-        ))}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-text">{game.name}</p>
+                  <code className="rounded bg-raised px-1.5 py-0.5 text-xs text-accent">{game.command}</code>
+                  {rewards && (
+                    <span className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
+                      <Coins size={11} /> Ganha moedas
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs text-muted">{game.description}</p>
+              </div>
+              <Toggle checked={settings?.enabled[game.id] ?? true} onChange={(v) => toggle(game.id, v)} />
+            </Card>
+          )
+        })}
       </div>
 
       <p className="text-xs text-faint">
         Os comandos ficam disponíveis no servidor assim que ativados (é instantâneo) — mas só respondem enquanto a
-        LisDiscord estiver aberta e o bot ligado, tal como o resto da app.
+        LisDiscord estiver aberta e o bot ligado, tal como o resto da app. Os jogos marcados com{' '}
+        <span className="inline-flex items-center gap-1 align-middle text-warning">
+          <Coins size={11} /> Ganha moedas
+        </span>{' '}
+        alimentam a economia partilhada do servidor — os membros veem o saldo com <code className="text-accent">/saldo</code> e o
+        ranking com <code className="text-accent">/ranking</code>.
       </p>
     </div>
   )

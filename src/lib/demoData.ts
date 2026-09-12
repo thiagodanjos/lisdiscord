@@ -23,7 +23,12 @@ const DEMO_GAMES = [
   { id: 'moeda' as const, name: 'Cara ou Coroa', command: '/moeda', description: 'Atira uma moeda ao ar.' },
   { id: 'ppt' as const, name: 'Pedra, Papel ou Tesoura', command: '/ppt', description: 'Joga contra o bot.' },
   { id: 'oitobola' as const, name: 'Bola 8 Mágica', command: '/oitobola', description: 'Faz uma pergunta e recebe uma resposta misteriosa.' },
-  { id: 'trivia' as const, name: 'Trivia', command: '/trivia', description: 'Responde a uma pergunta de escolha múltipla contra o relógio.' },
+  { id: 'trivia' as const, name: 'Trivia', command: '/trivia', description: 'Responde a uma pergunta de escolha múltipla contra o relógio e ganha moedas.' },
+  { id: 'forca' as const, name: 'Forca', command: '/forca', description: 'Adivinha a palavra letra a letra antes que a forca se complete.' },
+  { id: 'blackjack' as const, name: 'Blackjack', command: '/blackjack', description: 'Joga 21 contra a casa, apostando moedas.' },
+  { id: 'jogodavelha' as const, name: 'Jogo do Galo', command: '/jogodavelha', description: 'Desafia outro membro para um jogo do galo por turnos.' },
+  { id: 'duelo' as const, name: 'Duelo', command: '/duelo', description: 'Combate por turnos contra outro membro, apostando moedas, com ataques e defesas.' },
+  { id: 'economia' as const, name: 'Economia', command: '/saldo · /diario · /ranking', description: 'Vê o teu saldo, reclama moedas diárias e consulta o ranking do servidor.' },
 ]
 
 // Tudo neste ficheiro é fictício — nomes, servidores, mensagens. Serve para
