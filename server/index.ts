@@ -20,9 +20,7 @@ async function main(): Promise<void> {
   const status = await discordManager.connect(token)
   console.log(`✅ LisDiscord (bot autónomo) ligado como ${status.botTag} — ${status.guildCount} servidor(es).`)
   if (!status.messageContentEnabled) {
-    console.warn(
-      '⚠️  Message Content Intent desativada no Developer Portal — os transcripts ficam sem conteúdo das mensagens e o /movcall não consegue ler a lista de participantes no chat.',
-    )
+    console.warn('⚠️  Message Content Intent desativada no Developer Portal — os transcripts ficam sem conteúdo das mensagens.')
   }
 
   startScheduledBackups()

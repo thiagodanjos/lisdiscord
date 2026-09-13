@@ -1,5 +1,6 @@
-import type { Guild, Interaction, RESTPostAPIChatInputApplicationCommandsJSONBody } from 'discord.js'
+import { type ChatInputCommandInteraction, EmbedBuilder, type Guild, type Interaction, type RESTPostAPIChatInputApplicationCommandsJSONBody, SlashCommandBuilder } from 'discord.js'
 import type { GameId, GameInfo } from '../../../shared/types'
+import { enabledGameIds } from '../../store/gameSettings'
 import { handleGiveawayCommand, sorteioCommandDef } from '../giveawayCommand'
 import { handleMovCallCommand, movCallCommandDefs } from '../movcall'
 import { blackjackCommandDef, runBlackjack } from './blackjack'
@@ -70,8 +71,57 @@ function commandDefsForGame(id: GameId): CommandDef[] {
   }
 }
 
+export function helpCommandDef(): RESTPostAPIChatInputApplicationCommandsJSONBody {
+  return new SlashCommandBuilder().setName('help').setDescription('Mostra todos os comandos do bot e como usá-los').toJSON()
+}
+
+async function handleHelpCommand(interaction: ChatInputCommandInteraction): Promise<boolean> {
+  if (interaction.commandName !== 'help') return false
+  const enabled = interaction.guild ? enabledGameIds(interaction.guild.id) : []
+  await interaction.reply({ embeds: buildHelpEmbeds(enabled), ephemeral: true })
+  return true
+}
+
+function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
+  const movEmbed = new EmbedBuilder()
+    .setColor(0xf0b232)
+    .setTitle('🏅 Pontos de MOV. Call')
+    .setDescription(
+      [
+        '`/movcall` — regista uma Mov. Call de hoje por um assistente com botões: escolhe o tipo e escreve a lista de participantes por ID, numa janela própria. *(gestores)*',
+        '`/movhoras` — atribui horas de Mov. Call a um membro, escolhido por um seletor. *(gestores)*',
+        '`/pontosmov ver [membro]` — mostra os pontos e horas de alguém (ou os teus).',
+        '`/pontosmov ranking` — mostra o placar completo de pontos de Mov. Call.',
+        '`/pontosmovadmin adicionar|remover` — ajusta pontos de alguém manualmente. *(gestores)*',
+        '`/pontosmovadmin painel` — define o canal onde fica o placar sempre atualizado. *(gestores)*',
+        '`/inativos` — mostra quem não tem pontos ou tem menos de 5 horas de Mov. Call. *(gestores)*',
+        '`/resetmovcall` — apaga todos os pontos e horas do servidor, com confirmação. *(gestores)*',
+      ].join('\n'),
+    )
+
+  const giveawayEmbed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle('🎉 Sorteios')
+    .setDescription(
+      '`/sorteio` — cria um sorteio por reação 🎉, com assistente para escolher canal, título/prémio, duração exata e nº de vencedores. Depois de terminar, um botão "Rerolar vencedor(es)" permite escolher outro vencedor. *(gestores)*',
+    )
+
+  const gamesList = GAMES.filter((g) => enabled.includes(g.id))
+  const gamesEmbed = new EmbedBuilder()
+    .setColor(0x3ba55c)
+    .setTitle('🎮 Jogos')
+    .setDescription(
+      gamesList.length > 0
+        ? gamesList.map((g) => `\`${g.command}\` — ${g.description}`).join('\n') +
+            '\n\n_Nenhum jogo atribui pontos de Mov. Call — isso é só pelos comandos acima._'
+        : '_Nenhum jogo está ativado neste servidor. Ativa em "Jogos", na app desktop._',
+    )
+
+  return [movEmbed, giveawayEmbed, gamesEmbed]
+}
+
 export function buildCommandDefinitions(enabled: GameId[]): CommandDef[] {
-  return [...enabled.flatMap((id) => commandDefsForGame(id)), ...movCallCommandDefs(), sorteioCommandDef()]
+  return [...enabled.flatMap((id) => commandDefsForGame(id)), ...movCallCommandDefs(), sorteioCommandDef(), helpCommandDef()]
 }
 
 export async function registerCommandsForGuild(guild: Guild, enabled: GameId[]): Promise<void> {
@@ -81,6 +131,7 @@ export async function registerCommandsForGuild(guild: Guild, enabled: GameId[]):
 export async function handleGameInteraction(interaction: Interaction): Promise<void> {
   if (!interaction.isChatInputCommand()) return
 
+  if (await handleHelpCommand(interaction)) return
   if (await handleSimpleCommand(interaction)) return
   if (await handleEconomyCommand(interaction)) return
   if (await handleMovCallCommand(interaction)) return

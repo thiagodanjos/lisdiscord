@@ -1,13 +1,10 @@
 import {
   ActionRowBuilder,
-  type ButtonInteraction,
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
   type ChatInputCommandInteraction,
-  ComponentType,
   EmbedBuilder,
-  GatewayIntentBits,
   type Guild,
   type Message,
   type MessageEditOptions,
@@ -17,7 +14,6 @@ import {
   PermissionFlagsBits,
   type RESTPostAPIChatInputApplicationCommandsJSONBody,
   SlashCommandBuilder,
-  type TextBasedChannel,
   TextInputBuilder,
   TextInputStyle,
   UserSelectMenuBuilder,
@@ -26,7 +22,8 @@ import type { MovCallType } from '../../shared/types'
 import * as movPoints from '../store/movPoints'
 
 const POINTS_BY_TYPE: Record<MovCallType, number> = { normal: 10, tematica: 15 }
-const SETUP_TIMEOUT_MS = 20 * 60_000
+const INACTIVE_HOURS_THRESHOLD_SECONDS = 5 * 3600
+const SETUP_TIMEOUT_MS = 10 * 60_000
 const MODAL_TIMEOUT_MS = 120_000
 const RESULT_DISPLAY_MS = 6_000
 const CANCEL_DISPLAY_MS = 2_500
@@ -103,12 +100,27 @@ export function resetMovCallCommandDef(): RESTPostAPIChatInputApplicationCommand
     .toJSON()
 }
 
+export function inativosCommandDef(): RESTPostAPIChatInputApplicationCommandsJSONBody {
+  return new SlashCommandBuilder()
+    .setName('inativos')
+    .setDescription('Mostra membros sem pontos ou com menos de 5 horas de Mov. Call')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .toJSON()
+}
+
 export function movCallCommandDefs(): RESTPostAPIChatInputApplicationCommandsJSONBody[] {
-  return [movCallCommandDef(), movHorasCommandDef(), pontosMovCommandDef(), pontosMovAdminCommandDef(), resetMovCallCommandDef()]
+  return [
+    movCallCommandDef(),
+    movHorasCommandDef(),
+    pontosMovCommandDef(),
+    pontosMovAdminCommandDef(),
+    resetMovCallCommandDef(),
+    inativosCommandDef(),
+  ]
 }
 
 export async function handleMovCallCommand(interaction: ChatInputCommandInteraction): Promise<boolean> {
-  if (!['movcall', 'movhoras', 'pontosmov', 'pontosmovadmin', 'resetmovcall'].includes(interaction.commandName)) return false
+  if (!['movcall', 'movhoras', 'pontosmov', 'pontosmovadmin', 'resetmovcall', 'inativos'].includes(interaction.commandName)) return false
 
   const guild = interaction.guild
   if (!guild) {
@@ -131,6 +143,11 @@ export async function handleMovCallCommand(interaction: ChatInputCommandInteract
     return true
   }
 
+  if (interaction.commandName === 'inativos') {
+    await runInativos(interaction, guild)
+    return true
+  }
+
   if (interaction.commandName === 'pontosmov') {
     const sub = interaction.options.getSubcommand()
     if (sub === 'ver') await runVerPontos(interaction, guild)
@@ -150,14 +167,6 @@ export async function handleMovCallCommand(interaction: ChatInputCommandInteract
 // ==========================================================================
 
 async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
-  const channelRef = interaction.channel
-  if (!channelRef || !channelRef.isTextBased() || channelRef instanceof PartialGroupDMChannel) {
-    await interaction.reply({ content: '❌ Não consigo aceder a este canal para ler a lista de participantes.', ephemeral: true })
-    return
-  }
-  const channel: ListenableChannel = channelRef
-  const messageContentEnabled = interaction.client.options.intents.has(GatewayIntentBits.MessageContent)
-
   const today = formatBrasiliaDate(new Date())
   let tipo: MovCallType | null = null
   let errorText = ''
@@ -182,28 +191,20 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
     )
   }
 
-  function waitingListEmbed(): EmbedBuilder {
-    const embed = new EmbedBuilder()
+  function listEmbed(): EmbedBuilder {
+    return new EmbedBuilder()
       .setColor(tipo === 'normal' ? 0x5865f2 : 0xf0b232)
       .setTitle(`📋 Mov. Call ${tipo === 'normal' ? 'Normal' : 'Temática / Outra MOV'}`)
       .setDescription(
-        'Escreve agora, **neste canal**, a lista de participantes — um membro por linha, por menção (@membro, mesmo sem escolher a sugestão do Discord), ' +
-          'pelo nome/alcunha, ou pelo ID. A tua mensagem fica com ✅ quando os pontos forem atribuídos, ou ❌ se algo correr mal.',
+        'Clica em **Escrever lista** e cola os participantes numa caixa de texto, um **ID** por linha (menções não funcionam aqui — o Discord não permite escrevê-las dentro desta janela).\n\n' +
+          '💡 Não sabes o ID de alguém? Ativa o **Modo de Programador** em Definições → Avançado no Discord, depois clica com o botão direito no membro → **Copiar ID de Utilizador**.',
       )
-      .setFooter({
-        text: `+${POINTS_BY_TYPE[tipo ?? 'normal']} pontos por participante · tens ${Math.round(SETUP_TIMEOUT_MS / 60_000)} minutos`,
-      })
-    if (!messageContentEnabled) {
-      embed.addFields({
-        name: '⚠️ Aviso',
-        value: 'A Message Content Intent parece estar desativada — posso não conseguir ler o texto da tua mensagem. Ativa-a em Developer Portal → Bot → Privileged Gateway Intents.',
-      })
-    }
-    return embed
+      .setFooter({ text: `+${POINTS_BY_TYPE[tipo ?? 'normal']} pontos por participante` })
   }
 
-  function waitingListRow(): ActionRowBuilder<ButtonBuilder> {
+  function listRow(): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('movcall:writeList').setLabel('Escrever lista').setStyle(ButtonStyle.Primary).setEmoji('📝'),
       new ButtonBuilder().setCustomId('movcall:back').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
       new ButtonBuilder().setCustomId('movcall:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
     )
@@ -211,6 +212,13 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
 
   function errorEmbed(): EmbedBuilder {
     return new EmbedBuilder().setColor(0xed4245).setTitle('❌ Não consegui perceber a lista').setDescription(errorText)
+  }
+
+  function errorRow(): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('movcall:back').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
+      new ButtonBuilder().setCustomId('movcall:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
+    )
   }
 
   const reply = await interaction.reply({ embeds: [chooseTypeEmbed()], components: [chooseTypeRow()], ephemeral: true, withResponse: true })
@@ -222,16 +230,9 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
     await interaction.deleteReply().catch(() => undefined)
   }
 
-  async function timeoutOut(): Promise<void> {
-    await interaction
-      .editReply({ embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('⏱️ Tempo esgotado').setDescription('Registo de Mov. Call cancelado.')], components: [] })
-      .catch(() => undefined)
-    await interaction.deleteReply().catch(() => undefined)
-  }
+  await loop(message)
 
-  await chooseTypeStep(message)
-
-  async function chooseTypeStep(msg: Message): Promise<void> {
+  async function loop(msg: Message): Promise<void> {
     try {
       const click = await msg.awaitMessageComponent({ time: SETUP_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
 
@@ -243,71 +244,63 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
 
       if (click.customId === 'movcall:tipo:normal' || click.customId === 'movcall:tipo:tematica') {
         tipo = click.customId.endsWith('normal') ? 'normal' : 'tematica'
-        await click.update({ embeds: [waitingListEmbed()], components: [waitingListRow()] })
-        await listStep(msg)
-        return
-      }
-
-      await chooseTypeStep(msg)
-    } catch {
-      await timeoutOut()
-    }
-  }
-
-  async function listStep(msg: Message): Promise<void> {
-    const outcome = await raceListInput(msg, channel, interaction.user.id, SETUP_TIMEOUT_MS)
-
-    if (outcome.kind === 'timeout') {
-      await timeoutOut()
-      return
-    }
-
-    if (outcome.kind === 'component') {
-      const click = outcome.interaction
-
-      if (click.customId === 'movcall:cancel') {
-        await click.update({ embeds: [new EmbedBuilder().setColor(0x99aab5).setTitle('Cancelado').setDescription('Registo de Mov. Call cancelado.')], components: [] })
-        await deleteAfter(CANCEL_DISPLAY_MS)
+        await click.update({ embeds: [listEmbed()], components: [listRow()] })
+        await loop(msg)
         return
       }
 
       if (click.customId === 'movcall:back') {
         tipo = null
         await click.update({ embeds: [chooseTypeEmbed()], components: [chooseTypeRow()] })
-        await chooseTypeStep(msg)
+        await loop(msg)
         return
       }
 
-      await listStep(msg)
-      return
-    }
+      if (click.customId === 'movcall:writeList') {
+        const modal = new ModalBuilder()
+          .setCustomId('movcall:modal')
+          .setTitle('Lista de participantes')
+          .addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder()
+                .setCustomId('lista')
+                .setLabel('Um ID por linha (não funciona com menções)')
+                .setStyle(TextInputStyle.Paragraph)
+                .setRequired(true)
+                .setPlaceholder('123456789012345678\n987654321098765432'),
+            ),
+          )
+        await click.showModal(modal)
 
-    const userMessage = outcome.message
-    await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏳ A procurar participantes…')], components: [] }).catch(() => undefined)
-    const ids = await parseParticipantsList(guild, userMessage.content)
+        try {
+          const submitted = await click.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
+          const ids = parseParticipantsList(submitted.fields.getTextInputValue('lista'))
 
-    if (ids.length === 0) {
-      await userMessage.react('❌').catch(() => undefined)
-      errorText =
-        'Não encontrei ninguém válido nessa mensagem. Escreve um membro por linha, por menção (@membro — escolhida da sugestão do Discord ou não), pelo nome/alcunha, ou pelo ID. ' +
-        'Se a mensagem tinha texto e isto continuar a acontecer, confirma que a **Message Content Intent** está ativada em Developer Portal → Bot.'
-      await interaction.editReply({ embeds: [errorEmbed()], components: [waitingListRow()] }).catch(() => undefined)
-      await listStep(msg)
-      return
-    }
+          if (ids.length === 0) {
+            errorText = 'Não encontrei nenhum ID válido nessa lista. Confirma que puseste um ID por linha (não funciona com menções @pessoa).'
+            await updateFromModal(submitted, interaction, { embeds: [errorEmbed()], components: [errorRow()] })
+            await loop(msg)
+            return
+          }
 
-    await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏳ A atribuir pontos…')], components: [] }).catch(() => undefined)
+          await updateFromModal(submitted, interaction, { embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏳ A atribuir pontos…')], components: [] })
+          const resultEmbed = await processParticipants(guild, tipo ?? 'normal', ids, interaction.user.tag, today)
+          await interaction.editReply({ embeds: [resultEmbed], components: [] })
+          await deleteAfter(RESULT_DISPLAY_MS)
+        } catch {
+          // modal fechada sem submeter — mantém-se no passo da lista
+          await interaction.editReply({ embeds: [listEmbed()], components: [listRow()] })
+          await loop(msg)
+        }
+        return
+      }
 
-    try {
-      const resultEmbed = await processParticipants(guild, tipo ?? 'normal', ids, interaction.user.tag, today)
-      await userMessage.react('✅').catch(() => undefined)
-      await interaction.editReply({ embeds: [resultEmbed], components: [] })
-      await deleteAfter(RESULT_DISPLAY_MS)
+      await loop(msg)
     } catch {
-      await userMessage.react('❌').catch(() => undefined)
-      errorText = 'Ocorreu um erro inesperado ao atribuir os pontos. Tenta enviar a lista outra vez.'
-      await interaction.editReply({ embeds: [errorEmbed()], components: [waitingListRow()] }).catch(() => undefined)
-      await listStep(msg)
+      await interaction
+        .editReply({ embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('⏱️ Tempo esgotado').setDescription('Registo de Mov. Call cancelado.')], components: [] })
+        .catch(() => undefined)
+      await interaction.deleteReply().catch(() => undefined)
     }
   }
 }
@@ -633,6 +626,32 @@ async function runResetMovCall(interaction: ChatInputCommandInteraction, guild: 
 }
 
 // ==========================================================================
+// /inativos (gestão)
+// ==========================================================================
+
+async function runInativos(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
+  await interaction.reply({ embeds: [buildInactiveEmbed(guild)], ephemeral: true })
+}
+
+function buildInactiveEmbed(guild: Guild): EmbedBuilder {
+  const leaderboard = movPoints.getLeaderboard(guild.id)
+  const inactive = leaderboard.filter((entry) => entry.points === 0 || entry.totalSeconds < INACTIVE_HOURS_THRESHOLD_SECONDS)
+
+  const lines = inactive.map((entry) => `⚠️ **${entry.tag}** — ${entry.points} pontos · ${formatDuration(entry.totalSeconds)}`)
+
+  return new EmbedBuilder()
+    .setColor(0xed4245)
+    .setTitle('⚠️ MEMBROS INATIVOS')
+    .setDescription(
+      lines.length > 0
+        ? lines.join('\n')
+        : '_Ninguém está abaixo do limite — toda a gente com registo tem pontos e pelo menos 5 horas de Mov. Call._',
+    )
+    .setFooter({ text: `${guild.name} · sem pontos ou menos de 5h de Mov. Call · só considera quem já tem registo` })
+    .setTimestamp(new Date())
+}
+
+// ==========================================================================
 // Painel em tempo real
 // ==========================================================================
 
@@ -678,36 +697,20 @@ function buildBoardEmbed(guild: Guild): EmbedBuilder {
 // Auxiliares
 // ==========================================================================
 
-/**
- * Resolve uma linha da lista para um ID de utilizador: menção real (`<@id>`, quando o Discord já a
- * converteu por teres escolhido a sugestão de autocompletar), ID em bruto, ou — quando alguém escreve
- * só `@nome` como texto normal, sem selecionar a sugestão, o que o Discord não converte em menção —
- * uma pesquisa pelo nome/alcunha através da REST API (não precisa do intent de membros).
- */
-async function resolveParticipantId(guild: Guild, rawLine: string): Promise<string | null> {
-  const line = rawLine.trim()
-  if (!line) return null
-
-  const mentionMatch = line.match(/^<@!?(\d{15,21})>$/)
+function extractUserId(raw: string): string | null {
+  const mentionMatch = raw.match(/^<@!?(\d{15,21})>$/)
   if (mentionMatch) return mentionMatch[1]
-
-  if (/^\d{15,21}$/.test(line)) return line
-
-  const name = line.replace(/^@/, '').trim()
-  if (!name) return null
-
-  const results = await guild.members.search({ query: name, limit: 1 }).catch(() => null)
-  return results?.first()?.id ?? null
+  if (/^\d{15,21}$/.test(raw)) return raw
+  return null
 }
 
-async function parseParticipantsList(guild: Guild, text: string): Promise<string[]> {
-  const lines = text
+function parseParticipantsList(text: string): string[] {
+  const ids = text
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-
-  const resolved = await Promise.all(lines.map((line) => resolveParticipantId(guild, line)))
-  const ids = resolved.filter((id): id is string => id !== null)
+    .map(extractUserId)
+    .filter((id): id is string => id !== null)
   return [...new Set(ids)]
 }
 
@@ -744,42 +747,4 @@ async function updateFromModal(
 
 function formatBrasiliaDate(date: Date): string {
   return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'full' }).format(date)
-}
-
-/** `PartialGroupDMChannel` não tem `createMessageCollector` e nunca aparece num comando de servidor — excluído para o TS confirmar o método existe. */
-type ListenableChannel = Exclude<TextBasedChannel, PartialGroupDMChannel>
-
-type ListInputOutcome = { kind: 'component'; interaction: ButtonInteraction } | { kind: 'message'; message: Message } | { kind: 'timeout' }
-
-/**
- * Espera, ao mesmo tempo, por um clique nos botões (Voltar/Cancelar) da mensagem efémera OU por uma
- * mensagem normal enviada pelo utilizador no canal — é assim que a lista de participantes aceita
- * menções reais, já que só a caixa de mensagem normal do Discord (não uma modal) as converte em `<@id>`.
- */
-function raceListInput(msg: Message, channel: ListenableChannel, userId: string, timeMs: number): Promise<ListInputOutcome> {
-  return new Promise((resolve) => {
-    let done = false
-
-    const componentCollector = msg.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      filter: (i) => i.user.id === userId,
-      time: timeMs,
-      max: 1,
-    })
-    const messageCollector = channel.createMessageCollector({ filter: (m) => m.author.id === userId, time: timeMs, max: 1 })
-
-    function finish(result: ListInputOutcome): void {
-      if (done) return
-      done = true
-      componentCollector.stop()
-      messageCollector.stop()
-      resolve(result)
-    }
-
-    componentCollector.on('collect', (interaction) => finish({ kind: 'component', interaction }))
-    messageCollector.on('collect', (message) => finish({ kind: 'message', message }))
-    componentCollector.on('end', (_collected, reason) => {
-      if (reason === 'time') finish({ kind: 'timeout' })
-    })
-  })
 }

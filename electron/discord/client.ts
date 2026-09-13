@@ -11,8 +11,7 @@ import { handleGameInteraction, registerCommandsForGuild } from './games'
  *
  * Intents pedidos de propósito ao mínimo: `Guilds` (obrigatório para o cache
  * de servidores/canais/cargos funcionar) e `GuildMessages` + `MessageContent`
- * (usados para os transcripts e para o /movcall conseguir ler a lista de
- * participantes escrita no chat). Sem `GuildMembers` — não precisamos da
+ * (só usados para os transcripts). Sem `GuildMembers` — não precisamos da
  * lista de membros, só da contagem aproximada que já vem com o servidor
  * (e a pesquisa de membros usa a REST API, que não exige este intent).
  */
