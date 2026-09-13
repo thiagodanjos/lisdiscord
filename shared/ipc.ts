@@ -7,6 +7,7 @@ import type {
   ChannelPickerEntry,
   DiffEntry,
   EmbedDraft,
+  ExcludedMember,
   GameId,
   GameInfo,
   GameSettings,
@@ -86,6 +87,9 @@ export const IPC = {
   listRoleGoals: 'goals:list',
   setRoleGoal: 'goals:set',
   removeRoleGoal: 'goals:remove',
+
+  listExcludedMembers: 'movpoints:excluded:list',
+  setMemberExcluded: 'movpoints:excluded:set',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -150,4 +154,7 @@ export interface LisDiscordBridge {
   listRoleGoals(guildId: string): Promise<RoleGoal[]>
   setRoleGoal(guildId: string, roleId: string, roleName: string, pointsGoal: number, hoursGoal: number): Promise<RoleGoal[]>
   removeRoleGoal(guildId: string, roleId: string): Promise<RoleGoal[]>
+
+  listExcludedMembers(guildId: string): Promise<ExcludedMember[]>
+  setMemberExcluded(guildId: string, userId: string, tag: string, excluded: boolean): Promise<ExcludedMember[]>
 }

@@ -5,6 +5,7 @@ import type {
   ChannelBackup,
   DiffEntry,
   EmojiBackup,
+  ExcludedMember,
   GameId,
   GameSettings,
   Giveaway,
@@ -185,7 +186,22 @@ let movPointsBoardData: Record<string, MovPointsBoardConfig> = {
 }
 
 function sortMovPoints(entries: MovPointsEntry[]): MovPointsEntry[] {
-  return [...entries].sort((a, b) => b.points - a.points || b.totalSeconds - a.totalSeconds)
+  return [...entries].sort((a, b) => b.points - a.points || b.totalSeconds - a.totalSeconds || a.tag.localeCompare(b.tag))
+}
+
+let excludedMembersData: Record<string, ExcludedMember[]> = {}
+
+/** Espelha buildFullLeaderboard do lado real: mostra sempre todos os membros (não-bots), com 0/0 para quem nunca teve pontos, exceto quem foi escondido. */
+function fullDemoLeaderboard(guildId: string): MovPointsEntry[] {
+  const excluded = new Set((excludedMembersData[guildId] ?? []).map((m) => m.userId))
+  const tracked = new Map((movPointsData[guildId] ?? []).map((e) => [e.userId, e]))
+  const entries = membersData
+    .filter((m) => !m.isBot && !excluded.has(m.id))
+    .map((m) => {
+      const existing = tracked.get(m.id)
+      return { userId: m.id, tag: m.tag, points: existing?.points ?? 0, totalSeconds: existing?.totalSeconds ?? 0 }
+    })
+  return sortMovPoints(entries)
 }
 
 const demoRoles: RolePickerEntry[] = [
@@ -498,7 +514,7 @@ export const demoBridge: LisDiscordBridge = {
 
   async listMovPoints(guildId) {
     await delay()
-    return sortMovPoints(movPointsData[guildId] ?? [])
+    return fullDemoLeaderboard(guildId)
   },
   async addMovPoints(guildId, userId, amount) {
     await delay(300)
@@ -508,7 +524,7 @@ export const demoBridge: LisDiscordBridge = {
     if (existing) existing.points = Math.max(0, existing.points + amount)
     else entries.push({ userId, tag: member?.tag ?? userId, points: Math.max(0, amount), totalSeconds: 0 })
     movPointsData = { ...movPointsData, [guildId]: entries }
-    return sortMovPoints(entries)
+    return fullDemoLeaderboard(guildId)
   },
   async removeMovPoints(guildId, userId, amount) {
     await delay(300)
@@ -518,7 +534,7 @@ export const demoBridge: LisDiscordBridge = {
     if (existing) existing.points = Math.max(0, existing.points - amount)
     else entries.push({ userId, tag: member?.tag ?? userId, points: 0, totalSeconds: 0 })
     movPointsData = { ...movPointsData, [guildId]: entries }
-    return sortMovPoints(entries)
+    return fullDemoLeaderboard(guildId)
   },
   async addMovHours(guildId, userId, seconds) {
     await delay(300)
@@ -528,7 +544,7 @@ export const demoBridge: LisDiscordBridge = {
     if (existing) existing.totalSeconds = Math.max(0, existing.totalSeconds + seconds)
     else entries.push({ userId, tag: member?.tag ?? userId, points: 0, totalSeconds: Math.max(0, seconds) })
     movPointsData = { ...movPointsData, [guildId]: entries }
-    return sortMovPoints(entries)
+    return fullDemoLeaderboard(guildId)
   },
   async getMovPointsBoard(guildId) {
     await delay()
@@ -544,7 +560,20 @@ export const demoBridge: LisDiscordBridge = {
   async resetMovPoints(guildId) {
     await delay(400)
     movPointsData = { ...movPointsData, [guildId]: [] }
-    return []
+    return fullDemoLeaderboard(guildId)
+  },
+
+  async listExcludedMembers(guildId) {
+    await delay()
+    return excludedMembersData[guildId] ?? []
+  },
+  async setMemberExcluded(guildId, userId, tag, excluded) {
+    await delay()
+    const current = excludedMembersData[guildId] ?? []
+    const without = current.filter((m) => m.userId !== userId)
+    const updated = excluded ? [...without, { userId, tag }] : without
+    excludedMembersData = { ...excludedMembersData, [guildId]: updated }
+    return updated
   },
 
   async listRoles() {

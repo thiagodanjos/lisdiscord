@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Clock3, Medal, Minus, Plus, Radio, RotateCcw, Search } from 'lucide-react'
+import { Clock3, Eye, EyeOff, Medal, Minus, Plus, Radio, RotateCcw, Search } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatDuration } from '../lib/format'
 import { Avatar, Badge, Button, Card, ConfirmDialog, EmptyState, SectionHeading } from '../components/ui'
-import type { ChannelPickerEntry, GuildSummary, MemberSearchResult, MovPointsBoardConfig, MovPointsEntry } from '../../shared/types'
+import type { ChannelPickerEntry, ExcludedMember, GuildSummary, MemberSearchResult, MovPointsBoardConfig, MovPointsEntry } from '../../shared/types'
 
 const POLL_INTERVAL_MS = 8_000
 
@@ -27,6 +27,8 @@ export default function MovPoints() {
   const [busyHours, setBusyHours] = useState(false)
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [excludedMembers, setExcludedMembers] = useState<ExcludedMember[]>([])
+  const [togglingExclusion, setTogglingExclusion] = useState<string | null>(null)
 
   useEffect(() => {
     bridge.listGuilds().then((g) => {
@@ -42,6 +44,7 @@ export default function MovPoints() {
       setBoard(b)
       setBoardChannelId(b.channelId ?? '')
     })
+    bridge.listExcludedMembers(guildId).then(setExcludedMembers)
     loadLeaderboard()
 
     const interval = setInterval(loadLeaderboard, POLL_INTERVAL_MS)
@@ -119,6 +122,17 @@ export default function MovPoints() {
       setConfirmResetOpen(false)
     } finally {
       setResetting(false)
+    }
+  }
+
+  async function toggleExclusion(userId: string, tag: string, excluded: boolean) {
+    setTogglingExclusion(userId)
+    try {
+      const updatedExcluded = await bridge.setMemberExcluded(guildId, userId, tag, excluded)
+      setExcludedMembers(updatedExcluded)
+      loadLeaderboard()
+    } finally {
+      setTogglingExclusion(null)
     }
   }
 
@@ -299,6 +313,7 @@ export default function MovPoints() {
       <section>
         <SectionHeading
           title="Ranking"
+          subtitle="Mostra sempre todos os membros do servidor (mesmo sem pontos ou horas), exceto quem esconderes abaixo"
           action={
             <div className="flex items-center gap-3">
               {leaderboard.length > 0 && (
@@ -312,7 +327,7 @@ export default function MovPoints() {
           }
         />
         {leaderboard.length === 0 ? (
-          <EmptyState title="Ainda sem pontos" description="Regista uma Mov. Call com /movcall no Discord ou adiciona pontos manualmente acima." />
+          <EmptyState title="Ainda sem membros" description="Assim que o bot conseguir ver membros deste servidor, eles aparecem aqui automaticamente." />
         ) : (
           <div className="flex flex-col gap-2">
             {leaderboard.map((entry, i) => (
@@ -326,6 +341,42 @@ export default function MovPoints() {
                   </span>
                 )}
                 <span className="shrink-0 text-sm font-bold text-warning">{entry.points} pontos</span>
+                <button
+                  onClick={() => toggleExclusion(entry.userId, entry.tag, true)}
+                  disabled={togglingExclusion === entry.userId}
+                  title="Esconder do ranking"
+                  className="shrink-0 text-faint hover:text-danger disabled:opacity-50"
+                >
+                  <EyeOff size={15} />
+                </button>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <SectionHeading
+          title="Membros escondidos"
+          subtitle="Quem escondes aqui nunca aparece no ranking, no painel público ou no /pontosmov ranking do Discord"
+        />
+        {excludedMembers.length === 0 ? (
+          <EmptyState title="Ninguém escondido" description="Usa o ícone de olho fechado numa linha do ranking acima para esconder alguém." />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {excludedMembers.map((m) => (
+              <Card key={m.userId} className="flex items-center gap-4 p-4">
+                <Avatar name={m.tag} color="#99AAB5" size="sm" />
+                <p className="min-w-0 flex-1 truncate text-sm font-semibold text-text">{m.tag}</p>
+                <Button
+                  variant="dark"
+                  onClick={() => toggleExclusion(m.userId, m.tag, false)}
+                  loading={togglingExclusion === m.userId}
+                  className="!px-3 !py-1.5 text-xs"
+                >
+                  <Eye size={13} />
+                  Mostrar de novo
+                </Button>
               </Card>
             ))}
           </div>

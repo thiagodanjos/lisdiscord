@@ -8,6 +8,7 @@ import type {
   ChannelPickerEntry,
   DiffEntry,
   EmbedDraft,
+  ExcludedMember,
   GameId,
   GameInfo,
   GameSettings,
@@ -38,6 +39,7 @@ import { postGiveawayMessage } from '../discord/giveaways'
 import { GAMES, registerCommandsForGuild } from '../discord/games'
 import { refreshBoard } from '../discord/movcall'
 import { getMemberProfile, listGuildRoles } from '../discord/memberProfile'
+import { buildFullLeaderboard } from '../discord/leaderboard'
 import { concludeGiveawayById, startGiveawayScheduler, startScheduledBackups } from '../discord/automation'
 import * as backupsStore from '../store/backups'
 import * as transcriptsStore from '../store/transcripts'
@@ -47,6 +49,7 @@ import * as gameSettingsStore from '../store/gameSettings'
 import * as moderationLogStore from '../store/moderationLog'
 import * as movPointsStore from '../store/movPoints'
 import * as roleGoalsStore from '../store/roleGoals'
+import * as excludedMembersStore from '../store/excludedMembers'
 import { getAppSettings, loadToken, openDataDir, saveToken } from '../store/settings'
 
 const CHANNEL_KIND_MAP: Record<number, ChannelKind | undefined> = {
@@ -257,14 +260,19 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   })
 
   // ---- Pontos de MOV. Call ----
-  ipcMain.handle(IPC.listMovPoints, async (_e, guildId: string): Promise<MovPointsEntry[]> => movPointsStore.getLeaderboard(guildId))
+  ipcMain.handle(IPC.listMovPoints, async (_e, guildId: string): Promise<MovPointsEntry[]> => {
+    if (!discordManager.isConnected()) return movPointsStore.getLeaderboard(guildId)
+    const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
+    if (!guild) return movPointsStore.getLeaderboard(guildId)
+    return buildFullLeaderboard(guild).catch(() => movPointsStore.getLeaderboard(guildId))
+  })
 
   ipcMain.handle(IPC.addMovPoints, async (_e, guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]> => {
     const guild = await discordManager.getClient().guilds.fetch(guildId)
     const member = await guild.members.fetch(userId)
     movPointsStore.addPoints(guildId, userId, member.user.tag, amount)
     await refreshBoard(guild).catch(() => undefined)
-    return movPointsStore.getLeaderboard(guildId)
+    return buildFullLeaderboard(guild).catch(() => movPointsStore.getLeaderboard(guildId))
   })
 
   ipcMain.handle(IPC.removeMovPoints, async (_e, guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]> => {
@@ -272,7 +280,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     const member = await guild.members.fetch(userId)
     movPointsStore.removePoints(guildId, userId, member.user.tag, amount)
     await refreshBoard(guild).catch(() => undefined)
-    return movPointsStore.getLeaderboard(guildId)
+    return buildFullLeaderboard(guild).catch(() => movPointsStore.getLeaderboard(guildId))
   })
 
   ipcMain.handle(IPC.addMovHours, async (_e, guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]> => {
@@ -280,7 +288,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     const member = await guild.members.fetch(userId)
     movPointsStore.addHours(guildId, userId, member.user.tag, seconds)
     await refreshBoard(guild).catch(() => undefined)
-    return movPointsStore.getLeaderboard(guildId)
+    return buildFullLeaderboard(guild).catch(() => movPointsStore.getLeaderboard(guildId))
   })
 
   ipcMain.handle(IPC.getMovPointsBoard, async (_e, guildId: string): Promise<MovPointsBoardConfig> => movPointsStore.getBoardConfig(guildId))
@@ -298,10 +306,27 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     movPointsStore.resetGuild(guildId)
     if (discordManager.isConnected()) {
       const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
-      if (guild) await refreshBoard(guild).catch(() => undefined)
+      if (guild) {
+        await refreshBoard(guild).catch(() => undefined)
+        return buildFullLeaderboard(guild).catch(() => movPointsStore.getLeaderboard(guildId))
+      }
     }
     return movPointsStore.getLeaderboard(guildId)
   })
+
+  ipcMain.handle(IPC.listExcludedMembers, async (_e, guildId: string): Promise<ExcludedMember[]> => excludedMembersStore.listExcluded(guildId))
+
+  ipcMain.handle(
+    IPC.setMemberExcluded,
+    async (_e, guildId: string, userId: string, tag: string, excluded: boolean): Promise<ExcludedMember[]> => {
+      const updated = excludedMembersStore.setExcluded(guildId, userId, tag, excluded)
+      if (discordManager.isConnected()) {
+        const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
+        if (guild) await refreshBoard(guild).catch(() => undefined)
+      }
+      return updated
+    },
+  )
 
   // ---- Upamentos (metas de cargo) ----
   ipcMain.handle(IPC.listRoles, async (_e, guildId: string): Promise<RolePickerEntry[]> => {

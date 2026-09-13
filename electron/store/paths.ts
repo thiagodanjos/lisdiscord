@@ -40,6 +40,7 @@ export const paths = {
   economyFile: path.join(root, 'economy.json'),
   movPointsFile: path.join(root, 'mov-points.json'),
   roleGoalsFile: path.join(root, 'role-goals.json'),
+  excludedMembersFile: path.join(root, 'excluded-members.json'),
 }
 
 export function ensureDataDirs(): void {

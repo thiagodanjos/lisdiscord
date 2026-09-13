@@ -309,6 +309,11 @@ export interface MovPointsBoardConfig {
   channelName: string | null
 }
 
+export interface ExcludedMember {
+  userId: string
+  tag: string
+}
+
 // ==========================================================================
 // Upamentos (metas de cargo)
 // ==========================================================================

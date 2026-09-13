@@ -74,6 +74,9 @@ const bridge: LisDiscordBridge = {
   setRoleGoal: (guildId, roleId, roleName, pointsGoal, hoursGoal) =>
     ipcRenderer.invoke(IPC.setRoleGoal, guildId, roleId, roleName, pointsGoal, hoursGoal),
   removeRoleGoal: (guildId, roleId) => ipcRenderer.invoke(IPC.removeRoleGoal, guildId, roleId),
+
+  listExcludedMembers: (guildId) => ipcRenderer.invoke(IPC.listExcludedMembers, guildId),
+  setMemberExcluded: (guildId, userId, tag, excluded) => ipcRenderer.invoke(IPC.setMemberExcluded, guildId, userId, tag, excluded),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

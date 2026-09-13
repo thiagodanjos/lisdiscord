@@ -18,11 +18,13 @@ import {
   TextInputStyle,
   UserSelectMenuBuilder,
 } from 'discord.js'
-import type { MovCallType } from '../../shared/types'
+import type { MovCallType, MovPointsEntry } from '../../shared/types'
 import * as movPoints from '../store/movPoints'
+import { buildFullLeaderboard } from './leaderboard'
 
 const POINTS_BY_TYPE: Record<MovCallType, number> = { normal: 10, tematica: 15 }
 const INACTIVE_HOURS_THRESHOLD_SECONDS = 5 * 3600
+const MAX_BOARD_LINES = 60
 const SETUP_TIMEOUT_MS = 10 * 60_000
 const MODAL_TIMEOUT_MS = 120_000
 const RESULT_DISPLAY_MS = 6_000
@@ -520,7 +522,8 @@ async function runVerPontos(interaction: ChatInputCommandInteraction, guild: Gui
 }
 
 async function runRanking(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
-  await interaction.reply({ embeds: [buildBoardEmbed(guild)] })
+  await interaction.deferReply()
+  await interaction.editReply({ embeds: [await buildBoardEmbed(guild)] })
 }
 
 // ==========================================================================
@@ -630,24 +633,25 @@ async function runResetMovCall(interaction: ChatInputCommandInteraction, guild: 
 // ==========================================================================
 
 async function runInativos(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
-  await interaction.reply({ embeds: [buildInactiveEmbed(guild)] })
+  await interaction.deferReply()
+  await interaction.editReply({ embeds: [await buildInactiveEmbed(guild)] })
 }
 
-function buildInactiveEmbed(guild: Guild): EmbedBuilder {
-  const leaderboard = movPoints.getLeaderboard(guild.id)
+async function buildInactiveEmbed(guild: Guild): Promise<EmbedBuilder> {
+  const leaderboard = await buildFullLeaderboard(guild)
   const inactive = leaderboard.filter((entry) => entry.points === 0 || entry.totalSeconds < INACTIVE_HOURS_THRESHOLD_SECONDS)
+  const { shown, remaining } = capLines(inactive, MAX_BOARD_LINES)
 
-  const lines = inactive.map((entry) => `⚠️ <@${entry.userId}> — ${entry.points} pontos · ${formatDuration(entry.totalSeconds)}`)
+  const lines = shown.map((entry) => `⚠️ <@${entry.userId}> — ${entry.points} pontos · ${formatDuration(entry.totalSeconds)}`)
+  if (remaining > 0) lines.push(`_+ ${remaining} membro(s) inativo(s) não mostrado(s)._`)
 
   return new EmbedBuilder()
     .setColor(0xed4245)
     .setTitle('⚠️ MEMBROS INATIVOS')
     .setDescription(
-      lines.length > 0
-        ? lines.join('\n')
-        : '_Ninguém está abaixo do limite — toda a gente com registo tem pontos e pelo menos 5 horas de Mov. Call._',
+      lines.length > 0 ? lines.join('\n') : '_Ninguém está abaixo do limite — toda a gente tem pontos e pelo menos 5 horas de Mov. Call._',
     )
-    .setFooter({ text: `${guild.name} · sem pontos ou menos de 5h de Mov. Call · só considera quem já tem registo` })
+    .setFooter({ text: `${guild.name} · sem pontos ou menos de 5h de Mov. Call · não inclui bots` })
     .setTimestamp(new Date())
 }
 
@@ -662,7 +666,7 @@ export async function refreshBoard(guild: Guild): Promise<void> {
   const channel = await guild.channels.fetch(config.channelId).catch(() => null)
   if (!channel || !channel.isTextBased() || channel instanceof PartialGroupDMChannel) return
 
-  const embed = buildBoardEmbed(guild)
+  const embed = await buildBoardEmbed(guild)
   const messageId = movPoints.getBoardMessageId(guild.id)
 
   if (messageId) {
@@ -677,18 +681,21 @@ export async function refreshBoard(guild: Guild): Promise<void> {
   if (sent) movPoints.setBoardMessageId(guild.id, sent.id)
 }
 
-function buildBoardEmbed(guild: Guild): EmbedBuilder {
-  const leaderboard = movPoints.getLeaderboard(guild.id)
+async function buildBoardEmbed(guild: Guild): Promise<EmbedBuilder> {
+  const leaderboard = await buildFullLeaderboard(guild)
   const medals = ['🥇', '🥈', '🥉']
-  const lines = leaderboard.map((entry, i) => {
+  const { shown, remaining } = capLines(leaderboard, MAX_BOARD_LINES)
+
+  const lines = shown.map((entry, i) => {
     const hoursText = entry.totalSeconds > 0 ? ` · ${formatDuration(entry.totalSeconds)}` : ''
     return `${medals[i] ?? `${i + 1}.`} <@${entry.userId}> — ${entry.points} pontos${hoursText}`
   })
+  if (remaining > 0) lines.push(`_+ ${remaining} membro(s) não mostrado(s)._`)
 
   return new EmbedBuilder()
     .setColor(0xf0b232)
     .setTitle('🏅 PONTOS DE MOV. CALL')
-    .setDescription(lines.length > 0 ? lines.join('\n') : '_Ainda ninguém tem pontos registados._')
+    .setDescription(lines.length > 0 ? lines.join('\n') : '_Este servidor ainda não tem membros para mostrar._')
     .setFooter({ text: `${guild.name} · atualizado em ${formatBrasiliaDate(new Date())}` })
     .setTimestamp(new Date())
 }
@@ -696,6 +703,12 @@ function buildBoardEmbed(guild: Guild): EmbedBuilder {
 // ==========================================================================
 // Auxiliares
 // ==========================================================================
+
+/** Corta a lista num máximo de linhas, para nunca ultrapassar o limite de tamanho de um embed do Discord. */
+function capLines(entries: MovPointsEntry[], max: number): { shown: MovPointsEntry[]; remaining: number } {
+  if (entries.length <= max) return { shown: entries, remaining: 0 }
+  return { shown: entries.slice(0, max), remaining: entries.length - max }
+}
 
 function extractUserId(raw: string): string | null {
   const mentionMatch = raw.match(/^<@!?(\d{15,21})>$/)
