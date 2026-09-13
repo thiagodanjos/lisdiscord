@@ -91,12 +91,20 @@ export function pontosMovAdminCommandDef(): RESTPostAPIChatInputApplicationComma
     .toJSON()
 }
 
+export function resetMovCallCommandDef(): RESTPostAPIChatInputApplicationCommandsJSONBody {
+  return new SlashCommandBuilder()
+    .setName('resetmovcall')
+    .setDescription('Apaga TODOS os pontos e horas de Mov. Call do servidor, deixando o placar vazio')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .toJSON()
+}
+
 export function movCallCommandDefs(): RESTPostAPIChatInputApplicationCommandsJSONBody[] {
-  return [movCallCommandDef(), movHorasCommandDef(), pontosMovCommandDef(), pontosMovAdminCommandDef()]
+  return [movCallCommandDef(), movHorasCommandDef(), pontosMovCommandDef(), pontosMovAdminCommandDef(), resetMovCallCommandDef()]
 }
 
 export async function handleMovCallCommand(interaction: ChatInputCommandInteraction): Promise<boolean> {
-  if (!['movcall', 'movhoras', 'pontosmov', 'pontosmovadmin'].includes(interaction.commandName)) return false
+  if (!['movcall', 'movhoras', 'pontosmov', 'pontosmovadmin', 'resetmovcall'].includes(interaction.commandName)) return false
 
   const guild = interaction.guild
   if (!guild) {
@@ -111,6 +119,11 @@ export async function handleMovCallCommand(interaction: ChatInputCommandInteract
 
   if (interaction.commandName === 'movhoras') {
     await runMovHoras(interaction, guild)
+    return true
+  }
+
+  if (interaction.commandName === 'resetmovcall') {
+    await runResetMovCall(interaction, guild)
     return true
   }
 
@@ -162,7 +175,8 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
       .setColor(tipo === 'normal' ? 0x5865f2 : 0xf0b232)
       .setTitle(`📋 Mov. Call ${tipo === 'normal' ? 'Normal' : 'Temática / Outra MOV'}`)
       .setDescription(
-        'Clica em **Escrever lista** e cola os participantes numa caixa de texto, um por linha — por menção (@pessoa) ou pelo ID.',
+        'Clica em **Escrever lista** e cola os participantes numa caixa de texto, um **ID** por linha (menções não funcionam aqui — o Discord não permite escrevê-las dentro desta janela).\n\n' +
+          '💡 Não sabes o ID de alguém? Ativa o **Modo de Programador** em Definições → Avançado no Discord, depois clica com o botão direito no membro → **Copiar ID de Utilizador**.',
       )
       .setFooter({ text: `+${POINTS_BY_TYPE[tipo ?? 'normal']} pontos por participante` })
   }
@@ -229,10 +243,10 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
             new ActionRowBuilder<TextInputBuilder>().addComponents(
               new TextInputBuilder()
                 .setCustomId('lista')
-                .setLabel('Uma pessoa por linha — menção ou ID')
+                .setLabel('Um ID por linha (não funciona com menções)')
                 .setStyle(TextInputStyle.Paragraph)
                 .setRequired(true)
-                .setPlaceholder('@pessoa1\n123456789012345678\n@pessoa3'),
+                .setPlaceholder('123456789012345678\n987654321098765432'),
             ),
           )
         await click.showModal(modal)
@@ -242,7 +256,7 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
           const ids = parseParticipantsList(submitted.fields.getTextInputValue('lista'))
 
           if (ids.length === 0) {
-            errorText = 'Não encontrei nenhuma menção ou ID válido nessa lista. Confirma que puseste uma pessoa por linha.'
+            errorText = 'Não encontrei nenhum ID válido nessa lista. Confirma que puseste um ID por linha (não funciona com menções @pessoa).'
             await updateFromModal(submitted, interaction, { embeds: [errorEmbed()], components: [errorRow()] })
             await loop(msg)
             return
@@ -521,6 +535,66 @@ async function runPainel(interaction: ChatInputCommandInteraction, guild: Guild)
     .setTitle('🏅 Painel de pontos configurado')
     .setDescription(`O painel de pontos de MOV. Call vai ser mantido atualizado em <#${channel.id}>.`)
   await interaction.reply({ embeds: [embed], ephemeral: true })
+}
+
+// ==========================================================================
+// /resetmovcall (gestão)
+// ==========================================================================
+
+async function runResetMovCall(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
+  const count = movPoints.getLeaderboard(guild.id).length
+
+  if (count === 0) {
+    await interaction.reply({
+      embeds: [new EmbedBuilder().setColor(0x99aab5).setTitle('Nada para repor').setDescription('Não há pontos registados neste servidor.')],
+      ephemeral: true,
+    })
+    return
+  }
+
+  const confirmEmbed = new EmbedBuilder()
+    .setColor(0xed4245)
+    .setTitle('⚠️ Repor pontos de Mov. Call')
+    .setDescription(
+      `Isto vai apagar os pontos e horas de **${count} pessoa(s)** neste servidor e deixar o placar vazio. Esta ação não pode ser desfeita.`,
+    )
+
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId('resetmovcall:confirm').setLabel('Sim, apagar tudo').setStyle(ButtonStyle.Danger).setEmoji('🗑️'),
+    new ButtonBuilder().setCustomId('resetmovcall:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Secondary),
+  )
+
+  const reply = await interaction.reply({ embeds: [confirmEmbed], components: [row], ephemeral: true, withResponse: true })
+  const message = reply.resource?.message
+  if (!message) return
+
+  try {
+    const click = await message.awaitMessageComponent({ time: 30_000, filter: (i) => i.user.id === interaction.user.id })
+
+    if (click.customId === 'resetmovcall:confirm') {
+      movPoints.resetGuild(guild.id)
+      await refreshBoard(guild)
+      await click.update({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x3ba55c)
+            .setTitle('✅ Placar reposto')
+            .setDescription('Todos os pontos e horas de Mov. Call deste servidor foram apagados.'),
+        ],
+        components: [],
+      })
+      return
+    }
+
+    await click.update({
+      embeds: [new EmbedBuilder().setColor(0x99aab5).setTitle('Cancelado').setDescription('Nada foi apagado.')],
+      components: [],
+    })
+  } catch {
+    await interaction
+      .editReply({ embeds: [new EmbedBuilder().setColor(0x99aab5).setTitle('⏱️ Tempo esgotado').setDescription('Nada foi apagado.')], components: [] })
+      .catch(() => undefined)
+  }
 }
 
 // ==========================================================================

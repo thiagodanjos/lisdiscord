@@ -76,6 +76,7 @@ export const IPC = {
   addMovHours: 'movpoints:hours:add',
   getMovPointsBoard: 'movpoints:board:get',
   setMovPointsBoard: 'movpoints:board:set',
+  resetMovPoints: 'movpoints:reset',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -133,4 +134,5 @@ export interface LisDiscordBridge {
   addMovHours(guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]>
   getMovPointsBoard(guildId: string): Promise<MovPointsBoardConfig>
   setMovPointsBoard(guildId: string, channelId: string | null): Promise<MovPointsBoardConfig>
+  resetMovPoints(guildId: string): Promise<MovPointsEntry[]>
 }

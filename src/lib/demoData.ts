@@ -519,4 +519,9 @@ export const demoBridge: LisDiscordBridge = {
     movPointsBoardData = { ...movPointsBoardData, [guildId]: updated }
     return updated
   },
+  async resetMovPoints(guildId) {
+    await delay(400)
+    movPointsData = { ...movPointsData, [guildId]: [] }
+    return []
+  },
 }

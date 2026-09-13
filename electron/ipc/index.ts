@@ -288,6 +288,15 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     await refreshBoard(guild).catch(() => undefined)
     return config
   })
+
+  ipcMain.handle(IPC.resetMovPoints, async (_e, guildId: string): Promise<MovPointsEntry[]> => {
+    movPointsStore.resetGuild(guildId)
+    if (discordManager.isConnected()) {
+      const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
+      if (guild) await refreshBoard(guild).catch(() => undefined)
+    }
+    return movPointsStore.getLeaderboard(guildId)
+  })
 }
 
 /** Corre à parte do registo dos handlers: religa agendamentos e, se houver token guardado, liga o bot sozinho. */

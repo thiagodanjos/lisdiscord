@@ -37,10 +37,10 @@ O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidore
 **Servidor**
 - **Mensagens** — compositor de embeds com pré-visualização ao vivo (título, descrição, cor, imagem, campos, rodapé) para publicar mensagens bem formatadas num canal
 - **Moderação** — pesquisar membros, banir, expulsar e mutar (timeout), bloquear/desbloquear canais, com registo de todas as ações
-- **Sorteios** — publica um sorteio com reação 🎉, escolhe vencedores automaticamente quando termina (ou manualmente, a qualquer momento)
+- **Sorteios** — publica um sorteio com reação 🎉, escolhe vencedores automaticamente quando termina (ou manualmente, a qualquer momento); além da app, `/sorteio` faz o mesmo diretamente no Discord, com um assistente por botões: escolhe o canal, depois escreve o título/prémio, a duração exata (ex: `1h30m`, `2d`, `45m`) e o número de vencedores
 - **Jogos** — ativa mini-jogos como comandos que os membros do servidor podem usar, todos por botões (sem escrever comandos extra no chat): clássicos rápidos (`/dado`, `/moeda`, `/ppt`, `/oitobola`), `/trivia` com 24 perguntas em 6 categorias, `/forca` (adivinha a palavra letra a letra, escolhendo cada letra numa janela própria), `/blackjack` (21 contra a casa, com aposta), `/jogodavelha` (galo por turnos entre dois membros), `/duelo` (combate por turnos com ataque, defesa e ataque especial, também com aposta), `/roleta` e `/caca-niqueis` (casino, com jackpot), `/corrida` (aposta em qual bicho vence uma corrida animada), `/numero` (adivinha um número secreto, quanto menos tentativas mais moedas) e `/desembaralhar` (desembaralha as letras e escreve a palavra certa antes dos outros)
 - **Economia** — os jogos com recompensa alimentam um saldo de moedas por servidor; os membros consultam com `/saldo`, reclamam uma recompensa diária com `/diario` (com bónus por sequência) e veem o `/ranking` de quem tem mais moedas
-- **Pontos de MOV. Call** — `/movcall` é um assistente guiado por botões: escolhe o tipo (Normal = 10 pontos, ou Temática/Outras MOVS = 15 pontos), depois abre uma janela para colar a lista de participantes (uma menção ou ID por linha); se a lista não for percebida, mostra o erro com um botão para voltar atrás, e no fim apaga sozinho as mensagens do assistente. `/movhoras` atribui horas de Mov. Call a um membro (escolhido por um seletor) através de uma janela com campos de horas/minutos/segundos — as horas acumulam-se e aparecem ao lado dos pontos na tabela, como critério de desempate: quem tem mais pontos vem sempre primeiro, e só entre pessoas com os mesmos pontos (incluindo 0) é que desempata quem tem mais horas. Gere tudo manualmente com `/pontosmovadmin` (adicionar/remover pontos, definir o canal do painel) ou pela página **Pontos MOV** da app; `/pontosmov` deixa qualquer membro consultar os seus pontos ou o ranking; um painel fixo no canal escolhido mostra sempre a tabela atualizada, em tempo real, sempre que pontos ou horas mudam
+- **Pontos de MOV. Call** — `/movcall` é um assistente guiado por botões: escolhe o tipo (Normal = 10 pontos, ou Temática/Outras MOVS = 15 pontos), depois abre uma janela para colar a lista de participantes, um **ID** por linha (o Discord não permite escrever menções dentro de uma janela deste tipo, só IDs); se a lista não for percebida, mostra o erro com um botão para voltar atrás, e no fim apaga sozinho as mensagens do assistente. `/movhoras` atribui horas de Mov. Call a um membro (escolhido por um seletor) através de uma janela com campos de horas/minutos/segundos — as horas acumulam-se e aparecem ao lado dos pontos na tabela, como critério de desempate: quem tem mais pontos vem sempre primeiro, e só entre pessoas com os mesmos pontos (incluindo 0) é que desempata quem tem mais horas. Gere tudo manualmente com `/pontosmovadmin` (adicionar/remover pontos, definir o canal do painel) ou pela página **Pontos MOV** da app; `/pontosmov` deixa qualquer membro consultar os seus pontos ou o ranking; um painel fixo no canal escolhido mostra sempre a tabela atualizada, em tempo real, sempre que pontos ou horas mudam. `/resetmovcall` (com confirmação) apaga todos os pontos e horas do servidor de uma vez, deixando o placar vazio — o mesmo reset também está disponível como botão na página **Pontos MOV** da app, sempre manual e nunca automático
 
 **Geral**
 - Modo demonstração — explora a app inteira com dados fictícios, sem bot nem token nenhum
@@ -63,7 +63,7 @@ O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidore
 
 O token fica guardado encriptado localmente (via `safeStorage` do Electron) — nunca é enviado para lado nenhum a não ser para a própria API da Discord.
 
-Os comandos `/movcall` e `/pontosmovadmin` (que atribuem/removem pontos) só aparecem, por omissão, para membros com a permissão **Gerir servidor** — ajustável em **Definições do servidor → Integrações** no Discord. `/pontosmov` (ver pontos e ranking) fica disponível para toda a gente.
+Os comandos `/movcall`, `/movhoras`, `/pontosmovadmin`, `/resetmovcall` e `/sorteio` só aparecem, por omissão, para membros com a permissão **Gerir servidor** — ajustável em **Definições do servidor → Integrações** no Discord. `/pontosmov` (ver pontos e ranking) fica disponível para toda a gente.
 
 ## Capturas de ecrã
 
@@ -110,8 +110,9 @@ electron/
 │   ├── messaging.ts         # enviar mensagens com embed
 │   ├── moderation.ts         # banir, expulsar, mutar, bloquear canais
 │   ├── giveaways.ts           # publicar e concluir sorteios
+│   ├── giveawayCommand.ts      # /sorteio — assistente por botões + modal, usa giveaways.ts
 │   ├── games/                  # slash commands dos mini-jogos (um módulo por jogo) + economia
-│   └── movcall.ts              # /movcall, /pontosmov, /pontosmovadmin e o painel de pontos em tempo real
+│   └── movcall.ts              # /movcall, /movhoras, /pontosmov, /pontosmovadmin, /resetmovcall e o painel de pontos em tempo real
 ├── store/               # persistência local (JSON em disco, token encriptado)
 └── ipc/                  # liga os pedidos da interface às funções acima
 

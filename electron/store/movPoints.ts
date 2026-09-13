@@ -112,3 +112,11 @@ export function setBoardMessageId(guildId: string, messageId: string | null): vo
   guild.board.messageId = messageId
   writeAll(data)
 }
+
+/** Apaga os pontos e horas de toda a gente no servidor — mantém a configuração do painel (canal, mensagem). */
+export function resetGuild(guildId: string): void {
+  const data = readAll()
+  const guild = ensureGuild(data, guildId)
+  guild.players = {}
+  writeAll(data)
+}

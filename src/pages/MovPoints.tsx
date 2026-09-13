@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Clock3, Medal, Minus, Plus, Radio, Search } from 'lucide-react'
+import { Clock3, Medal, Minus, Plus, Radio, RotateCcw, Search } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatDuration } from '../lib/format'
-import { Avatar, Badge, Button, Card, EmptyState, SectionHeading } from '../components/ui'
+import { Avatar, Badge, Button, Card, ConfirmDialog, EmptyState, SectionHeading } from '../components/ui'
 import type { ChannelPickerEntry, GuildSummary, MemberSearchResult, MovPointsBoardConfig, MovPointsEntry } from '../../shared/types'
 
 const POLL_INTERVAL_MS = 8_000
@@ -25,6 +25,8 @@ export default function MovPoints() {
   const [seconds, setSeconds] = useState(0)
   const [busy, setBusy] = useState(false)
   const [busyHours, setBusyHours] = useState(false)
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   useEffect(() => {
     bridge.listGuilds().then((g) => {
@@ -106,6 +108,17 @@ export default function MovPoints() {
       setSeconds(0)
     } finally {
       setBusyHours(false)
+    }
+  }
+
+  async function resetPoints() {
+    setResetting(true)
+    try {
+      const updated = await bridge.resetMovPoints(guildId)
+      setLeaderboard(updated)
+      setConfirmResetOpen(false)
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -284,7 +297,20 @@ export default function MovPoints() {
       </section>
 
       <section>
-        <SectionHeading title="Ranking" action={<Medal size={16} className="text-faint" />} />
+        <SectionHeading
+          title="Ranking"
+          action={
+            <div className="flex items-center gap-3">
+              {leaderboard.length > 0 && (
+                <Button variant="danger" onClick={() => setConfirmResetOpen(true)} className="!px-3 !py-1.5 text-xs">
+                  <RotateCcw size={13} />
+                  Repor placar
+                </Button>
+              )}
+              <Medal size={16} className="text-faint" />
+            </div>
+          }
+        />
         {leaderboard.length === 0 ? (
           <EmptyState title="Ainda sem pontos" description="Regista uma Mov. Call com /movcall no Discord ou adiciona pontos manualmente acima." />
         ) : (
@@ -305,6 +331,16 @@ export default function MovPoints() {
           </div>
         )}
       </section>
+
+      <ConfirmDialog
+        open={confirmResetOpen}
+        onClose={() => setConfirmResetOpen(false)}
+        onConfirm={resetPoints}
+        title="Repor placar de Mov. Call"
+        description="Isto apaga TODOS os pontos e horas de Mov. Call de todas as pessoas neste servidor, de forma irreversível. O painel fica vazio até novas Mov. Calls serem registadas."
+        danger
+        confirmLabel={resetting ? 'A apagar…' : 'Sim, apagar tudo'}
+      />
     </div>
   )
 }
