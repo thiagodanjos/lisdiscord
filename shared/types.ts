@@ -308,3 +308,29 @@ export interface MovPointsBoardConfig {
   channelId: string | null
   channelName: string | null
 }
+
+// ==========================================================================
+// Upamentos (metas de cargo)
+// ==========================================================================
+
+export interface RolePickerEntry {
+  id: string
+  name: string
+  color: string
+}
+
+export interface RoleGoal {
+  roleId: string
+  roleName: string
+  pointsGoal: number
+  hoursGoal: number
+}
+
+export interface MemberProfile {
+  id: string
+  tag: string
+  avatarUrl: string | null
+  roles: RolePickerEntry[]
+  points: number
+  totalSeconds: number
+}

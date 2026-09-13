@@ -39,6 +39,7 @@ export const paths = {
   moderationLogFile: path.join(root, 'moderation-log.json'),
   economyFile: path.join(root, 'economy.json'),
   movPointsFile: path.join(root, 'mov-points.json'),
+  roleGoalsFile: path.join(root, 'role-goals.json'),
 }
 
 export function ensureDataDirs(): void {

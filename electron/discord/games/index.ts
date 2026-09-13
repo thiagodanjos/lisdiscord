@@ -3,6 +3,7 @@ import type { GameId, GameInfo } from '../../../shared/types'
 import { enabledGameIds } from '../../store/gameSettings'
 import { handleGiveawayCommand, sorteioCommandDef } from '../giveawayCommand'
 import { handleMovCallCommand, movCallCommandDefs } from '../movcall'
+import { handleVerifyCommand, verificarCommandDef } from '../verifyCommand'
 import { blackjackCommandDef, runBlackjack } from './blackjack'
 import { runDuel, duelCommandDef } from './duel'
 import { economyCommandDefs, handleEconomyCommand } from './economyCommands'
@@ -96,6 +97,7 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
         '`/pontosmovadmin painel` — define o canal onde fica o placar sempre atualizado. *(gestores)*',
         '`/inativos` — mostra quem não tem pontos ou tem menos de 5 horas de Mov. Call. *(gestores)*',
         '`/resetmovcall` — apaga todos os pontos e horas do servidor, com confirmação. *(gestores)*',
+        '`/verificar @membro` — mostra os cargos de alguém, pontos, horas, e se já cumpre a meta para upar de cargo (configurada na app, em "Metas").',
       ].join('\n'),
     )
 
@@ -121,7 +123,13 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
 }
 
 export function buildCommandDefinitions(enabled: GameId[]): CommandDef[] {
-  return [...enabled.flatMap((id) => commandDefsForGame(id)), ...movCallCommandDefs(), sorteioCommandDef(), helpCommandDef()]
+  return [
+    ...enabled.flatMap((id) => commandDefsForGame(id)),
+    ...movCallCommandDefs(),
+    sorteioCommandDef(),
+    verificarCommandDef(),
+    helpCommandDef(),
+  ]
 }
 
 export async function registerCommandsForGuild(guild: Guild, enabled: GameId[]): Promise<void> {
@@ -136,6 +144,7 @@ export async function handleGameInteraction(interaction: Interaction): Promise<v
   if (await handleEconomyCommand(interaction)) return
   if (await handleMovCallCommand(interaction)) return
   if (await handleGiveawayCommand(interaction)) return
+  if (await handleVerifyCommand(interaction)) return
 
   switch (interaction.commandName) {
     case 'trivia':

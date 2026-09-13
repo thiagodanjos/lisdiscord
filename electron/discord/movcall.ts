@@ -328,7 +328,7 @@ async function processParticipants(
       continue
     }
     movPoints.addPoints(guild.id, id, member.user.tag, points)
-    awarded.push(member.user.tag)
+    awarded.push(`<@${id}>`)
   }
 
   await refreshBoard(guild)
@@ -340,7 +340,7 @@ async function processParticipants(
     .setTitle(tipo === 'normal' ? '📋 Mov. Call Normal registada' : '📋 Mov. Call Temática / Outra MOV registada')
     .setDescription(
       awarded.length > 0
-        ? `**+${points} pontos** de MOV. Call para:\n${awarded.map((tag) => `• ${tag}`).join('\n')}`
+        ? `**+${points} pontos** de MOV. Call para:\n${awarded.map((mention) => `• ${mention}`).join('\n')}`
         : 'Nenhum participante válido foi encontrado (bots não recebem pontos).',
     )
     .setFooter({
@@ -484,7 +484,7 @@ async function runMovHoras(interaction: ChatInputCommandInteraction, guild: Guil
           const embed = new EmbedBuilder()
             .setColor(0x3ba55c)
             .setTitle('⏱️ Horas atribuídas')
-            .setDescription(`**+${formatDuration(totalSeconds)}** de Mov. Call para **${targetTag}**.\nTotal acumulado: **${formatDuration(newTotal)}**.`)
+            .setDescription(`**+${formatDuration(totalSeconds)}** de Mov. Call para <@${targetId}>.\nTotal acumulado: **${formatDuration(newTotal)}**.`)
           await updateFromModal(submitted, interaction, { embeds: [embed], components: [] })
           await deleteAfter(RESULT_DISPLAY_MS)
         } catch {
@@ -515,7 +515,7 @@ async function runVerPontos(interaction: ChatInputCommandInteraction, guild: Gui
   const embed = new EmbedBuilder()
     .setColor(0xf0b232)
     .setTitle('🏅 Pontos de MOV. Call')
-    .setDescription(`**${target.tag}** tem **${points} pontos** e **${formatDuration(totalSeconds)}** de Mov. Call neste servidor.`)
+    .setDescription(`<@${target.id}> tem **${points} pontos** e **${formatDuration(totalSeconds)}** de Mov. Call neste servidor.`)
   await interaction.reply({ embeds: [embed] })
 }
 
@@ -536,7 +536,7 @@ async function runAdicionar(interaction: ChatInputCommandInteraction, guild: Gui
   const embed = new EmbedBuilder()
     .setColor(0x3ba55c)
     .setTitle('🏅 Pontos adicionados')
-    .setDescription(`**+${amount} pontos** de MOV. Call para **${user.tag}**.\nSaldo atual: **${newTotal} pontos**.`)
+    .setDescription(`**+${amount} pontos** de MOV. Call para <@${user.id}>.\nSaldo atual: **${newTotal} pontos**.`)
   await interaction.reply({ embeds: [embed] })
 }
 
@@ -549,7 +549,7 @@ async function runRemover(interaction: ChatInputCommandInteraction, guild: Guild
   const embed = new EmbedBuilder()
     .setColor(0xed4245)
     .setTitle('🏅 Pontos removidos')
-    .setDescription(`**-${amount} pontos** de MOV. Call de **${user.tag}**.\nSaldo atual: **${newTotal} pontos**.`)
+    .setDescription(`**-${amount} pontos** de MOV. Call de <@${user.id}>.\nSaldo atual: **${newTotal} pontos**.`)
   await interaction.reply({ embeds: [embed] })
 }
 
@@ -630,14 +630,14 @@ async function runResetMovCall(interaction: ChatInputCommandInteraction, guild: 
 // ==========================================================================
 
 async function runInativos(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
-  await interaction.reply({ embeds: [buildInactiveEmbed(guild)], ephemeral: true })
+  await interaction.reply({ embeds: [buildInactiveEmbed(guild)] })
 }
 
 function buildInactiveEmbed(guild: Guild): EmbedBuilder {
   const leaderboard = movPoints.getLeaderboard(guild.id)
   const inactive = leaderboard.filter((entry) => entry.points === 0 || entry.totalSeconds < INACTIVE_HOURS_THRESHOLD_SECONDS)
 
-  const lines = inactive.map((entry) => `⚠️ **${entry.tag}** — ${entry.points} pontos · ${formatDuration(entry.totalSeconds)}`)
+  const lines = inactive.map((entry) => `⚠️ <@${entry.userId}> — ${entry.points} pontos · ${formatDuration(entry.totalSeconds)}`)
 
   return new EmbedBuilder()
     .setColor(0xed4245)
@@ -682,7 +682,7 @@ function buildBoardEmbed(guild: Guild): EmbedBuilder {
   const medals = ['🥇', '🥈', '🥉']
   const lines = leaderboard.map((entry, i) => {
     const hoursText = entry.totalSeconds > 0 ? ` · ${formatDuration(entry.totalSeconds)}` : ''
-    return `${medals[i] ?? `${i + 1}.`} **${entry.tag}** — ${entry.points} pontos${hoursText}`
+    return `${medals[i] ?? `${i + 1}.`} <@${entry.userId}> — ${entry.points} pontos${hoursText}`
   })
 
   return new EmbedBuilder()
@@ -721,7 +721,7 @@ function parseNonNegativeInt(raw: string): number | null {
   return Number(trimmed)
 }
 
-function formatDuration(totalSeconds: number): string {
+export function formatDuration(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600)
   const m = Math.floor((totalSeconds % 3600) / 60)
   const s = totalSeconds % 60

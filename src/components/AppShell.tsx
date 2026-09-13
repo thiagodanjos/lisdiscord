@@ -10,6 +10,8 @@ import {
   Server,
   Settings as SettingsIcon,
   ShieldAlert,
+  Target,
+  TrendingUp,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
@@ -33,6 +35,8 @@ const NAV_SERVER = [
   { to: '/sorteios', label: 'Sorteios', icon: Gift },
   { to: '/jogos', label: 'Jogos', icon: Gamepad2 },
   { to: '/pontos-mov', label: 'Pontos MOV', icon: Medal },
+  { to: '/upamentos', label: 'Upamentos', icon: TrendingUp },
+  { to: '/metas', label: 'Metas', icon: Target },
 ]
 
 export function AppShell({ children, status }: { children: ReactNode; status: BotStatus | null }) {

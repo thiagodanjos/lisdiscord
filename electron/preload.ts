@@ -67,6 +67,13 @@ const bridge: LisDiscordBridge = {
   getMovPointsBoard: (guildId) => ipcRenderer.invoke(IPC.getMovPointsBoard, guildId),
   setMovPointsBoard: (guildId, channelId) => ipcRenderer.invoke(IPC.setMovPointsBoard, guildId, channelId),
   resetMovPoints: (guildId) => ipcRenderer.invoke(IPC.resetMovPoints, guildId),
+
+  listRoles: (guildId) => ipcRenderer.invoke(IPC.listRoles, guildId),
+  getMemberProfile: (guildId, userId) => ipcRenderer.invoke(IPC.getMemberProfile, guildId, userId),
+  listRoleGoals: (guildId) => ipcRenderer.invoke(IPC.listRoleGoals, guildId),
+  setRoleGoal: (guildId, roleId, roleName, pointsGoal, hoursGoal) =>
+    ipcRenderer.invoke(IPC.setRoleGoal, guildId, roleId, roleName, pointsGoal, hoursGoal),
+  removeRoleGoal: (guildId, roleId) => ipcRenderer.invoke(IPC.removeRoleGoal, guildId, roleId),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

@@ -13,11 +13,14 @@ import type {
   GameSettings,
   Giveaway,
   GuildSummary,
+  MemberProfile,
   MemberSearchResult,
   ModerationLogEntry,
   MovPointsBoardConfig,
   MovPointsEntry,
   RestoreOptions,
+  RoleGoal,
+  RolePickerEntry,
   ScheduleConfig,
   ScheduleFrequency,
   TimeoutDuration,
@@ -34,6 +37,7 @@ import * as moderation from '../discord/moderation'
 import { postGiveawayMessage } from '../discord/giveaways'
 import { GAMES, registerCommandsForGuild } from '../discord/games'
 import { refreshBoard } from '../discord/movcall'
+import { getMemberProfile, listGuildRoles } from '../discord/memberProfile'
 import { concludeGiveawayById, startGiveawayScheduler, startScheduledBackups } from '../discord/automation'
 import * as backupsStore from '../store/backups'
 import * as transcriptsStore from '../store/transcripts'
@@ -42,6 +46,7 @@ import * as giveawaysStore from '../store/giveaways'
 import * as gameSettingsStore from '../store/gameSettings'
 import * as moderationLogStore from '../store/moderationLog'
 import * as movPointsStore from '../store/movPoints'
+import * as roleGoalsStore from '../store/roleGoals'
 import { getAppSettings, loadToken, openDataDir, saveToken } from '../store/settings'
 
 const CHANNEL_KIND_MAP: Record<number, ChannelKind | undefined> = {
@@ -297,6 +302,30 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     }
     return movPointsStore.getLeaderboard(guildId)
   })
+
+  // ---- Upamentos (metas de cargo) ----
+  ipcMain.handle(IPC.listRoles, async (_e, guildId: string): Promise<RolePickerEntry[]> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    return listGuildRoles(guild)
+  })
+
+  ipcMain.handle(IPC.getMemberProfile, async (_e, guildId: string, userId: string): Promise<MemberProfile> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    return getMemberProfile(guild, userId)
+  })
+
+  ipcMain.handle(IPC.listRoleGoals, async (_e, guildId: string): Promise<RoleGoal[]> => roleGoalsStore.listGoals(guildId))
+
+  ipcMain.handle(
+    IPC.setRoleGoal,
+    async (_e, guildId: string, roleId: string, roleName: string, pointsGoal: number, hoursGoal: number): Promise<RoleGoal[]> =>
+      roleGoalsStore.setGoal(guildId, roleId, roleName, pointsGoal, hoursGoal),
+  )
+
+  ipcMain.handle(
+    IPC.removeRoleGoal,
+    async (_e, guildId: string, roleId: string): Promise<RoleGoal[]> => roleGoalsStore.removeGoal(guildId, roleId),
+  )
 }
 
 /** Corre à parte do registo dos handlers: religa agendamentos e, se houver token guardado, liga o bot sozinho. */

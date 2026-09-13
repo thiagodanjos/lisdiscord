@@ -12,12 +12,15 @@ import type {
   GameSettings,
   Giveaway,
   GuildSummary,
+  MemberProfile,
   MemberSearchResult,
   ModerationLogEntry,
   MovPointsBoardConfig,
   MovPointsEntry,
   RestoreOptions,
   RestoreProgressEvent,
+  RoleGoal,
+  RolePickerEntry,
   ScheduleConfig,
   ScheduleFrequency,
   TimeoutDuration,
@@ -77,6 +80,12 @@ export const IPC = {
   getMovPointsBoard: 'movpoints:board:get',
   setMovPointsBoard: 'movpoints:board:set',
   resetMovPoints: 'movpoints:reset',
+
+  listRoles: 'guilds:roles',
+  getMemberProfile: 'members:profile',
+  listRoleGoals: 'goals:list',
+  setRoleGoal: 'goals:set',
+  removeRoleGoal: 'goals:remove',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -135,4 +144,10 @@ export interface LisDiscordBridge {
   getMovPointsBoard(guildId: string): Promise<MovPointsBoardConfig>
   setMovPointsBoard(guildId: string, channelId: string | null): Promise<MovPointsBoardConfig>
   resetMovPoints(guildId: string): Promise<MovPointsEntry[]>
+
+  listRoles(guildId: string): Promise<RolePickerEntry[]>
+  getMemberProfile(guildId: string, userId: string): Promise<MemberProfile>
+  listRoleGoals(guildId: string): Promise<RoleGoal[]>
+  setRoleGoal(guildId: string, roleId: string, roleName: string, pointsGoal: number, hoursGoal: number): Promise<RoleGoal[]>
+  removeRoleGoal(guildId: string, roleId: string): Promise<RoleGoal[]>
 }

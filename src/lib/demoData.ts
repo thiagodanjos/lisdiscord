@@ -15,6 +15,8 @@ import type {
   MovPointsEntry,
   RestoreProgressEvent,
   RoleBackup,
+  RoleGoal,
+  RolePickerEntry,
   ScheduleConfig,
   Transcript,
   TranscriptSummary,
@@ -184,6 +186,26 @@ let movPointsBoardData: Record<string, MovPointsBoardConfig> = {
 
 function sortMovPoints(entries: MovPointsEntry[]): MovPointsEntry[] {
   return [...entries].sort((a, b) => b.points - a.points || b.totalSeconds - a.totalSeconds)
+}
+
+const demoRoles: RolePickerEntry[] = [
+  { id: 'r3', name: 'Veterano', color: '#F0B232' },
+  { id: 'r2', name: 'Membro Ativo', color: '#3BA55C' },
+  { id: 'r1', name: 'Membro', color: '#99AAB5' },
+]
+
+const memberRolesData: Record<string, RolePickerEntry[]> = {
+  u10: [demoRoles[1]],
+  u11: [demoRoles[2]],
+  u12: [demoRoles[1]],
+  u13: [demoRoles[2]],
+}
+
+let roleGoalsData: Record<string, RoleGoal[]> = {
+  g1: [
+    { roleId: 'r2', roleName: 'Membro Ativo', pointsGoal: 50, hoursGoal: 2 },
+    { roleId: 'r3', roleName: 'Veterano', pointsGoal: 100, hoursGoal: 10 },
+  ],
 }
 
 const transcriptsData: Transcript[] = [
@@ -523,5 +545,42 @@ export const demoBridge: LisDiscordBridge = {
     await delay(400)
     movPointsData = { ...movPointsData, [guildId]: [] }
     return []
+  },
+
+  async listRoles() {
+    await delay()
+    return demoRoles
+  },
+  async getMemberProfile(guildId, userId) {
+    await delay()
+    const member = membersData.find((m) => m.id === userId)
+    const entry = (movPointsData[guildId] ?? []).find((e) => e.userId === userId)
+    return {
+      id: userId,
+      tag: member?.tag ?? 'Desconhecido',
+      avatarUrl: member?.avatarUrl ?? null,
+      roles: memberRolesData[userId] ?? [],
+      points: entry?.points ?? 0,
+      totalSeconds: entry?.totalSeconds ?? 0,
+    }
+  },
+  async listRoleGoals(guildId) {
+    await delay()
+    return roleGoalsData[guildId] ?? []
+  },
+  async setRoleGoal(guildId, roleId, roleName, pointsGoal, hoursGoal) {
+    await delay()
+    const existing = roleGoalsData[guildId] ?? []
+    const idx = existing.findIndex((g) => g.roleId === roleId)
+    const goal: RoleGoal = { roleId, roleName, pointsGoal, hoursGoal }
+    const updated = idx === -1 ? [...existing, goal] : existing.map((g, i) => (i === idx ? goal : g))
+    roleGoalsData = { ...roleGoalsData, [guildId]: updated }
+    return updated
+  },
+  async removeRoleGoal(guildId, roleId) {
+    await delay()
+    const updated = (roleGoalsData[guildId] ?? []).filter((g) => g.roleId !== roleId)
+    roleGoalsData = { ...roleGoalsData, [guildId]: updated }
+    return updated
   },
 }
