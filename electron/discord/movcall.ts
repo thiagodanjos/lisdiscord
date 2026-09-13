@@ -1,9 +1,11 @@
 import {
   ActionRowBuilder,
+  type ButtonInteraction,
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
   type ChatInputCommandInteraction,
+  ComponentType,
   EmbedBuilder,
   type Guild,
   type Message,
@@ -14,6 +16,7 @@ import {
   PermissionFlagsBits,
   type RESTPostAPIChatInputApplicationCommandsJSONBody,
   SlashCommandBuilder,
+  type TextBasedChannel,
   TextInputBuilder,
   TextInputStyle,
   UserSelectMenuBuilder,
@@ -146,6 +149,13 @@ export async function handleMovCallCommand(interaction: ChatInputCommandInteract
 // ==========================================================================
 
 async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
+  const channelRef = interaction.channel
+  if (!channelRef || !channelRef.isTextBased() || channelRef instanceof PartialGroupDMChannel) {
+    await interaction.reply({ content: '❌ Não consigo aceder a este canal para ler a lista de participantes.', ephemeral: true })
+    return
+  }
+  const channel: ListenableChannel = channelRef
+
   const today = formatBrasiliaDate(new Date())
   let tipo: MovCallType | null = null
   let errorText = ''
@@ -170,20 +180,21 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
     )
   }
 
-  function listEmbed(): EmbedBuilder {
+  function waitingListEmbed(): EmbedBuilder {
     return new EmbedBuilder()
       .setColor(tipo === 'normal' ? 0x5865f2 : 0xf0b232)
       .setTitle(`📋 Mov. Call ${tipo === 'normal' ? 'Normal' : 'Temática / Outra MOV'}`)
       .setDescription(
-        'Clica em **Escrever lista** e cola os participantes numa caixa de texto, um **ID** por linha (menções não funcionam aqui — o Discord não permite escrevê-las dentro desta janela).\n\n' +
-          '💡 Não sabes o ID de alguém? Ativa o **Modo de Programador** em Definições → Avançado no Discord, depois clica com o botão direito no membro → **Copiar ID de Utilizador**.',
+        'Escreve agora, **neste canal**, a lista de participantes — um membro por linha, por menção (ex: @membro) ou pelo ID. ' +
+          'A tua mensagem é apagada automaticamente depois de processada.',
       )
-      .setFooter({ text: `+${POINTS_BY_TYPE[tipo ?? 'normal']} pontos por participante` })
+      .setFooter({
+        text: `+${POINTS_BY_TYPE[tipo ?? 'normal']} pontos por participante · tens ${Math.round(SETUP_TIMEOUT_MS / 60_000)} minutos`,
+      })
   }
 
-  function listRow(): ActionRowBuilder<ButtonBuilder> {
+  function waitingListRow(): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('movcall:writeList').setLabel('Escrever lista').setStyle(ButtonStyle.Primary).setEmoji('📝'),
       new ButtonBuilder().setCustomId('movcall:back').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
       new ButtonBuilder().setCustomId('movcall:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
     )
@@ -191,13 +202,6 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
 
   function errorEmbed(): EmbedBuilder {
     return new EmbedBuilder().setColor(0xed4245).setTitle('❌ Não consegui perceber a lista').setDescription(errorText)
-  }
-
-  function errorRow(): ActionRowBuilder<ButtonBuilder> {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('movcall:back').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
-      new ButtonBuilder().setCustomId('movcall:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
-    )
   }
 
   const reply = await interaction.reply({ embeds: [chooseTypeEmbed()], components: [chooseTypeRow()], ephemeral: true, withResponse: true })
@@ -209,9 +213,16 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
     await interaction.deleteReply().catch(() => undefined)
   }
 
-  await loop(message)
+  async function timeoutOut(): Promise<void> {
+    await interaction
+      .editReply({ embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('⏱️ Tempo esgotado').setDescription('Registo de Mov. Call cancelado.')], components: [] })
+      .catch(() => undefined)
+    await interaction.deleteReply().catch(() => undefined)
+  }
 
-  async function loop(msg: Message): Promise<void> {
+  await chooseTypeStep(message)
+
+  async function chooseTypeStep(msg: Message): Promise<void> {
     try {
       const click = await msg.awaitMessageComponent({ time: SETUP_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
 
@@ -223,63 +234,68 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
 
       if (click.customId === 'movcall:tipo:normal' || click.customId === 'movcall:tipo:tematica') {
         tipo = click.customId.endsWith('normal') ? 'normal' : 'tematica'
-        await click.update({ embeds: [listEmbed()], components: [listRow()] })
-        await loop(msg)
+        await click.update({ embeds: [waitingListEmbed()], components: [waitingListRow()] })
+        await listStep(msg)
+        return
+      }
+
+      await chooseTypeStep(msg)
+    } catch {
+      await timeoutOut()
+    }
+  }
+
+  async function listStep(msg: Message): Promise<void> {
+    const outcome = await raceListInput(msg, channel, interaction.user.id, SETUP_TIMEOUT_MS)
+
+    if (outcome.kind === 'timeout') {
+      await timeoutOut()
+      return
+    }
+
+    if (outcome.kind === 'component') {
+      const click = outcome.interaction
+
+      if (click.customId === 'movcall:cancel') {
+        await click.update({ embeds: [new EmbedBuilder().setColor(0x99aab5).setTitle('Cancelado').setDescription('Registo de Mov. Call cancelado.')], components: [] })
+        await deleteAfter(CANCEL_DISPLAY_MS)
         return
       }
 
       if (click.customId === 'movcall:back') {
         tipo = null
         await click.update({ embeds: [chooseTypeEmbed()], components: [chooseTypeRow()] })
-        await loop(msg)
+        await chooseTypeStep(msg)
         return
       }
 
-      if (click.customId === 'movcall:writeList') {
-        const modal = new ModalBuilder()
-          .setCustomId('movcall:modal')
-          .setTitle('Lista de participantes')
-          .addComponents(
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder()
-                .setCustomId('lista')
-                .setLabel('Um ID por linha (não funciona com menções)')
-                .setStyle(TextInputStyle.Paragraph)
-                .setRequired(true)
-                .setPlaceholder('123456789012345678\n987654321098765432'),
-            ),
-          )
-        await click.showModal(modal)
+      await listStep(msg)
+      return
+    }
 
-        try {
-          const submitted = await click.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
-          const ids = parseParticipantsList(submitted.fields.getTextInputValue('lista'))
+    const userMessage = outcome.message
+    const ids = parseParticipantsList(userMessage.content)
+    await userMessage.delete().catch(() => undefined)
 
-          if (ids.length === 0) {
-            errorText = 'Não encontrei nenhum ID válido nessa lista. Confirma que puseste um ID por linha (não funciona com menções @pessoa).'
-            await updateFromModal(submitted, interaction, { embeds: [errorEmbed()], components: [errorRow()] })
-            await loop(msg)
-            return
-          }
+    if (ids.length === 0) {
+      errorText =
+        'Não encontrei nenhum ID ou menção válida nessa mensagem. Escreve um membro por linha, por menção (@membro) ou pelo ID. ' +
+        'Se a mensagem tinha texto e isto continuar a acontecer, confirma que a **Message Content Intent** está ativada em Developer Portal → Bot.'
+      await interaction.editReply({ embeds: [errorEmbed()], components: [waitingListRow()] }).catch(() => undefined)
+      await listStep(msg)
+      return
+    }
 
-          await updateFromModal(submitted, interaction, { embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏳ A atribuir pontos…')], components: [] })
-          const resultEmbed = await processParticipants(guild, tipo ?? 'normal', ids, interaction.user.tag, today)
-          await interaction.editReply({ embeds: [resultEmbed], components: [] })
-          await deleteAfter(RESULT_DISPLAY_MS)
-        } catch {
-          // modal fechada sem submeter — mantém-se no passo da lista
-          await interaction.editReply({ embeds: [listEmbed()], components: [listRow()] })
-          await loop(msg)
-        }
-        return
-      }
+    await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏳ A atribuir pontos…')], components: [] }).catch(() => undefined)
 
-      await loop(msg)
+    try {
+      const resultEmbed = await processParticipants(guild, tipo ?? 'normal', ids, interaction.user.tag, today)
+      await interaction.editReply({ embeds: [resultEmbed], components: [] })
+      await deleteAfter(RESULT_DISPLAY_MS)
     } catch {
-      await interaction
-        .editReply({ embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('⏱️ Tempo esgotado').setDescription('Registo de Mov. Call cancelado.')], components: [] })
-        .catch(() => undefined)
-      await interaction.deleteReply().catch(() => undefined)
+      errorText = 'Ocorreu um erro inesperado ao atribuir os pontos. Tenta enviar a lista outra vez.'
+      await interaction.editReply({ embeds: [errorEmbed()], components: [waitingListRow()] }).catch(() => undefined)
+      await listStep(msg)
     }
   }
 }
@@ -693,4 +709,42 @@ async function updateFromModal(
 
 function formatBrasiliaDate(date: Date): string {
   return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'full' }).format(date)
+}
+
+/** `PartialGroupDMChannel` não tem `createMessageCollector` e nunca aparece num comando de servidor — excluído para o TS confirmar o método existe. */
+type ListenableChannel = Exclude<TextBasedChannel, PartialGroupDMChannel>
+
+type ListInputOutcome = { kind: 'component'; interaction: ButtonInteraction } | { kind: 'message'; message: Message } | { kind: 'timeout' }
+
+/**
+ * Espera, ao mesmo tempo, por um clique nos botões (Voltar/Cancelar) da mensagem efémera OU por uma
+ * mensagem normal enviada pelo utilizador no canal — é assim que a lista de participantes aceita
+ * menções reais, já que só a caixa de mensagem normal do Discord (não uma modal) as converte em `<@id>`.
+ */
+function raceListInput(msg: Message, channel: ListenableChannel, userId: string, timeMs: number): Promise<ListInputOutcome> {
+  return new Promise((resolve) => {
+    let done = false
+
+    const componentCollector = msg.createMessageComponentCollector({
+      componentType: ComponentType.Button,
+      filter: (i) => i.user.id === userId,
+      time: timeMs,
+      max: 1,
+    })
+    const messageCollector = channel.createMessageCollector({ filter: (m) => m.author.id === userId, time: timeMs, max: 1 })
+
+    function finish(result: ListInputOutcome): void {
+      if (done) return
+      done = true
+      componentCollector.stop()
+      messageCollector.stop()
+      resolve(result)
+    }
+
+    componentCollector.on('collect', (interaction) => finish({ kind: 'component', interaction }))
+    messageCollector.on('collect', (message) => finish({ kind: 'message', message }))
+    componentCollector.on('end', (_collected, reason) => {
+      if (reason === 'time') finish({ kind: 'timeout' })
+    })
+  })
 }

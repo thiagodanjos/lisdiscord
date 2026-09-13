@@ -1,5 +1,6 @@
 import {
   ActionRowBuilder,
+  type ButtonInteraction,
   ButtonBuilder,
   ButtonStyle,
   ChannelSelectMenuBuilder,
@@ -18,7 +19,7 @@ import {
   TextInputStyle,
 } from 'discord.js'
 import * as giveawaysStore from '../store/giveaways'
-import { postGiveawayMessage } from './giveaways'
+import { postGiveawayMessage, rerollGiveaway } from './giveaways'
 
 const SETUP_TIMEOUT_MS = 10 * 60_000
 const MODAL_TIMEOUT_MS = 120_000
@@ -26,6 +27,7 @@ const RESULT_DISPLAY_MS = 8_000
 const CANCEL_DISPLAY_MS = 2_500
 const MIN_DURATION_MS = 30_000
 const MAX_DURATION_MS = 30 * 24 * 60 * 60_000
+const REROLL_PREFIX = 'giveaway:reroll:'
 
 export function sorteioCommandDef(): RESTPostAPIChatInputApplicationCommandsJSONBody {
   return new SlashCommandBuilder()
@@ -33,6 +35,53 @@ export function sorteioCommandDef(): RESTPostAPIChatInputApplicationCommandsJSON
     .setDescription('Cria um sorteio interativo por reações neste servidor')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .toJSON()
+}
+
+/** Trata o clique no botão "Rerolar vencedor(es)" que fica na mensagem de conclusão de qualquer sorteio — pode ser clicado muito depois do sorteio ter terminado, por isso não usa um collector local. */
+export async function handleGiveawayButtons(interaction: ButtonInteraction): Promise<boolean> {
+  if (!interaction.customId.startsWith(REROLL_PREFIX)) return false
+
+  const guild = interaction.guild
+  if (!guild) {
+    await interaction.reply({ content: '❌ Este botão só funciona dentro de um servidor.', ephemeral: true })
+    return true
+  }
+
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+    await interaction.reply({ content: '❌ Só quem pode gerir o servidor pode fazer reroll.', ephemeral: true })
+    return true
+  }
+
+  const id = interaction.customId.slice(REROLL_PREFIX.length)
+  const giveaway = giveawaysStore.getGiveaway(id)
+  if (!giveaway) {
+    await interaction.reply({ content: '❌ Já não encontro este sorteio (pode ter sido apagado).', ephemeral: true })
+    return true
+  }
+  if (!giveaway.ended || !giveaway.messageId) {
+    await interaction.reply({ content: '❌ Este sorteio ainda não terminou — espera que termine antes de rerolar.', ephemeral: true })
+    return true
+  }
+
+  await interaction.deferReply({ ephemeral: true })
+  try {
+    const winners = await rerollGiveaway(
+      guild,
+      giveaway.channelId,
+      giveaway.messageId,
+      giveaway.prize,
+      giveaway.winnerCount,
+      giveaway.id,
+      giveaway.winners,
+    )
+    giveawaysStore.markConcluded(giveaway.id, winners)
+    await interaction.editReply({
+      content: winners.length > 0 ? '🔁 Reroll feito — o novo resultado foi anunciado no canal.' : '🔁 Reroll feito, mas não havia mais participantes elegíveis.',
+    })
+  } catch (err) {
+    await interaction.editReply({ content: `❌ Não consegui fazer o reroll: ${err instanceof Error ? err.message : 'erro desconhecido'}` })
+  }
+  return true
 }
 
 export async function handleGiveawayCommand(interaction: ChatInputCommandInteraction): Promise<boolean> {

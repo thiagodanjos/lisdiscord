@@ -1,6 +1,7 @@
 import { Client, Events, GatewayIntentBits, PermissionsBitField } from 'discord.js'
 import type { BotStatus, GuildSummary } from '../../shared/types'
 import { enabledGameIds } from '../store/gameSettings'
+import { handleGiveawayButtons } from './giveawayCommand'
 import { handleGameInteraction, registerCommandsForGuild } from './games'
 
 /**
@@ -10,7 +11,8 @@ import { handleGameInteraction, registerCommandsForGuild } from './games'
  *
  * Intents pedidos de propósito ao mínimo: `Guilds` (obrigatório para o cache
  * de servidores/canais/cargos funcionar) e `GuildMessages` + `MessageContent`
- * (só usados para os transcripts). Sem `GuildMembers` — não precisamos da
+ * (usados para os transcripts e para o /movcall conseguir ler a lista de
+ * participantes escrita no chat). Sem `GuildMembers` — não precisamos da
  * lista de membros, só da contagem aproximada que já vem com o servidor
  * (e a pesquisa de membros usa a REST API, que não exige este intent).
  */
@@ -43,10 +45,17 @@ class DiscordManager {
     }
 
     client.on(Events.InteractionCreate, async (interaction) => {
-      if (!interaction.isChatInputCommand()) return
-      await handleGameInteraction(interaction).catch((err) => {
-        console.error('Erro a processar comando de jogo:', err)
-      })
+      if (interaction.isChatInputCommand()) {
+        await handleGameInteraction(interaction).catch((err) => {
+          console.error('Erro a processar comando de jogo:', err)
+        })
+        return
+      }
+      if (interaction.isButton()) {
+        await handleGiveawayButtons(interaction).catch((err) => {
+          console.error('Erro a processar botão de sorteio:', err)
+        })
+      }
     })
 
     client.on(Events.GuildCreate, async (guild) => {

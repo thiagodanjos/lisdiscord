@@ -16,7 +16,7 @@ export async function concludeGiveawayById(id: string): Promise<Giveaway> {
   if (!giveaway.messageId) throw new Error('Sorteio sem mensagem associada.')
 
   const guild = await discordManager.getClient().guilds.fetch(giveaway.guildId)
-  const winners = await concludeGiveaway(guild, giveaway.channelId, giveaway.messageId, giveaway.prize, giveaway.winnerCount)
+  const winners = await concludeGiveaway(guild, giveaway.channelId, giveaway.messageId, giveaway.prize, giveaway.winnerCount, giveaway.id)
   const updated = giveawaysStore.markConcluded(id, winners)
   if (!updated) throw new Error('Falha ao guardar o resultado do sorteio.')
   return updated
