@@ -7,6 +7,7 @@ import {
   type ChatInputCommandInteraction,
   ComponentType,
   EmbedBuilder,
+  GatewayIntentBits,
   type Guild,
   type Message,
   type MessageEditOptions,
@@ -25,7 +26,7 @@ import type { MovCallType } from '../../shared/types'
 import * as movPoints from '../store/movPoints'
 
 const POINTS_BY_TYPE: Record<MovCallType, number> = { normal: 10, tematica: 15 }
-const SETUP_TIMEOUT_MS = 10 * 60_000
+const SETUP_TIMEOUT_MS = 20 * 60_000
 const MODAL_TIMEOUT_MS = 120_000
 const RESULT_DISPLAY_MS = 6_000
 const CANCEL_DISPLAY_MS = 2_500
@@ -155,6 +156,7 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
     return
   }
   const channel: ListenableChannel = channelRef
+  const messageContentEnabled = interaction.client.options.intents.has(GatewayIntentBits.MessageContent)
 
   const today = formatBrasiliaDate(new Date())
   let tipo: MovCallType | null = null
@@ -181,16 +183,23 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
   }
 
   function waitingListEmbed(): EmbedBuilder {
-    return new EmbedBuilder()
+    const embed = new EmbedBuilder()
       .setColor(tipo === 'normal' ? 0x5865f2 : 0xf0b232)
       .setTitle(`📋 Mov. Call ${tipo === 'normal' ? 'Normal' : 'Temática / Outra MOV'}`)
       .setDescription(
         'Escreve agora, **neste canal**, a lista de participantes — um membro por linha, por menção (@membro, mesmo sem escolher a sugestão do Discord), ' +
-          'pelo nome/alcunha, ou pelo ID. A tua mensagem é apagada automaticamente depois de processada.',
+          'pelo nome/alcunha, ou pelo ID. A tua mensagem fica com ✅ quando os pontos forem atribuídos, ou ❌ se algo correr mal.',
       )
       .setFooter({
         text: `+${POINTS_BY_TYPE[tipo ?? 'normal']} pontos por participante · tens ${Math.round(SETUP_TIMEOUT_MS / 60_000)} minutos`,
       })
+    if (!messageContentEnabled) {
+      embed.addFields({
+        name: '⚠️ Aviso',
+        value: 'A Message Content Intent parece estar desativada — posso não conseguir ler o texto da tua mensagem. Ativa-a em Developer Portal → Bot → Privileged Gateway Intents.',
+      })
+    }
+    return embed
   }
 
   function waitingListRow(): ActionRowBuilder<ButtonBuilder> {
@@ -276,9 +285,9 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
     const userMessage = outcome.message
     await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏳ A procurar participantes…')], components: [] }).catch(() => undefined)
     const ids = await parseParticipantsList(guild, userMessage.content)
-    await userMessage.delete().catch(() => undefined)
 
     if (ids.length === 0) {
+      await userMessage.react('❌').catch(() => undefined)
       errorText =
         'Não encontrei ninguém válido nessa mensagem. Escreve um membro por linha, por menção (@membro — escolhida da sugestão do Discord ou não), pelo nome/alcunha, ou pelo ID. ' +
         'Se a mensagem tinha texto e isto continuar a acontecer, confirma que a **Message Content Intent** está ativada em Developer Portal → Bot.'
@@ -291,9 +300,11 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
 
     try {
       const resultEmbed = await processParticipants(guild, tipo ?? 'normal', ids, interaction.user.tag, today)
+      await userMessage.react('✅').catch(() => undefined)
       await interaction.editReply({ embeds: [resultEmbed], components: [] })
       await deleteAfter(RESULT_DISPLAY_MS)
     } catch {
+      await userMessage.react('❌').catch(() => undefined)
       errorText = 'Ocorreu um erro inesperado ao atribuir os pontos. Tenta enviar a lista outra vez.'
       await interaction.editReply({ embeds: [errorEmbed()], components: [waitingListRow()] }).catch(() => undefined)
       await listStep(msg)
@@ -311,11 +322,16 @@ async function processParticipants(
   const points = POINTS_BY_TYPE[tipo]
   const awarded: string[] = []
   let skipped = 0
+  let bots = 0
 
   for (const id of ids) {
     const member = await guild.members.fetch(id).catch(() => null)
     if (!member) {
       skipped += 1
+      continue
+    }
+    if (member.user.bot) {
+      bots += 1
       continue
     }
     movPoints.addPoints(guild.id, id, member.user.tag, points)
@@ -324,16 +340,18 @@ async function processParticipants(
 
   await refreshBoard(guild)
 
+  const notes = [skipped ? `${skipped} inválido(s) ignorado(s)` : null, bots ? `${bots} bot(s) ignorado(s)` : null].filter(Boolean).join(' · ')
+
   const embed = new EmbedBuilder()
     .setColor(tipo === 'normal' ? 0x5865f2 : 0xf0b232)
     .setTitle(tipo === 'normal' ? '📋 Mov. Call Normal registada' : '📋 Mov. Call Temática / Outra MOV registada')
     .setDescription(
       awarded.length > 0
         ? `**+${points} pontos** de MOV. Call para:\n${awarded.map((tag) => `• ${tag}`).join('\n')}`
-        : 'Nenhum participante válido foi encontrado.',
+        : 'Nenhum participante válido foi encontrado (bots não recebem pontos).',
     )
     .setFooter({
-      text: `Registado por ${runnerTag} em ${today} · ${awarded.length} participante(s)${skipped ? ` · ${skipped} inválido(s) ignorado(s)` : ''}`,
+      text: `Registado por ${runnerTag} em ${today} · ${awarded.length} participante(s)${notes ? ` · ${notes}` : ''}`,
     })
     .setTimestamp(new Date())
 
