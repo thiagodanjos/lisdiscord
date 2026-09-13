@@ -185,8 +185,8 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
       .setColor(tipo === 'normal' ? 0x5865f2 : 0xf0b232)
       .setTitle(`📋 Mov. Call ${tipo === 'normal' ? 'Normal' : 'Temática / Outra MOV'}`)
       .setDescription(
-        'Escreve agora, **neste canal**, a lista de participantes — um membro por linha, por menção (ex: @membro) ou pelo ID. ' +
-          'A tua mensagem é apagada automaticamente depois de processada.',
+        'Escreve agora, **neste canal**, a lista de participantes — um membro por linha, por menção (@membro, mesmo sem escolher a sugestão do Discord), ' +
+          'pelo nome/alcunha, ou pelo ID. A tua mensagem é apagada automaticamente depois de processada.',
       )
       .setFooter({
         text: `+${POINTS_BY_TYPE[tipo ?? 'normal']} pontos por participante · tens ${Math.round(SETUP_TIMEOUT_MS / 60_000)} minutos`,
@@ -274,12 +274,13 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
     }
 
     const userMessage = outcome.message
-    const ids = parseParticipantsList(userMessage.content)
+    await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏳ A procurar participantes…')], components: [] }).catch(() => undefined)
+    const ids = await parseParticipantsList(guild, userMessage.content)
     await userMessage.delete().catch(() => undefined)
 
     if (ids.length === 0) {
       errorText =
-        'Não encontrei nenhum ID ou menção válida nessa mensagem. Escreve um membro por linha, por menção (@membro) ou pelo ID. ' +
+        'Não encontrei ninguém válido nessa mensagem. Escreve um membro por linha, por menção (@membro — escolhida da sugestão do Discord ou não), pelo nome/alcunha, ou pelo ID. ' +
         'Se a mensagem tinha texto e isto continuar a acontecer, confirma que a **Message Content Intent** está ativada em Developer Portal → Bot.'
       await interaction.editReply({ embeds: [errorEmbed()], components: [waitingListRow()] }).catch(() => undefined)
       await listStep(msg)
@@ -659,20 +660,36 @@ function buildBoardEmbed(guild: Guild): EmbedBuilder {
 // Auxiliares
 // ==========================================================================
 
-function extractUserId(raw: string): string | null {
-  const mentionMatch = raw.match(/^<@!?(\d{15,21})>$/)
+/**
+ * Resolve uma linha da lista para um ID de utilizador: menção real (`<@id>`, quando o Discord já a
+ * converteu por teres escolhido a sugestão de autocompletar), ID em bruto, ou — quando alguém escreve
+ * só `@nome` como texto normal, sem selecionar a sugestão, o que o Discord não converte em menção —
+ * uma pesquisa pelo nome/alcunha através da REST API (não precisa do intent de membros).
+ */
+async function resolveParticipantId(guild: Guild, rawLine: string): Promise<string | null> {
+  const line = rawLine.trim()
+  if (!line) return null
+
+  const mentionMatch = line.match(/^<@!?(\d{15,21})>$/)
   if (mentionMatch) return mentionMatch[1]
-  if (/^\d{15,21}$/.test(raw)) return raw
-  return null
+
+  if (/^\d{15,21}$/.test(line)) return line
+
+  const name = line.replace(/^@/, '').trim()
+  if (!name) return null
+
+  const results = await guild.members.search({ query: name, limit: 1 }).catch(() => null)
+  return results?.first()?.id ?? null
 }
 
-function parseParticipantsList(text: string): string[] {
-  const ids = text
+async function parseParticipantsList(guild: Guild, text: string): Promise<string[]> {
+  const lines = text
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-    .map(extractUserId)
-    .filter((id): id is string => id !== null)
+
+  const resolved = await Promise.all(lines.map((line) => resolveParticipantId(guild, line)))
+  const ids = resolved.filter((id): id is string => id !== null)
   return [...new Set(ids)]
 }
 
