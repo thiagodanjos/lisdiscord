@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
 interface PlayerRecord {
@@ -18,16 +18,11 @@ const DAILY_STREAK_BONUS = 20
 const STARTING_BALANCE = 200
 
 function readAll(): EconomyData {
-  if (!existsSync(paths.economyFile)) return {}
-  try {
-    return JSON.parse(readFileSync(paths.economyFile, 'utf-8')) as EconomyData
-  } catch {
-    return {}
-  }
+  return readJsonFile<EconomyData>(paths.economyFile, {})
 }
 
 function writeAll(data: EconomyData): void {
-  writeFileSync(paths.economyFile, JSON.stringify(data, null, 2), 'utf-8')
+  writeJsonFile(paths.economyFile, data)
 }
 
 function ensurePlayer(data: EconomyData, guildId: string, userId: string, tag: string): PlayerRecord {

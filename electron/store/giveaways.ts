@@ -1,19 +1,14 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { Giveaway } from '../../shared/types'
+import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
 function readAll(): Giveaway[] {
-  if (!existsSync(paths.giveawaysFile)) return []
-  try {
-    return JSON.parse(readFileSync(paths.giveawaysFile, 'utf-8')) as Giveaway[]
-  } catch {
-    return []
-  }
+  return readJsonFile<Giveaway[]>(paths.giveawaysFile, [])
 }
 
 function writeAll(giveaways: Giveaway[]): void {
-  writeFileSync(paths.giveawaysFile, JSON.stringify(giveaways, null, 2), 'utf-8')
+  writeJsonFile(paths.giveawaysFile, giveaways)
 }
 
 export function listGiveaways(): Giveaway[] {

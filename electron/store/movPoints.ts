@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import type { MovPointsBoardConfig, MovPointsEntry } from '../../shared/types'
+import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
 interface PlayerRecord {
@@ -16,16 +16,11 @@ interface GuildMovPoints {
 type MovPointsData = Record<string, GuildMovPoints>
 
 function readAll(): MovPointsData {
-  if (!existsSync(paths.movPointsFile)) return {}
-  try {
-    return JSON.parse(readFileSync(paths.movPointsFile, 'utf-8')) as MovPointsData
-  } catch {
-    return {}
-  }
+  return readJsonFile<MovPointsData>(paths.movPointsFile, {})
 }
 
 function writeAll(data: MovPointsData): void {
-  writeFileSync(paths.movPointsFile, JSON.stringify(data, null, 2), 'utf-8')
+  writeJsonFile(paths.movPointsFile, data)
 }
 
 function ensureGuild(data: MovPointsData, guildId: string): GuildMovPoints {

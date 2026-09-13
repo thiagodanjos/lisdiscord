@@ -1,6 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import type { GameId, GameSettings } from '../../shared/types'
 import { GAMES } from '../discord/games'
+import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
 type StoredSettings = Record<string, GameSettings>
@@ -12,16 +12,11 @@ function defaultSettings(): GameSettings {
 }
 
 function readAll(): StoredSettings {
-  if (!existsSync(paths.gameSettingsFile)) return {}
-  try {
-    return JSON.parse(readFileSync(paths.gameSettingsFile, 'utf-8')) as StoredSettings
-  } catch {
-    return {}
-  }
+  return readJsonFile<StoredSettings>(paths.gameSettingsFile, {})
 }
 
 function writeAll(settings: StoredSettings): void {
-  writeFileSync(paths.gameSettingsFile, JSON.stringify(settings, null, 2), 'utf-8')
+  writeJsonFile(paths.gameSettingsFile, settings)
 }
 
 export function getGameSettings(guildId: string): GameSettings {

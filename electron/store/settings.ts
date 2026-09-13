@@ -1,6 +1,7 @@
 import { safeStorage, shell } from 'electron'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import type { AppSettings } from '../../shared/types'
+import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
 interface StoredSettings {
@@ -8,16 +9,11 @@ interface StoredSettings {
 }
 
 function readStored(): StoredSettings {
-  if (!existsSync(paths.settingsFile)) return { theme: 'dark' }
-  try {
-    return { theme: 'dark', ...JSON.parse(readFileSync(paths.settingsFile, 'utf-8')) }
-  } catch {
-    return { theme: 'dark' }
-  }
+  return { theme: 'dark', ...readJsonFile<Partial<StoredSettings>>(paths.settingsFile, {}) }
 }
 
 function writeStored(settings: StoredSettings): void {
-  writeFileSync(paths.settingsFile, JSON.stringify(settings, null, 2), 'utf-8')
+  writeJsonFile(paths.settingsFile, settings)
 }
 
 export function getAppSettings(): AppSettings {

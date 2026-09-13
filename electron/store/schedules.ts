@@ -1,7 +1,7 @@
 import cron, { type ScheduledTask } from 'node-cron'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { ScheduleConfig, ScheduleFrequency } from '../../shared/types'
+import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
 const CRON_BY_FREQUENCY: Record<ScheduleFrequency, string> = {
@@ -16,16 +16,11 @@ const jobs = new Map<string, ScheduledTask>()
 let onTick: ((schedule: ScheduleConfig) => Promise<void>) | null = null
 
 function readAll(): ScheduleConfig[] {
-  if (!existsSync(paths.schedulesFile)) return []
-  try {
-    return JSON.parse(readFileSync(paths.schedulesFile, 'utf-8')) as ScheduleConfig[]
-  } catch {
-    return []
-  }
+  return readJsonFile<ScheduleConfig[]>(paths.schedulesFile, [])
 }
 
 function writeAll(schedules: ScheduleConfig[]): void {
-  writeFileSync(paths.schedulesFile, JSON.stringify(schedules, null, 2), 'utf-8')
+  writeJsonFile(paths.schedulesFile, schedules)
 }
 
 function startJob(schedule: ScheduleConfig): void {

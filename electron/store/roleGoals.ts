@@ -1,20 +1,15 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import type { RoleGoal } from '../../shared/types'
+import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
 type RoleGoalsData = Record<string, RoleGoal[]>
 
 function readAll(): RoleGoalsData {
-  if (!existsSync(paths.roleGoalsFile)) return {}
-  try {
-    return JSON.parse(readFileSync(paths.roleGoalsFile, 'utf-8')) as RoleGoalsData
-  } catch {
-    return {}
-  }
+  return readJsonFile<RoleGoalsData>(paths.roleGoalsFile, {})
 }
 
 function writeAll(data: RoleGoalsData): void {
-  writeFileSync(paths.roleGoalsFile, JSON.stringify(data, null, 2), 'utf-8')
+  writeJsonFile(paths.roleGoalsFile, data)
 }
 
 export function listGoals(guildId: string): RoleGoal[] {
