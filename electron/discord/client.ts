@@ -44,14 +44,21 @@ class DiscordManager {
     }
 
     client.on(Events.InteractionCreate, async (interaction) => {
+      // O gateway da Discord pode, raramente, reentregar o mesmo evento (ex.: depois de um
+      // resume da ligação) — sem isto, a segunda entrega tentava responder a uma interação já
+      // respondida e rebentava com "Interaction has already been acknowledged" (40060).
+      if (wasRecentlySeen(interaction.id)) return
+
       if (interaction.isChatInputCommand()) {
         await handleGameInteraction(interaction).catch((err) => {
+          if (isAlreadyAcknowledgedError(err)) return
           console.error('Erro a processar comando de jogo:', err)
         })
         return
       }
       if (interaction.isButton()) {
         await handleGiveawayButtons(interaction).catch((err) => {
+          if (isAlreadyAcknowledgedError(err)) return
           console.error('Erro a processar botão de sorteio:', err)
         })
       }
@@ -168,9 +175,25 @@ function isDisallowedIntentsError(err: unknown): boolean {
   return /disallowed intents/i.test(message)
 }
 
+/** Código 40060 da Discord: outra entrega do mesmo evento (ou outra instância do bot) já respondeu a esta interação — inofensivo. */
+function isAlreadyAcknowledgedError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && (err as { code: unknown }).code === 40060
+}
+
 function asFriendlyError(err: unknown): Error {
   const message = err instanceof Error ? err.message : String(err)
   return new Error(`Não foi possível ligar com este token: ${message}`)
+}
+
+const SEEN_INTERACTION_TTL_MS = 60_000
+const seenInteractionIds = new Set<string>()
+
+/** Marca um id de interação como visto; devolve `true` se já o tínhamos visto nos últimos 60s. */
+function wasRecentlySeen(id: string): boolean {
+  if (seenInteractionIds.has(id)) return true
+  seenInteractionIds.add(id)
+  setTimeout(() => seenInteractionIds.delete(id), SEEN_INTERACTION_TTL_MS)
+  return false
 }
 
 export const discordManager = new DiscordManager()
