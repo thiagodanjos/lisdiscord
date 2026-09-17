@@ -1,8 +1,8 @@
-import { Client, Events, GatewayIntentBits, PermissionsBitField } from 'discord.js'
+import { ActivityType, Client, Events, GatewayIntentBits, PermissionsBitField } from 'discord.js'
 import type { BotStatus, GuildSummary } from '../../shared/types'
 import { enabledGameIds } from '../store/gameSettings'
 import { handleGiveawayButtons } from './giveawayCommand'
-import { handleGameInteraction, registerCommandsForGuild } from './games'
+import { buildGlobalCommandDefinitions, handleGameInteraction, registerCommandsForGuild } from './games'
 import { handleJustificationButtons } from './justifications'
 
 /**
@@ -85,6 +85,11 @@ class DiscordManager {
     })
 
     this.client = client
+    client.user?.setPresence({
+      activities: [{ name: '/help', type: ActivityType.Watching }],
+      status: 'online',
+    })
+    await this.registerGlobalCommands()
     await this.registerAllCommands()
     return this.getStatus()
   }
@@ -157,6 +162,17 @@ class DiscordManager {
     }
 
     return out.sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /**
+   * Regista os comandos fixos (Mov. Call, sorteio, verificar, help) globalmente — uma só vez,
+   * não por servidor. É isto que faz a secção "Commands" aparecer no cartão de perfil do bot
+   * na Discord, que só lista comandos globais; comandos por servidor não aparecem lá.
+   * Pode demorar até cerca de 1 hora a propagar-se a todos os servidores na primeira vez.
+   */
+  async registerGlobalCommands(): Promise<void> {
+    const client = this.getClient()
+    await client.application?.commands.set(buildGlobalCommandDefinitions())
   }
 
   /** Regista os slash commands (jogos) em todos os servidores, de acordo com as preferências guardadas de cada um. */

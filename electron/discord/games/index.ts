@@ -122,18 +122,22 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
   return [movEmbed, giveawayEmbed, gamesEmbed]
 }
 
-export function buildCommandDefinitions(enabled: GameId[]): CommandDef[] {
-  return [
-    ...enabled.flatMap((id) => commandDefsForGame(id)),
-    ...movCallCommandDefs(),
-    sorteioCommandDef(),
-    verificarCommandDef(),
-    helpCommandDef(),
-  ]
+/**
+ * Comandos fixos, iguais em todos os servidores — registados globalmente (não
+ * por servidor) para que apareçam na secção "Commands" do perfil do bot na
+ * Discord, que só lista comandos globais.
+ */
+export function buildGlobalCommandDefinitions(): CommandDef[] {
+  return [...movCallCommandDefs(), sorteioCommandDef(), verificarCommandDef(), helpCommandDef()]
+}
+
+/** Comandos dos jogos, que variam consoante o que cada servidor ativou — continuam por servidor. */
+export function buildGuildCommandDefinitions(enabled: GameId[]): CommandDef[] {
+  return enabled.flatMap((id) => commandDefsForGame(id))
 }
 
 export async function registerCommandsForGuild(guild: Guild, enabled: GameId[]): Promise<void> {
-  await guild.commands.set(buildCommandDefinitions(enabled))
+  await guild.commands.set(buildGuildCommandDefinitions(enabled))
 }
 
 export async function handleGameInteraction(interaction: Interaction): Promise<void> {
