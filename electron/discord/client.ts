@@ -3,6 +3,7 @@ import type { BotStatus, GuildSummary } from '../../shared/types'
 import { enabledGameIds } from '../store/gameSettings'
 import { handleGiveawayButtons } from './giveawayCommand'
 import { handleGameInteraction, registerCommandsForGuild } from './games'
+import { handleJustificationButtons } from './justifications'
 
 /**
  * Envolve o Client do discord.js num singleton simples: liga, desliga e dá
@@ -71,6 +72,10 @@ class DiscordManager {
         await handleGiveawayButtons(interaction).catch((err) => {
           if (isAlreadyAcknowledgedError(err)) return
           console.error('Erro a processar botão de sorteio:', err)
+        })
+        await handleJustificationButtons(interaction).catch((err) => {
+          if (isAlreadyAcknowledgedError(err)) return
+          console.error('Erro a processar botão de justificativa:', err)
         })
       }
     })

@@ -13,6 +13,8 @@ import type {
   GameSettings,
   Giveaway,
   GuildSummary,
+  JustificationChannelKind,
+  JustificationSettings,
   MemberProfile,
   MemberSearchResult,
   ModerationLogEntry,
@@ -92,6 +94,9 @@ export const IPC = {
 
   listExcludedMembers: 'movpoints:excluded:list',
   setMemberExcluded: 'movpoints:excluded:set',
+
+  getJustificationSettings: 'justifications:settings:get',
+  setJustificationChannel: 'justifications:settings:setChannel',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -160,4 +165,7 @@ export interface LisDiscordBridge {
 
   listExcludedMembers(guildId: string): Promise<ExcludedMember[]>
   setMemberExcluded(guildId: string, userId: string, tag: string, excluded: boolean): Promise<ExcludedMember[]>
+
+  getJustificationSettings(guildId: string): Promise<JustificationSettings>
+  setJustificationChannel(guildId: string, kind: JustificationChannelKind, channelId: string | null): Promise<JustificationSettings>
 }

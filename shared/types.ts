@@ -331,6 +331,25 @@ export interface MovPointsLogEntry {
 }
 
 // ==========================================================================
+// Justificativas (fixas e diárias)
+// ==========================================================================
+
+export type JustificationType = 'fixed' | 'daily'
+
+export type JustificationChannelKind = 'fixedPost' | 'dailyPost' | 'fixedLog' | 'dailyLog'
+
+export interface JustificationSettings {
+  fixedPostChannelId: string | null
+  fixedPostChannelName: string | null
+  dailyPostChannelId: string | null
+  dailyPostChannelName: string | null
+  fixedLogChannelId: string | null
+  fixedLogChannelName: string | null
+  dailyLogChannelId: string | null
+  dailyLogChannelName: string | null
+}
+
+// ==========================================================================
 // Upamentos (metas de cargo)
 // ==========================================================================
 

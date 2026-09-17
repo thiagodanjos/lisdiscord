@@ -10,6 +10,7 @@ import type {
   GameSettings,
   Giveaway,
   GuildSummary,
+  JustificationSettings,
   MemberSearchResult,
   ModerationLogEntry,
   MovPointsBoardConfig,
@@ -246,6 +247,30 @@ function sortMovPoints(entries: MovPointsEntry[]): MovPointsEntry[] {
 }
 
 let excludedMembersData: Record<string, ExcludedMember[]> = {}
+
+let justificationSettingsData: Record<string, JustificationSettings> = {
+  g1: {
+    fixedPostChannelId: null,
+    fixedPostChannelName: null,
+    dailyPostChannelId: null,
+    dailyPostChannelName: null,
+    fixedLogChannelId: null,
+    fixedLogChannelName: null,
+    dailyLogChannelId: null,
+    dailyLogChannelName: null,
+  },
+}
+
+const EMPTY_JUSTIFICATION_SETTINGS: JustificationSettings = {
+  fixedPostChannelId: null,
+  fixedPostChannelName: null,
+  dailyPostChannelId: null,
+  dailyPostChannelName: null,
+  fixedLogChannelId: null,
+  fixedLogChannelName: null,
+  dailyLogChannelId: null,
+  dailyLogChannelName: null,
+}
 
 /** Espelha buildFullLeaderboard do lado real: mostra sempre todos os membros (não-bots), com 0/0 para quem nunca teve pontos, exceto quem foi escondido. */
 function fullDemoLeaderboard(guildId: string): MovPointsEntry[] {
@@ -662,6 +687,33 @@ export const demoBridge: LisDiscordBridge = {
     const without = current.filter((m) => m.userId !== userId)
     const updated = excluded ? [...without, { userId, tag }] : without
     excludedMembersData = { ...excludedMembersData, [guildId]: updated }
+    return updated
+  },
+
+  async getJustificationSettings(guildId) {
+    await delay()
+    return justificationSettingsData[guildId] ?? EMPTY_JUSTIFICATION_SETTINGS
+  },
+  async setJustificationChannel(guildId, kind, channelId) {
+    await delay()
+    const current = justificationSettingsData[guildId] ?? EMPTY_JUSTIFICATION_SETTINGS
+    const channel = makeChannels().find((c) => c.id === channelId)
+    const channelName = channelId ? (channel?.name ?? channelId) : null
+    const updated: JustificationSettings = { ...current }
+    if (kind === 'fixedPost') {
+      updated.fixedPostChannelId = channelId
+      updated.fixedPostChannelName = channelName
+    } else if (kind === 'dailyPost') {
+      updated.dailyPostChannelId = channelId
+      updated.dailyPostChannelName = channelName
+    } else if (kind === 'fixedLog') {
+      updated.fixedLogChannelId = channelId
+      updated.fixedLogChannelName = channelName
+    } else {
+      updated.dailyLogChannelId = channelId
+      updated.dailyLogChannelName = channelName
+    }
+    justificationSettingsData = { ...justificationSettingsData, [guildId]: updated }
     return updated
   },
 

@@ -14,6 +14,8 @@ import type {
   GameSettings,
   Giveaway,
   GuildSummary,
+  JustificationChannelKind,
+  JustificationSettings,
   MemberProfile,
   MemberSearchResult,
   ModerationLogEntry,
@@ -50,6 +52,8 @@ import * as gameSettingsStore from '../store/gameSettings'
 import * as moderationLogStore from '../store/moderationLog'
 import * as movPointsStore from '../store/movPoints'
 import * as movPointsLogStore from '../store/movPointsLog'
+import * as justificationSettingsStore from '../store/justificationSettings'
+import { postJustificationMessage } from '../discord/justifications'
 import * as roleGoalsStore from '../store/roleGoals'
 import * as excludedMembersStore from '../store/excludedMembers'
 import { getAppSettings, loadToken, openDataDir, saveToken } from '../store/settings'
@@ -331,6 +335,31 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
         const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
         if (guild) await refreshBoard(guild).catch(() => undefined)
       }
+      return updated
+    },
+  )
+
+  // ---- Justificativas (fixas e diárias) ----
+  ipcMain.handle(IPC.getJustificationSettings, async (_e, guildId: string): Promise<JustificationSettings> => justificationSettingsStore.getSettings(guildId))
+
+  ipcMain.handle(
+    IPC.setJustificationChannel,
+    async (_e, guildId: string, kind: JustificationChannelKind, channelId: string | null): Promise<JustificationSettings> => {
+      const guild = discordManager.isConnected() ? await discordManager.getClient().guilds.fetch(guildId).catch(() => null) : null
+
+      let channelName: string | null = null
+      if (channelId && guild) {
+        const channel = await guild.channels.fetch(channelId).catch(() => null)
+        channelName = channel && 'name' in channel ? (channel.name ?? channelId) : channelId
+      }
+
+      const updated = justificationSettingsStore.setChannel(guildId, kind, channelId, channelName)
+
+      if (guild && channelId && (kind === 'fixedPost' || kind === 'dailyPost')) {
+        const type = kind === 'fixedPost' ? 'fixed' : 'daily'
+        await postJustificationMessage(guild, type, channelId).catch((err) => console.error('[justifications] Falha ao publicar mensagem:', err))
+      }
+
       return updated
     },
   )
