@@ -4,9 +4,19 @@
 // desktop, só que o token vem de uma variável de ambiente em vez do ecrã
 // inicial, e os dados ficam em LISDISCORD_DATA_DIR em vez da pasta do
 // Electron (ver electron/store/paths.ts).
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { startGiveawayScheduler, startScheduledBackups } from '../electron/discord/automation'
 import { discordManager } from '../electron/discord/client'
 import { ensureDataDirs } from '../electron/store/paths'
+
+function readPackageVersion(): string {
+  const dir = path.dirname(fileURLToPath(import.meta.url))
+  const pkgPath = path.join(dir, '..', 'package.json')
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version: string }
+  return pkg.version
+}
 
 async function main(): Promise<void> {
   const token = process.env.DISCORD_TOKEN
@@ -14,6 +24,11 @@ async function main(): Promise<void> {
     console.error('❌ Falta a variável de ambiente DISCORD_TOKEN. Define-a antes de arrancar o bot.')
     process.exit(1)
   }
+
+  // Imprime a versão logo no arranque — é a forma mais rápida de confirmar que um `docker compose up
+  // -d --build` (ou equivalente) realmente reconstruiu a imagem com o código mais recente, em vez de
+  // só ter atualizado o código-fonte na pasta sem voltar a construir o container.
+  console.log(`🚀 LisDiscord v${readPackageVersion()} — a arrancar…`)
 
   ensureDataDirs()
 
