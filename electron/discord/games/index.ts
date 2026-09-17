@@ -123,21 +123,24 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
 }
 
 /**
- * Comandos fixos, iguais em todos os servidores — registados globalmente (não
- * por servidor) para que apareçam na secção "Commands" do perfil do bot na
- * Discord, que só lista comandos globais.
+ * Comandos fixos, iguais em todos os servidores. Registados tanto por servidor (instantâneo,
+ * é o que os torna utilizáveis logo a seguir a ligar o bot) como globalmente (demora até ~1h
+ * a propagar-se da primeira vez, mas é o que faz a secção "Commands" aparecer no cartão de
+ * perfil do bot na Discord — essa secção só lista comandos globais). Quando um comando de
+ * servidor e um global têm o mesmo nome, a Discord usa o do servidor nesse servidor, por isso
+ * não há duplicados nem risco de os comandos ficarem indisponíveis enquanto o global propaga.
  */
 export function buildGlobalCommandDefinitions(): CommandDef[] {
   return [...movCallCommandDefs(), sorteioCommandDef(), verificarCommandDef(), helpCommandDef()]
 }
 
-/** Comandos dos jogos, que variam consoante o que cada servidor ativou — continuam por servidor. */
-export function buildGuildCommandDefinitions(enabled: GameId[]): CommandDef[] {
-  return enabled.flatMap((id) => commandDefsForGame(id))
+/** Comandos por servidor: os fixos (para ficarem disponíveis já) + os jogos que o servidor ativou. */
+export function buildCommandDefinitions(enabled: GameId[]): CommandDef[] {
+  return [...enabled.flatMap((id) => commandDefsForGame(id)), ...buildGlobalCommandDefinitions()]
 }
 
 export async function registerCommandsForGuild(guild: Guild, enabled: GameId[]): Promise<void> {
-  await guild.commands.set(buildGuildCommandDefinitions(enabled))
+  await guild.commands.set(buildCommandDefinitions(enabled))
 }
 
 export async function handleGameInteraction(interaction: Interaction): Promise<void> {
