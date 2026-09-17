@@ -22,6 +22,7 @@ import type {
   MovPointsBoardConfig,
   MovPointsEntry,
   MovPointsLogEntry,
+  RemoteBotConfig,
   RestoreOptions,
   RoleGoal,
   RolePickerEntry,
@@ -53,9 +54,11 @@ import * as moderationLogStore from '../store/moderationLog'
 import * as movPointsStore from '../store/movPoints'
 import * as movPointsLogStore from '../store/movPointsLog'
 import * as justificationSettingsStore from '../store/justificationSettings'
-import { deleteJustificationMessage, postJustificationMessage } from '../discord/justifications'
+import { applyJustificationChannel } from '../discord/justifications'
+import { remoteApi, testRemoteBotConnection } from '../discord/remoteBotClient'
 import * as roleGoalsStore from '../store/roleGoals'
 import * as excludedMembersStore from '../store/excludedMembers'
+import * as remoteBotStore from '../store/remoteBot'
 import { getAppSettings, loadToken, openDataDir, saveToken } from '../store/settings'
 
 /** Identifica no log de pontos ações feitas pela app desktop (em vez de comandos do Discord). */
@@ -346,52 +349,45 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     IPC.setJustificationChannel,
     async (_e, guildId: string, kind: JustificationChannelKind, channelId: string | null): Promise<JustificationSettings> => {
       const guild = discordManager.isConnected() ? await discordManager.getClient().guilds.fetch(guildId).catch(() => null) : null
-
-      let channelName: string | null = null
-      if (channelId && guild) {
-        const channel = await guild.channels.fetch(channelId).catch(() => null)
-        channelName = channel && 'name' in channel ? (channel.name ?? channelId) : channelId
-      }
-
-      if (kind === 'fixedPost' || kind === 'dailyPost') {
-        const type = kind === 'fixedPost' ? 'fixed' : 'daily'
-        const current = justificationSettingsStore.getSettings(guildId)
-        const oldChannelId = type === 'fixed' ? current.fixedPostChannelId : current.dailyPostChannelId
-        const oldMessageId = justificationSettingsStore.getPostMessageId(guildId, type)
-        const channelChanged = oldChannelId !== channelId
-
-        // Para os canais de publicação, valida e publica ANTES de guardar — assim, se a publicação falhar
-        // (permissões, canal apagado, bot desligado), nada fica guardado a meio e o erro chega à app em
-        // vez de a pessoa pensar que a mensagem foi publicada quando não foi.
-        if (channelId) {
-          if (!guild) throw new Error('O bot não está ligado — liga-o antes de escolher este canal.')
-          const existingMessageId = channelChanged ? null : oldMessageId
-          const messageId = await postJustificationMessage(guild, type, channelId, existingMessageId)
-          const updated = justificationSettingsStore.setChannel(guildId, kind, channelId, channelName)
-          justificationSettingsStore.setPostMessageId(guildId, type, messageId)
-
-          // Mudou de canal — a mensagem antiga fica órfã com botões que ninguém deve poder usar, por
-          // isso é apagada depois de a nova já estar publicada e guardada com sucesso.
-          if (channelChanged && guild && oldChannelId && oldMessageId) {
-            await deleteJustificationMessage(guild, oldChannelId, oldMessageId).catch((err) =>
-              console.error('[justifications] Falha ao apagar a mensagem antiga:', err),
-            )
-          }
-          return updated
-        }
-
-        // Canal limpo ("Nenhum") — apaga a mensagem antiga, já que já não há configuração nenhuma para ela.
-        const updated = justificationSettingsStore.setChannel(guildId, kind, null, null)
-        if (guild && oldChannelId && oldMessageId) {
-          await deleteJustificationMessage(guild, oldChannelId, oldMessageId).catch((err) =>
-            console.error('[justifications] Falha ao apagar a mensagem antiga:', err),
-          )
-        }
-        return updated
-      }
-
-      return justificationSettingsStore.setChannel(guildId, kind, channelId, channelName)
+      return applyJustificationChannel(guild, guildId, kind, channelId)
     },
+  )
+
+  // ---- Bot remoto (gerir Justificativas contra o bot autónomo, sem duas ligações em simultâneo) ----
+  ipcMain.handle(IPC.getRemoteBotConfig, async (): Promise<RemoteBotConfig> => remoteBotStore.getRemoteBotConfig())
+
+  ipcMain.handle(IPC.setRemoteBotConfig, async (_e, url: string, apiKey: string): Promise<RemoteBotConfig> => {
+    remoteBotStore.setRemoteBotConnection(url, apiKey)
+    return remoteBotStore.getRemoteBotConfig()
+  })
+
+  ipcMain.handle(IPC.clearRemoteBotConfig, async (): Promise<RemoteBotConfig> => {
+    remoteBotStore.clearRemoteBotConnection()
+    return remoteBotStore.getRemoteBotConfig()
+  })
+
+  ipcMain.handle(IPC.testRemoteBotConnection, async (_e, url: string, apiKey: string) => testRemoteBotConnection(url, apiKey))
+
+  function requireRemoteCredentials(): { url: string; apiKey: string } {
+    const creds = remoteBotStore.loadRemoteBotCredentials()
+    if (!creds) throw new Error('O bot remoto ainda não está configurado — define o endereço e a chave de API.')
+    return creds
+  }
+
+  ipcMain.handle(IPC.listRemoteGuilds, async (): Promise<GuildSummary[]> => remoteApi(requireRemoteCredentials()).listGuilds())
+
+  ipcMain.handle(IPC.listRemoteChannels, async (_e, guildId: string): Promise<ChannelPickerEntry[]> =>
+    remoteApi(requireRemoteCredentials()).listChannels(guildId),
+  )
+
+  ipcMain.handle(IPC.getRemoteJustificationSettings, async (_e, guildId: string): Promise<JustificationSettings> =>
+    remoteApi(requireRemoteCredentials()).getJustificationSettings(guildId),
+  )
+
+  ipcMain.handle(
+    IPC.setRemoteJustificationChannel,
+    async (_e, guildId: string, kind: JustificationChannelKind, channelId: string | null): Promise<JustificationSettings> =>
+      remoteApi(requireRemoteCredentials()).setJustificationChannel(guildId, kind, channelId),
   )
 
   // ---- Upamentos (metas de cargo) ----

@@ -349,6 +349,17 @@ export interface JustificationSettings {
   dailyLogChannelName: string | null
 }
 
+/**
+ * Ligação opcional da app desktop a um bot remoto (o bot autónomo a correr num servidor) — usada para
+ * gerir configurações contra o bot que está mesmo a atender o servidor, em vez de a app abrir a sua
+ * própria ligação separada à Discord (o que faria cada lado gravar numa cópia diferente dos dados).
+ * A chave de API nunca é devolvida à interface, só se está ou não definida.
+ */
+export interface RemoteBotConfig {
+  url: string | null
+  hasApiKey: boolean
+}
+
 // ==========================================================================
 // Upamentos (metas de cargo)
 // ==========================================================================

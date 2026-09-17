@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Calendar, CalendarClock, MessageSquareWarning, Pin, Radio } from 'lucide-react'
+import { AlertTriangle, Calendar, CalendarClock, Cable, MessageSquareWarning, Pin, Radio } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { Badge, Button, Card, SectionHeading } from '../components/ui'
-import type { ChannelPickerEntry, GuildSummary, JustificationChannelKind, JustificationSettings } from '../../shared/types'
+import type { ChannelPickerEntry, GuildSummary, JustificationChannelKind, JustificationSettings, RemoteBotConfig } from '../../shared/types'
 
 const EMPTY_SETTINGS: JustificationSettings = {
   fixedPostChannelId: null,
@@ -14,6 +14,8 @@ const EMPTY_SETTINGS: JustificationSettings = {
   dailyLogChannelId: null,
   dailyLogChannelName: null,
 }
+
+const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
 
 const FIELDS: {
   kind: JustificationChannelKind
@@ -58,6 +60,13 @@ const FIELDS: {
 ]
 
 export default function Justifications() {
+  const [remoteConfig, setRemoteConfig] = useState<RemoteBotConfig>(EMPTY_REMOTE_CONFIG)
+  const [remoteUrlDraft, setRemoteUrlDraft] = useState('')
+  const [remoteKeyDraft, setRemoteKeyDraft] = useState('')
+  const [remoteBusy, setRemoteBusy] = useState(false)
+  const [remoteError, setRemoteError] = useState('')
+  const [remoteTestResult, setRemoteTestResult] = useState('')
+
   const [guilds, setGuilds] = useState<GuildSummary[]>([])
   const [guildId, setGuildId] = useState('')
   const [channels, setChannels] = useState<ChannelPickerEntry[]>([])
@@ -71,23 +80,32 @@ export default function Justifications() {
   const [saving, setSaving] = useState<JustificationChannelKind | null>(null)
   const [errors, setErrors] = useState<Partial<Record<JustificationChannelKind, string>>>({})
 
+  const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
+
   useEffect(() => {
-    bridge.listGuilds().then((g) => {
-      setGuilds(g)
-      setGuildId(g[0]?.id ?? '')
-    })
+    bridge.getRemoteBotConfig().then(setRemoteConfig)
   }, [])
 
   useEffect(() => {
+    const listGuilds = isRemote ? bridge.listRemoteGuilds : bridge.listGuilds
+    listGuilds().then((g) => {
+      setGuilds(g)
+      setGuildId(g[0]?.id ?? '')
+    })
+  }, [isRemote])
+
+  useEffect(() => {
     if (!guildId) return
-    bridge.listChannels(guildId).then(setChannels)
+    const listChannels = isRemote ? bridge.listRemoteChannels : bridge.listChannels
+    listChannels(guildId).then(setChannels)
     loadSettings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guildId])
+  }, [guildId, isRemote])
 
   function loadSettings() {
     if (!guildId) return
-    bridge.getJustificationSettings(guildId).then((s) => {
+    const getSettings = isRemote ? bridge.getRemoteJustificationSettings : bridge.getJustificationSettings
+    getSettings(guildId).then((s) => {
       setSettings(s)
       setDrafts({
         fixedPost: s.fixedPostChannelId ?? '',
@@ -102,12 +120,53 @@ export default function Justifications() {
     setSaving(kind)
     setErrors((prev) => ({ ...prev, [kind]: undefined }))
     try {
-      const updated = await bridge.setJustificationChannel(guildId, kind, drafts[kind] || null)
+      const setChannel = isRemote ? bridge.setRemoteJustificationChannel : bridge.setJustificationChannel
+      const updated = await setChannel(guildId, kind, drafts[kind] || null)
       setSettings(updated)
     } catch (err) {
       setErrors((prev) => ({ ...prev, [kind]: err instanceof Error ? err.message : 'Ocorreu um erro inesperado.' }))
     } finally {
       setSaving(null)
+    }
+  }
+
+  async function testRemoteConnection() {
+    setRemoteBusy(true)
+    setRemoteTestResult('')
+    setRemoteError('')
+    try {
+      const result = await bridge.testRemoteBotConnection(remoteUrlDraft.trim(), remoteKeyDraft.trim())
+      setRemoteTestResult(result.ok ? '✅ Ligação bem-sucedida.' : `❌ ${result.error ?? 'Não consegui ligar.'}`)
+    } finally {
+      setRemoteBusy(false)
+    }
+  }
+
+  async function saveRemoteConfig() {
+    setRemoteBusy(true)
+    setRemoteError('')
+    try {
+      const updated = await bridge.setRemoteBotConfig(remoteUrlDraft.trim(), remoteKeyDraft.trim())
+      setRemoteConfig(updated)
+      setRemoteKeyDraft('')
+      setRemoteTestResult('')
+    } catch (err) {
+      setRemoteError(err instanceof Error ? err.message : 'Ocorreu um erro inesperado.')
+    } finally {
+      setRemoteBusy(false)
+    }
+  }
+
+  async function disconnectRemote() {
+    setRemoteBusy(true)
+    try {
+      const updated = await bridge.clearRemoteBotConfig()
+      setRemoteConfig(updated)
+      setRemoteUrlDraft('')
+      setRemoteKeyDraft('')
+      setRemoteTestResult('')
+    } finally {
+      setRemoteBusy(false)
     }
   }
 
@@ -117,6 +176,69 @@ export default function Justifications() {
         title="Justificativas"
         subtitle='Configura os canais onde o bot publica os pedidos de justificativa fixa e diária, e para onde envia os alarmes de log'
       />
+
+      <Card className="flex flex-col gap-3 p-4">
+        <SectionHeading
+          title="Bot remoto"
+          subtitle="Se tens o bot a correr 24/7 noutro sítio (ex.: um servidor), liga-te diretamente a ele aqui — evita ter esta app e esse bot ligados à Discord ao mesmo tempo, o que faz cada um gravar a sua própria cópia das configurações"
+          action={
+            isRemote ? (
+              <Badge tone="success">
+                <Radio size={11} className="mr-1 inline" /> Ligado a {remoteConfig.url}
+              </Badge>
+            ) : (
+              <Badge tone="warning">Não configurado — a usar a ligação local desta app</Badge>
+            )
+          }
+        />
+        {isRemote ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="dark" onClick={disconnectRemote} loading={remoteBusy}>
+              Desligar bot remoto
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-3">
+              <div className="flex-1 min-w-[220px]">
+                <label className="text-xs font-semibold tracking-wide text-faint uppercase">Endereço (ex: http://IP_DO_SERVIDOR:8787)</label>
+                <input
+                  value={remoteUrlDraft}
+                  onChange={(e) => setRemoteUrlDraft(e.target.value)}
+                  placeholder="http://34.x.x.x:8787"
+                  className="mt-1.5 w-full rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text placeholder:text-faint focus:border-accent focus:outline-none"
+                />
+              </div>
+              <div className="flex-1 min-w-[220px]">
+                <label className="text-xs font-semibold tracking-wide text-faint uppercase">Chave de API (LISDISCORD_API_KEY)</label>
+                <input
+                  value={remoteKeyDraft}
+                  onChange={(e) => setRemoteKeyDraft(e.target.value)}
+                  type="password"
+                  placeholder="••••••••••••••••"
+                  className="mt-1.5 w-full rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text placeholder:text-faint focus:border-accent focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="dark"
+                onClick={testRemoteConnection}
+                loading={remoteBusy}
+                disabled={!remoteUrlDraft.trim() || !remoteKeyDraft.trim()}
+              >
+                <Cable size={14} />
+                Testar ligação
+              </Button>
+              <Button onClick={saveRemoteConfig} loading={remoteBusy} disabled={!remoteUrlDraft.trim() || !remoteKeyDraft.trim()}>
+                Ligar e usar este bot
+              </Button>
+            </div>
+            {remoteTestResult && <p className="text-xs text-muted">{remoteTestResult}</p>}
+            {remoteError && <p className="text-xs text-danger">❌ {remoteError}</p>}
+          </div>
+        )}
+      </Card>
 
       <div>
         <label className="text-xs font-semibold tracking-wide text-faint uppercase">Servidor</label>

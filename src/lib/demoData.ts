@@ -13,6 +13,7 @@ import type {
   JustificationSettings,
   MemberSearchResult,
   ModerationLogEntry,
+  RemoteBotConfig,
   MovPointsBoardConfig,
   MovPointsEntry,
   MovPointsLogAction,
@@ -271,6 +272,8 @@ const EMPTY_JUSTIFICATION_SETTINGS: JustificationSettings = {
   dailyLogChannelId: null,
   dailyLogChannelName: null,
 }
+
+let remoteBotConfigData: RemoteBotConfig = { url: null, hasApiKey: false }
 
 /** Espelha buildFullLeaderboard do lado real: mostra sempre todos os membros (não-bots), com 0/0 para quem nunca teve pontos, exceto quem foi escondido. */
 function fullDemoLeaderboard(guildId: string): MovPointsEntry[] {
@@ -695,6 +698,62 @@ export const demoBridge: LisDiscordBridge = {
     return justificationSettingsData[guildId] ?? EMPTY_JUSTIFICATION_SETTINGS
   },
   async setJustificationChannel(guildId, kind, channelId) {
+    await delay()
+    const current = justificationSettingsData[guildId] ?? EMPTY_JUSTIFICATION_SETTINGS
+    const channel = makeChannels().find((c) => c.id === channelId)
+    const channelName = channelId ? (channel?.name ?? channelId) : null
+    const updated: JustificationSettings = { ...current }
+    if (kind === 'fixedPost') {
+      updated.fixedPostChannelId = channelId
+      updated.fixedPostChannelName = channelName
+    } else if (kind === 'dailyPost') {
+      updated.dailyPostChannelId = channelId
+      updated.dailyPostChannelName = channelName
+    } else if (kind === 'fixedLog') {
+      updated.fixedLogChannelId = channelId
+      updated.fixedLogChannelName = channelName
+    } else {
+      updated.dailyLogChannelId = channelId
+      updated.dailyLogChannelName = channelName
+    }
+    justificationSettingsData = { ...justificationSettingsData, [guildId]: updated }
+    return updated
+  },
+
+  async getRemoteBotConfig() {
+    await delay()
+    return remoteBotConfigData
+  },
+  async setRemoteBotConfig(url, apiKey) {
+    await delay()
+    remoteBotConfigData = { url, hasApiKey: apiKey.length > 0 }
+    return remoteBotConfigData
+  },
+  async clearRemoteBotConfig() {
+    await delay()
+    remoteBotConfigData = { url: null, hasApiKey: false }
+    return remoteBotConfigData
+  },
+  async testRemoteBotConnection() {
+    await delay()
+    return { ok: true }
+  },
+  async listRemoteGuilds() {
+    await delay()
+    return guilds
+  },
+  async listRemoteChannels(guildId) {
+    await delay()
+    return makeChannels()
+      .filter((c) => c.kind === 'text' || c.kind === 'announcement')
+      .map((c) => ({ id: c.id, name: c.name, kind: c.kind }))
+      .concat(guildId === 'g2' ? [{ id: 'extra', name: 'testes-bot', kind: 'text' as const }] : [])
+  },
+  async getRemoteJustificationSettings(guildId) {
+    await delay()
+    return justificationSettingsData[guildId] ?? EMPTY_JUSTIFICATION_SETTINGS
+  },
+  async setRemoteJustificationChannel(guildId, kind, channelId) {
     await delay()
     const current = justificationSettingsData[guildId] ?? EMPTY_JUSTIFICATION_SETTINGS
     const channel = makeChannels().find((c) => c.id === channelId)

@@ -43,6 +43,8 @@ export const paths = {
   roleGoalsFile: path.join(root, 'role-goals.json'),
   excludedMembersFile: path.join(root, 'excluded-members.json'),
   justificationSettingsFile: path.join(root, 'justification-settings.json'),
+  remoteBotFile: path.join(root, 'remote-bot.json'),
+  remoteBotKeyFile: path.join(root, 'remote-bot-key.enc'),
 }
 
 export function ensureDataDirs(): void {

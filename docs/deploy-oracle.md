@@ -112,8 +112,10 @@ docker compose down           # parar e remover o container (os dados na volume 
 O token do bot só deve estar ligado **num sítio de cada vez**. Se ligares a
 app desktop com o mesmo token enquanto o bot autónomo também está a
 correr no servidor, os dois vão receber os mesmos comandos e sorteios em
-duplicado, e o Discord vai recusar a segunda resposta a cada interação
-("A interação falhou").
+duplicado, o Discord vai recusar a segunda resposta a cada interação
+("A interação falhou"), e — mais traiçoeiro ainda — cada lado vai gravar as
+alterações no seu próprio ficheiro local, por isso o que configurares na
+app pode nunca chegar ao bot que está mesmo a atender o servidor.
 
 Para fazeres alguma gestão a partir da app desktop (um backup manual,
 mensagens, moderação) enquanto o bot autónomo está online:
@@ -131,6 +133,38 @@ docker compose start
 Para tudo o que já tem comando no Discord — jogos, economia, `/movcall`,
 `/movhoras`, `/pontosmov` — não precisas de tocar em nada disto: o bot
 autónomo trata de tudo sozinho, o tempo todo.
+
+### Justificativas — geri-las pela app sem parar o bot
+
+Para a página **Justificativas** da app especificamente, não precisas da
+dança de parar/arrancar o servidor: ativa a API remota (secção seguinte) e a
+app fala diretamente com o bot que já está a correr, em vez de abrir a sua
+própria ligação. As outras páginas da app continuam a precisar do
+`docker compose stop` acima enquanto não tiverem o mesmo suporte.
+
+## API remota (opcional) — gerir Justificativas pela app sem parar o bot
+
+1. No `.env` do servidor, define uma chave secreta longa e aleatória:
+
+   ```bash
+   echo "LISDISCORD_API_KEY=$(openssl rand -hex 32)" >> .env
+   docker compose up -d --build
+   ```
+
+2. Confirma nos logs (`docker compose logs --tail=20`) que aparece algo como
+   `🌐 API remota a ouvir na porta 8787`.
+
+3. Na Oracle Cloud, abre a porta 8787 na regra de firewall da tua instância
+   (idealmente restrita só ao teu próprio IP, não a `0.0.0.0/0` — a API não
+   tem HTTPS embutido, por isso a chave viaja em texto simples na rede; abrir
+   só ao teu IP é a única proteção extra que tens).
+
+4. Na app desktop, em **Justificativas → Bot remoto**, mete o endereço
+   (`http://IP_DO_SERVIDOR:8787`) e a chave que geraste no passo 1.
+
+A partir daí, a página Justificativas passa a falar diretamente com o bot do
+servidor — nunca mais precisas de repetir a configuração nem de sincronizar
+ficheiros manualmente.
 
 ## Dados
 

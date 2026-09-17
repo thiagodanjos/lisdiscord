@@ -8,6 +8,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    # Só é preciso expor a porta se ativares a API remota (LISDISCORD_API_KEY no .env) para gerir
+    # o bot pela app desktop. Sem essa variável definida, a API fica desligada e esta porta não é usada.
+    ports:
+      - '8787:8787'
     volumes:
       - lisdiscord-data:/app/data
 

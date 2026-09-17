@@ -14,7 +14,7 @@ import {
   TextInputStyle,
   UserSelectMenuBuilder,
 } from 'discord.js'
-import type { JustificationType } from '../../shared/types'
+import type { JustificationChannelKind, JustificationSettings, JustificationType } from '../../shared/types'
 import * as justificationSettingsStore from '../store/justificationSettings'
 
 const SETUP_TIMEOUT_MS = 10 * 60_000
@@ -72,6 +72,67 @@ export async function deleteJustificationMessage(guild: Guild, channelId: string
   const message = await channel.messages.fetch(messageId).catch(() => null)
   if (!message) return
   await message.delete().catch(() => undefined)
+}
+
+/**
+ * Aplica a escolha de um canal de justificativas (guardar, publicar/atualizar a mensagem, apagar a
+ * antiga se mudou) — a mesma lógica usada tanto pelo IPC da app desktop como pela API HTTP do bot
+ * autónomo, para nunca haver duas implementações a divergir.
+ *
+ * `guild` só é obrigatório quando `channelId` é passado para um canal de publicação (é preciso estar
+ * ligado à Discord para publicar lá a mensagem) — nos outros casos (canais de log, ou limpar um canal)
+ * funciona mesmo com `guild` nulo, só sem conseguir confirmar o nome do canal.
+ */
+export async function applyJustificationChannel(
+  guild: Guild | null,
+  guildId: string,
+  kind: JustificationChannelKind,
+  channelId: string | null,
+): Promise<JustificationSettings> {
+  let channelName: string | null = null
+  if (channelId && guild) {
+    const channel = await guild.channels.fetch(channelId).catch(() => null)
+    channelName = channel && 'name' in channel ? (channel.name ?? channelId) : channelId
+  }
+
+  if (kind !== 'fixedPost' && kind !== 'dailyPost') {
+    return justificationSettingsStore.setChannel(guildId, kind, channelId, channelName)
+  }
+
+  const type = kind === 'fixedPost' ? 'fixed' : 'daily'
+  const current = justificationSettingsStore.getSettings(guildId)
+  const oldChannelId = type === 'fixed' ? current.fixedPostChannelId : current.dailyPostChannelId
+  const oldMessageId = justificationSettingsStore.getPostMessageId(guildId, type)
+  const channelChanged = oldChannelId !== channelId
+
+  // Para os canais de publicação, valida e publica ANTES de guardar — assim, se a publicação falhar
+  // (permissões, canal apagado, bot desligado), nada fica guardado a meio e o erro chega a quem chamou
+  // em vez de a pessoa pensar que a mensagem foi publicada quando não foi.
+  if (channelId) {
+    if (!guild) throw new Error('O bot não está ligado — liga-o antes de escolher este canal.')
+    const existingMessageId = channelChanged ? null : oldMessageId
+    const messageId = await postJustificationMessage(guild, type, channelId, existingMessageId)
+    const updated = justificationSettingsStore.setChannel(guildId, kind, channelId, channelName)
+    justificationSettingsStore.setPostMessageId(guildId, type, messageId)
+
+    // Mudou de canal — a mensagem antiga fica órfã com botões que ninguém deve poder usar, por isso é
+    // apagada depois de a nova já estar publicada e guardada com sucesso.
+    if (channelChanged && oldChannelId && oldMessageId) {
+      await deleteJustificationMessage(guild, oldChannelId, oldMessageId).catch((err) =>
+        console.error('[justifications] Falha ao apagar a mensagem antiga:', err),
+      )
+    }
+    return updated
+  }
+
+  // Canal limpo ("Nenhum") — apaga a mensagem antiga, já que já não há configuração nenhuma para ela.
+  const updated = justificationSettingsStore.setChannel(guildId, kind, null, null)
+  if (guild && oldChannelId && oldMessageId) {
+    await deleteJustificationMessage(guild, oldChannelId, oldMessageId).catch((err) =>
+      console.error('[justifications] Falha ao apagar a mensagem antiga:', err),
+    )
+  }
+  return updated
 }
 
 function buildInstructionEmbed(type: JustificationType): EmbedBuilder {

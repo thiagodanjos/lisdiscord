@@ -21,6 +21,7 @@ import type {
   MovPointsBoardConfig,
   MovPointsEntry,
   MovPointsLogEntry,
+  RemoteBotConfig,
   RestoreOptions,
   RestoreProgressEvent,
   RoleGoal,
@@ -97,6 +98,15 @@ export const IPC = {
 
   getJustificationSettings: 'justifications:settings:get',
   setJustificationChannel: 'justifications:settings:setChannel',
+
+  getRemoteBotConfig: 'remoteBot:get',
+  setRemoteBotConfig: 'remoteBot:set',
+  clearRemoteBotConfig: 'remoteBot:clear',
+  testRemoteBotConnection: 'remoteBot:test',
+  listRemoteGuilds: 'remoteBot:guilds:list',
+  listRemoteChannels: 'remoteBot:channels:list',
+  getRemoteJustificationSettings: 'remoteBot:justifications:get',
+  setRemoteJustificationChannel: 'remoteBot:justifications:set',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -168,4 +178,13 @@ export interface LisDiscordBridge {
 
   getJustificationSettings(guildId: string): Promise<JustificationSettings>
   setJustificationChannel(guildId: string, kind: JustificationChannelKind, channelId: string | null): Promise<JustificationSettings>
+
+  getRemoteBotConfig(): Promise<RemoteBotConfig>
+  setRemoteBotConfig(url: string, apiKey: string): Promise<RemoteBotConfig>
+  clearRemoteBotConfig(): Promise<RemoteBotConfig>
+  testRemoteBotConnection(url: string, apiKey: string): Promise<{ ok: boolean; error?: string }>
+  listRemoteGuilds(): Promise<GuildSummary[]>
+  listRemoteChannels(guildId: string): Promise<ChannelPickerEntry[]>
+  getRemoteJustificationSettings(guildId: string): Promise<JustificationSettings>
+  setRemoteJustificationChannel(guildId: string, kind: JustificationChannelKind, channelId: string | null): Promise<JustificationSettings>
 }

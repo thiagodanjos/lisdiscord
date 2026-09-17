@@ -72,6 +72,15 @@ const bridge: LisDiscordBridge = {
   getJustificationSettings: (guildId) => ipcRenderer.invoke(IPC.getJustificationSettings, guildId),
   setJustificationChannel: (guildId, kind, channelId) => ipcRenderer.invoke(IPC.setJustificationChannel, guildId, kind, channelId),
 
+  getRemoteBotConfig: () => ipcRenderer.invoke(IPC.getRemoteBotConfig),
+  setRemoteBotConfig: (url, apiKey) => ipcRenderer.invoke(IPC.setRemoteBotConfig, url, apiKey),
+  clearRemoteBotConfig: () => ipcRenderer.invoke(IPC.clearRemoteBotConfig),
+  testRemoteBotConnection: (url, apiKey) => ipcRenderer.invoke(IPC.testRemoteBotConnection, url, apiKey),
+  listRemoteGuilds: () => ipcRenderer.invoke(IPC.listRemoteGuilds),
+  listRemoteChannels: (guildId) => ipcRenderer.invoke(IPC.listRemoteChannels, guildId),
+  getRemoteJustificationSettings: (guildId) => ipcRenderer.invoke(IPC.getRemoteJustificationSettings, guildId),
+  setRemoteJustificationChannel: (guildId, kind, channelId) => ipcRenderer.invoke(IPC.setRemoteJustificationChannel, guildId, kind, channelId),
+
   listRoles: (guildId) => ipcRenderer.invoke(IPC.listRoles, guildId),
   getMemberProfile: (guildId, userId) => ipcRenderer.invoke(IPC.getMemberProfile, guildId, userId),
   listRoleGoals: (guildId) => ipcRenderer.invoke(IPC.listRoleGoals, guildId),

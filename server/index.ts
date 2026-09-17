@@ -10,6 +10,9 @@ import path from 'node:path'
 import { startGiveawayScheduler, startScheduledBackups } from '../electron/discord/automation'
 import { discordManager } from '../electron/discord/client'
 import { ensureDataDirs } from '../electron/store/paths'
+import { startHttpApi } from './httpApi'
+
+let httpApiServer: ReturnType<typeof startHttpApi> = null
 
 function readPackageVersion(): string {
   const dir = path.dirname(fileURLToPath(import.meta.url))
@@ -43,12 +46,14 @@ async function main(): Promise<void> {
 
   startScheduledBackups()
   startGiveawayScheduler()
+  httpApiServer = startHttpApi()
 
   console.log('🟢 Bot a correr — não é preciso ter a app desktop aberta enquanto este processo estiver de pé.')
 }
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   console.log(`\nA receber ${signal} — a desligar o bot...`)
+  if (httpApiServer) await new Promise((resolve) => httpApiServer?.close(resolve))
   await discordManager.disconnect().catch(() => undefined)
   process.exit(0)
 }
