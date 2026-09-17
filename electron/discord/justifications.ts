@@ -26,7 +26,18 @@ const CANCEL_DISPLAY_MS = 2_500
 // Mensagem instrutiva publicada no canal — com os botões Justificar / Remover Justificativa
 // ==========================================================================
 
-export async function postJustificationMessage(guild: Guild, type: JustificationType, channelId: string): Promise<void> {
+/**
+ * Publica (ou atualiza, se `existingMessageId` ainda existir nesse canal) a mensagem instrutiva.
+ * Não lê nem escreve na store — devolve o id da mensagem resultante, para quem chamar decidir quando
+ * e como persistir, sem risco de a store ficar com um valor a meio de uma escrita mais larga (ex.:
+ * mudar de canal ao mesmo tempo).
+ */
+export async function postJustificationMessage(
+  guild: Guild,
+  type: JustificationType,
+  channelId: string,
+  existingMessageId: string | null,
+): Promise<string> {
   const channel = await guild.channels.fetch(channelId).catch(() => null)
   if (!channel || !channel.isTextBased() || channel instanceof PartialGroupDMChannel) {
     throw new Error('Não encontrei esse canal ou ele não aceita mensagens de texto.')
@@ -42,17 +53,16 @@ export async function postJustificationMessage(guild: Guild, type: Justification
       .setEmoji('🗑️'),
   )
 
-  const messageId = justificationSettingsStore.getPostMessageId(guild.id, type)
-  if (messageId) {
-    const existing = await channel.messages.fetch(messageId).catch(() => null)
+  if (existingMessageId) {
+    const existing = await channel.messages.fetch(existingMessageId).catch(() => null)
     if (existing) {
       await existing.edit({ embeds: [embed], components: [row] })
-      return
+      return existing.id
     }
   }
 
   const sent = await channel.send({ embeds: [embed], components: [row] })
-  justificationSettingsStore.setPostMessageId(guild.id, type, sent.id)
+  return sent.id
 }
 
 function buildInstructionEmbed(type: JustificationType): EmbedBuilder {
@@ -254,6 +264,7 @@ async function runFileJustification(interaction: ButtonInteraction, guild: Guild
                 .setLabel(periodoLabel)
                 .setStyle(TextInputStyle.Short)
                 .setRequired(true)
+                .setMaxLength(200)
                 .setPlaceholder(periodoPlaceholder),
             ),
             new ActionRowBuilder<TextInputBuilder>().addComponents(
@@ -262,6 +273,7 @@ async function runFileJustification(interaction: ButtonInteraction, guild: Guild
                 .setLabel('Motivo')
                 .setStyle(TextInputStyle.Paragraph)
                 .setRequired(true)
+                .setMaxLength(1000)
                 .setPlaceholder('Explica o motivo da tua justificativa'),
             ),
           )
@@ -369,6 +381,7 @@ async function runRemoveJustification(interaction: ButtonInteraction, guild: Gui
           .setLabel('Motivo da remoção')
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(true)
+          .setMaxLength(1000)
           .setPlaceholder('Explica porque queres remover a tua justificativa — um administrador vai rever e remover manualmente.'),
       ),
     )

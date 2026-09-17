@@ -347,12 +347,19 @@ async function processParticipants(
 
   const notes = [skipped ? `${skipped} inválido(s) ignorado(s)` : null, bots ? `${bots} bot(s) ignorado(s)` : null].filter(Boolean).join(' · ')
 
+  // Pontos já foram atribuídos a todos independentemente de quantos cabem na descrição — isto só limita
+  // a lista mostrada, para nunca ultrapassar o limite de 4096 caracteres de um embed do Discord.
+  const MAX_AWARDED_LINES = 140
+  const shownAwarded = awarded.slice(0, MAX_AWARDED_LINES)
+  const remainingAwarded = awarded.length - shownAwarded.length
+  const awardedList = shownAwarded.map((mention) => `• ${mention}`).join('\n') + (remainingAwarded > 0 ? `\n_+ ${remainingAwarded} participante(s) não mostrado(s) aqui — os pontos foram todos atribuídos._` : '')
+
   const embed = new EmbedBuilder()
     .setColor(tipo === 'normal' ? 0x5865f2 : 0xf0b232)
     .setTitle(tipo === 'normal' ? '📋 Mov. Call Normal registada' : '📋 Mov. Call Temática / Outra MOV registada')
     .setDescription(
       awarded.length > 0
-        ? `**+${points} pontos** de MOV. Call para:\n${awarded.map((mention) => `• ${mention}`).join('\n')}`
+        ? `**+${points} pontos** de MOV. Call para:\n${awardedList}`
         : 'Nenhum participante válido foi encontrado (bots não recebem pontos).',
     )
     .setFooter({

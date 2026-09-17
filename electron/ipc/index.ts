@@ -353,14 +353,22 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
         channelName = channel && 'name' in channel ? (channel.name ?? channelId) : channelId
       }
 
-      const updated = justificationSettingsStore.setChannel(guildId, kind, channelId, channelName)
-
-      if (guild && channelId && (kind === 'fixedPost' || kind === 'dailyPost')) {
+      // Para os canais de publicação, valida e publica ANTES de guardar — assim, se a publicação falhar
+      // (permissões, canal apagado, bot desligado), nada fica guardado a meio e o erro chega à app em
+      // vez de a pessoa pensar que a mensagem foi publicada quando não foi.
+      if (channelId && (kind === 'fixedPost' || kind === 'dailyPost')) {
+        if (!guild) throw new Error('O bot não está ligado — liga-o antes de escolher este canal.')
         const type = kind === 'fixedPost' ? 'fixed' : 'daily'
-        await postJustificationMessage(guild, type, channelId).catch((err) => console.error('[justifications] Falha ao publicar mensagem:', err))
+        const current = justificationSettingsStore.getSettings(guildId)
+        const sameChannel = (type === 'fixed' ? current.fixedPostChannelId : current.dailyPostChannelId) === channelId
+        const existingMessageId = sameChannel ? justificationSettingsStore.getPostMessageId(guildId, type) : null
+        const messageId = await postJustificationMessage(guild, type, channelId, existingMessageId)
+        const updated = justificationSettingsStore.setChannel(guildId, kind, channelId, channelName)
+        justificationSettingsStore.setPostMessageId(guildId, type, messageId)
+        return updated
       }
 
-      return updated
+      return justificationSettingsStore.setChannel(guildId, kind, channelId, channelName)
     },
   )
 

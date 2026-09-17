@@ -22,6 +22,9 @@ async function main(): Promise<void> {
   if (!status.messageContentEnabled) {
     console.warn('⚠️  Message Content Intent desativada no Developer Portal — os transcripts ficam sem conteúdo das mensagens.')
   }
+  if (!status.guildMembersEnabled) {
+    console.warn('⚠️  Server Members Intent desativada no Developer Portal — o ranking de pontos só mostra quem já tem pontos ou horas.')
+  }
 
   startScheduledBackups()
   startGiveawayScheduler()

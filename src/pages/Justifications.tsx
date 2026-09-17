@@ -69,6 +69,7 @@ export default function Justifications() {
     dailyLog: '',
   })
   const [saving, setSaving] = useState<JustificationChannelKind | null>(null)
+  const [errors, setErrors] = useState<Partial<Record<JustificationChannelKind, string>>>({})
 
   useEffect(() => {
     bridge.listGuilds().then((g) => {
@@ -99,9 +100,12 @@ export default function Justifications() {
 
   async function save(kind: JustificationChannelKind) {
     setSaving(kind)
+    setErrors((prev) => ({ ...prev, [kind]: undefined }))
     try {
       const updated = await bridge.setJustificationChannel(guildId, kind, drafts[kind] || null)
       setSettings(updated)
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, [kind]: err instanceof Error ? err.message : 'Ocorreu um erro inesperado.' }))
     } finally {
       setSaving(null)
     }
@@ -167,6 +171,7 @@ export default function Justifications() {
                   Guardar
                 </Button>
               </div>
+              {errors[field.kind] && <p className="text-xs text-danger">❌ {errors[field.kind]}</p>}
             </Card>
           )
         })}
