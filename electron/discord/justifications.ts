@@ -135,7 +135,10 @@ async function runFileJustification(interaction: ButtonInteraction, guild: Guild
   }
 
   const typeLabel = type === 'fixed' ? 'Fixa' : 'Diária'
-  const periodoLabel = type === 'fixed' ? 'Dias da semana e horário (ex: Segunda à sexta - 14:00 até 18:00)' : 'Horário de hoje (ex: 14:00 até 18:00)'
+  // O label de um TextInput da Discord tem um limite rígido de 45 caracteres — ultrapassá-lo faz
+  // showModal() rebentar (interação nunca é reconhecida, o assistente falha sem aviso nenhum). Por
+  // isso o exemplo detalhado fica só no placeholder (limite de 100), nunca no label.
+  const periodoLabel = type === 'fixed' ? 'Dias da semana e horário' : 'Horário de hoje'
   const periodoPlaceholder = type === 'fixed' ? 'Segunda à sexta - 14:00 até 18:00' : '14:00 até 18:00'
 
   let confirmedSelf = false
@@ -182,7 +185,7 @@ async function runFileJustification(interaction: ButtonInteraction, guild: Guild
       .setColor(0x3ba55c)
       .setTitle(`📋 Revê a tua justificativa ${typeLabel}`)
       .addFields({ name: 'Período', value: periodo }, { name: 'Motivo', value: motivo })
-      .setFooter({ text: 'Confirma para enviar — a mensagem vai para o canal de log com o teu nome.' })
+      .setFooter({ text: 'Confirma para publicar aqui no canal, com o teu nome — os administradores também são avisados.' })
   }
 
   function reviewRow(): ActionRowBuilder<ButtonBuilder> {
@@ -315,8 +318,16 @@ async function runFileJustification(interaction: ButtonInteraction, guild: Guild
         try {
           await click.update({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏳ A enviar…')], components: [] })
 
-          const channel = await guild.channels.fetch(logChannelId as string).catch(() => null)
-          if (!channel || !channel.isTextBased() || channel instanceof PartialGroupDMChannel) {
+          // A justificativa em si é publicada no PRÓPRIO canal onde o botão foi clicado (o canal de
+          // justificativas configurado na app) — o canal de log é só um alarme para os administradores
+          // verem, com um link direto para a mensagem publicada, nunca o único sítio onde ela aparece.
+          const postChannel = await guild.channels.fetch(interaction.channelId).catch(() => null)
+          if (!postChannel || !postChannel.isTextBased() || postChannel instanceof PartialGroupDMChannel) {
+            throw new Error('Não encontrei este canal — avisa um administrador.')
+          }
+
+          const logChannel = await guild.channels.fetch(logChannelId as string).catch(() => null)
+          if (!logChannel || !logChannel.isTextBased() || logChannel instanceof PartialGroupDMChannel) {
             throw new Error('Não encontrei o canal de log configurado — avisa um administrador.')
           }
 
@@ -331,10 +342,19 @@ async function runFileJustification(interaction: ButtonInteraction, guild: Guild
             .setFooter({ text: `Justificado por ${interaction.user.tag}` })
             .setTimestamp(new Date())
 
-          await channel.send({ embeds: [finalEmbed] })
+          const posted = await postChannel.send({ embeds: [finalEmbed] })
+
+          const alertEmbed = new EmbedBuilder()
+            .setColor(type === 'fixed' ? 0xf0b232 : 0x5865f2)
+            .setTitle(`🔔 Nova justificativa ${typeLabel}`)
+            .setDescription(`<@${interaction.user.id}> justificou-se em <#${postChannel.id}>.\n[Ver a justificativa](${posted.url})`)
+            .addFields({ name: 'Período', value: periodo, inline: true }, { name: 'Motivo', value: motivo })
+            .setFooter({ text: `Justificado por ${interaction.user.tag}` })
+            .setTimestamp(new Date())
+          await logChannel.send({ embeds: [alertEmbed] })
 
           await interaction.editReply({
-            embeds: [new EmbedBuilder().setColor(0x3ba55c).setTitle('✅ Justificativa enviada').setDescription(`A tua justificativa ${typeLabel.toLowerCase()} foi registada em <#${logChannelId}>.`)],
+            embeds: [new EmbedBuilder().setColor(0x3ba55c).setTitle('✅ Justificativa enviada').setDescription(`A tua justificativa ${typeLabel.toLowerCase()} foi publicada aqui no canal.`)],
             components: [],
           })
           await deleteAfter(RESULT_DISPLAY_MS)
@@ -382,7 +402,7 @@ async function runRemoveJustification(interaction: ButtonInteraction, guild: Gui
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(true)
           .setMaxLength(1000)
-          .setPlaceholder('Explica porque queres remover a tua justificativa — um administrador vai rever e remover manualmente.'),
+          .setPlaceholder('Explica porque queres remover — um admin vai rever e remover manualmente.'),
       ),
     )
   await interaction.showModal(modal)
