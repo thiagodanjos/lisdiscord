@@ -86,10 +86,12 @@ class DiscordManager {
 
     this.client = client
     client.user?.setPresence({
-      activities: [{ name: '/help', type: ActivityType.Watching }],
+      activities: [{ name: 'https://lisfilms.pt/', type: ActivityType.Watching }],
       status: 'online',
     })
-    await this.registerGlobalCommands()
+    await this.registerGlobalCommands().catch((err) => {
+      console.error('Falha a registar comandos globais (secção "Commands" do perfil não vai aparecer):', err)
+    })
     await this.registerAllCommands()
     return this.getStatus()
   }
