@@ -65,6 +65,15 @@ export async function postJustificationMessage(
   return sent.id
 }
 
+/** Apaga a mensagem instrutiva antiga — usado quando o canal de publicação muda ou é limpo na app, para nunca deixar um botão "Justificar" órfão a funcionar num canal que já não está configurado. */
+export async function deleteJustificationMessage(guild: Guild, channelId: string, messageId: string): Promise<void> {
+  const channel = await guild.channels.fetch(channelId).catch(() => null)
+  if (!channel || !channel.isTextBased() || channel instanceof PartialGroupDMChannel) return
+  const message = await channel.messages.fetch(messageId).catch(() => null)
+  if (!message) return
+  await message.delete().catch(() => undefined)
+}
+
 function buildInstructionEmbed(type: JustificationType): EmbedBuilder {
   if (type === 'fixed') {
     return new EmbedBuilder()
