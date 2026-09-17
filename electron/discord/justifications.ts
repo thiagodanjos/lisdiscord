@@ -223,70 +223,94 @@ async function runFileJustification(interaction: ButtonInteraction, guild: Guild
       const click = await msg.awaitMessageComponent({ time: SETUP_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
 
       if (click.customId === 'jwizard:cancel') {
-        await click.update({ embeds: [new EmbedBuilder().setColor(0x99aab5).setTitle('Cancelado').setDescription('Justificativa cancelada.')], components: [] })
-        await deleteAfter(CANCEL_DISPLAY_MS)
+        try {
+          await click.update({ embeds: [new EmbedBuilder().setColor(0x99aab5).setTitle('Cancelado').setDescription('Justificativa cancelada.')], components: [] })
+          await deleteAfter(CANCEL_DISPLAY_MS)
+        } catch (err) {
+          console.error('[justifications] Erro ao cancelar:', err)
+        }
         return
       }
 
       if (click.isUserSelectMenu() && click.customId === 'jwizard:pick') {
-        const selected = click.users.first()
-        if (!selected || selected.id !== interaction.user.id) {
-          errorText = 'Só podes justificar-te a ti próprio(a) — escolhe o teu próprio utilizador na lista.'
-          await click.update({ embeds: [confirmEmbed(), errorEmbed()], components: confirmRows() })
+        try {
+          const selected = click.users.first()
+          if (!selected || selected.id !== interaction.user.id) {
+            errorText = 'Só podes justificar-te a ti próprio(a) — escolhe o teu próprio utilizador na lista.'
+            await click.update({ embeds: [confirmEmbed(), errorEmbed()], components: confirmRows() })
+            await loop(msg)
+            return
+          }
+          confirmedSelf = true
+          await click.update({ embeds: [detailsEmbed()], components: [detailsRow()] })
           await loop(msg)
-          return
+        } catch (err) {
+          console.error('[justifications] Erro ao confirmar membro:', err)
+          errorText = `Ocorreu um erro ao confirmar o membro.\n\`\`\`${err instanceof Error ? err.message : String(err)}\`\`\``
+          await interaction.editReply({ embeds: [errorEmbed()], components: [errorRow()] }).catch(() => undefined)
+          await loop(msg)
         }
-        confirmedSelf = true
-        await click.update({ embeds: [detailsEmbed()], components: [detailsRow()] })
-        await loop(msg)
         return
       }
 
       if (click.customId === 'jwizard:back') {
-        if (periodo || motivo) {
-          // já passou pelos detalhes — volta para lá, não para a confirmação do membro
-          periodo = ''
-          motivo = ''
-          await click.update({ embeds: [detailsEmbed()], components: [detailsRow()] })
-        } else {
-          confirmedSelf = false
-          await click.update({ embeds: [confirmEmbed()], components: confirmRows() })
+        try {
+          if (periodo || motivo) {
+            // já passou pelos detalhes — volta para lá, não para a confirmação do membro
+            periodo = ''
+            motivo = ''
+            await click.update({ embeds: [detailsEmbed()], components: [detailsRow()] })
+          } else {
+            confirmedSelf = false
+            await click.update({ embeds: [confirmEmbed()], components: confirmRows() })
+          }
+          await loop(msg)
+        } catch (err) {
+          console.error('[justifications] Erro ao voltar:', err)
         }
-        await loop(msg)
         return
       }
 
       if (click.customId === 'jwizard:write' && confirmedSelf) {
-        const modal = new ModalBuilder()
-          .setCustomId('jwizard:modal')
-          .setTitle(`Justificativa ${typeLabel}`)
-          .addComponents(
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder()
-                .setCustomId('periodo')
-                .setLabel(periodoLabel)
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setMaxLength(200)
-                .setPlaceholder(periodoPlaceholder),
-            ),
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder()
-                .setCustomId('motivo')
-                .setLabel('Motivo')
-                .setStyle(TextInputStyle.Paragraph)
-                .setRequired(true)
-                .setMaxLength(1000)
-                .setPlaceholder('Explica o motivo da tua justificativa'),
-            ),
-          )
-        await click.showModal(modal)
+        try {
+          const modal = new ModalBuilder()
+            .setCustomId('jwizard:modal')
+            .setTitle(`Justificativa ${typeLabel}`)
+            .addComponents(
+              new ActionRowBuilder<TextInputBuilder>().addComponents(
+                new TextInputBuilder()
+                  .setCustomId('periodo')
+                  .setLabel(periodoLabel)
+                  .setStyle(TextInputStyle.Short)
+                  .setRequired(true)
+                  .setMaxLength(200)
+                  .setPlaceholder(periodoPlaceholder),
+              ),
+              new ActionRowBuilder<TextInputBuilder>().addComponents(
+                new TextInputBuilder()
+                  .setCustomId('motivo')
+                  .setLabel('Motivo')
+                  .setStyle(TextInputStyle.Paragraph)
+                  .setRequired(true)
+                  .setMaxLength(1000)
+                  .setPlaceholder('Explica o motivo da tua justificativa'),
+              ),
+            )
+          await click.showModal(modal)
+        } catch (err) {
+          console.error('[justifications] Erro ao abrir o formulário de justificativa:', err)
+          errorText = `Não consegui abrir o formulário.\n\`\`\`${err instanceof Error ? err.message : String(err)}\`\`\``
+          await interaction.editReply({ embeds: [errorEmbed()], components: [errorRow()] }).catch(() => undefined)
+          await loop(msg)
+          return
+        }
 
         let submitted: ModalSubmitInteraction
         try {
           submitted = await click.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
-        } catch {
-          await interaction.editReply({ embeds: [detailsEmbed()], components: [detailsRow()] })
+        } catch (err) {
+          if (!isCollectorTimeout(err)) console.error('[justifications] Erro a aguardar o formulário:', err)
+          await interaction.editReply({ embeds: [detailsEmbed()], components: [detailsRow()] }).catch(() => undefined)
           await loop(msg)
           return
         }
@@ -307,6 +331,7 @@ async function runFileJustification(interaction: ButtonInteraction, guild: Guild
           await updateFromModal(submitted, interaction, { embeds: [reviewEmbed()], components: [reviewRow()] })
           await loop(msg)
         } catch (err) {
+          console.error('[justifications] Erro ao processar o formulário:', err)
           errorText = `Ocorreu um erro inesperado. Tenta novamente.\n\`\`\`${err instanceof Error ? err.message : String(err)}\`\`\``
           await updateFromModal(submitted, interaction, { embeds: [errorEmbed()], components: [errorRow()] }).catch(() => undefined)
           await loop(msg)
@@ -359,6 +384,7 @@ async function runFileJustification(interaction: ButtonInteraction, guild: Guild
           })
           await deleteAfter(RESULT_DISPLAY_MS)
         } catch (err) {
+          console.error('[justifications] Erro ao publicar a justificativa:', err)
           errorText = `Não consegui enviar a tua justificativa.\n\`\`\`${err instanceof Error ? err.message : String(err)}\`\`\``
           await interaction.editReply({ embeds: [errorEmbed()], components: [errorRow()] }).catch(() => undefined)
           await loop(msg)
@@ -367,7 +393,11 @@ async function runFileJustification(interaction: ButtonInteraction, guild: Guild
       }
 
       await loop(msg)
-    } catch {
+    } catch (err) {
+      // Só é um "tempo esgotado" de verdade quando o collector rejeita por não ter recebido nenhuma
+      // interação — qualquer outro erro chegar aqui é um bug real que passou por todos os catches
+      // internos, e antes ficava completamente invisível (mesmo nos logs). Agora fica sempre registado.
+      if (!isCollectorTimeout(err)) console.error('[justifications] Erro inesperado no assistente de justificativa:', err)
       await interaction
         .editReply({ embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('⏱️ Tempo esgotado').setDescription('Justificativa cancelada.')], components: [] })
         .catch(() => undefined)
@@ -391,27 +421,35 @@ async function runRemoveJustification(interaction: ButtonInteraction, guild: Gui
     return
   }
 
-  const modal = new ModalBuilder()
-    .setCustomId('jwizard:removeModal')
-    .setTitle('Remover justificativa')
-    .addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
-          .setCustomId('motivo')
-          .setLabel('Motivo da remoção')
-          .setStyle(TextInputStyle.Paragraph)
-          .setRequired(true)
-          .setMaxLength(1000)
-          .setPlaceholder('Explica porque queres remover — um admin vai rever e remover manualmente.'),
-      ),
-    )
-  await interaction.showModal(modal)
+  try {
+    const modal = new ModalBuilder()
+      .setCustomId('jwizard:removeModal')
+      .setTitle('Remover justificativa')
+      .addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder()
+            .setCustomId('motivo')
+            .setLabel('Motivo da remoção')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true)
+            .setMaxLength(1000)
+            .setPlaceholder('Explica porque queres remover — um admin vai rever e remover manualmente.'),
+        ),
+      )
+    await interaction.showModal(modal)
+  } catch (err) {
+    console.error('[justifications] Erro ao abrir o formulário de remoção:', err)
+    await interaction
+      .reply({ content: `❌ Não consegui abrir o formulário de remoção.\n\`\`\`${err instanceof Error ? err.message : String(err)}\`\`\``, ephemeral: true })
+      .catch(() => undefined)
+    return
+  }
 
   let submitted: ModalSubmitInteraction
   try {
     submitted = await interaction.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
-  } catch {
-    // modal fechada sem submeter — nada a fazer
+  } catch (err) {
+    if (!isCollectorTimeout(err)) console.error('[justifications] Erro a aguardar o formulário de remoção:', err)
     return
   }
 
@@ -443,6 +481,7 @@ async function runRemoveJustification(interaction: ButtonInteraction, guild: Gui
       ephemeral: true,
     })
   } catch (err) {
+    console.error('[justifications] Erro ao processar o pedido de remoção:', err)
     await submitted
       .reply({ content: `❌ Ocorreu um erro ao enviar o pedido: ${err instanceof Error ? err.message : 'erro desconhecido'}`, ephemeral: true })
       .catch(() => undefined)
@@ -452,6 +491,11 @@ async function runRemoveJustification(interaction: ButtonInteraction, guild: Gui
 // ==========================================================================
 // Auxiliares
 // ==========================================================================
+
+/** Distingue um `awaitMessageComponent`/`awaitModalSubmit` que expirou de verdade (ninguém clicou/submeteu a tempo) de qualquer outro erro — só o primeiro é esperado e não precisa de ser registado. */
+function isCollectorTimeout(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && (err as { code: unknown }).code === 'InteractionCollectorError'
+}
 
 /** `ModalSubmitInteraction.update()` só existe quando a modal foi aberta a partir de um componente de mensagem — o que é sempre o nosso caso, mas o TS só o sabe depois deste type guard. */
 async function updateFromModal(
