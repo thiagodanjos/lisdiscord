@@ -1,5 +1,6 @@
 import type { MovPointsBoardConfig, MovPointsEntry } from '../../shared/types'
 import { readJsonFile, writeJsonFile } from './fileStore'
+import { logMovPointsAction } from './movPointsLog'
 import { paths } from './paths'
 
 interface PlayerRecord {
@@ -39,31 +40,61 @@ function ensurePlayer(guild: GuildMovPoints, userId: string, tag: string): Playe
   return created
 }
 
-export function addPoints(guildId: string, userId: string, tag: string, amount: number): number {
+export function addPoints(guildId: string, userId: string, tag: string, amount: number, actorTag: string, note?: string): number {
   const data = readAll()
   const guild = ensureGuild(data, guildId)
   const player = ensurePlayer(guild, userId, tag)
   player.points = Math.max(0, player.points + Math.abs(amount))
   writeAll(data)
+  logMovPointsAction({
+    guildId,
+    action: 'add_points',
+    targetUserId: userId,
+    targetTag: tag,
+    amount: Math.abs(amount),
+    newTotal: player.points,
+    actorTag,
+    note,
+  })
   return player.points
 }
 
-export function removePoints(guildId: string, userId: string, tag: string, amount: number): number {
+export function removePoints(guildId: string, userId: string, tag: string, amount: number, actorTag: string, note?: string): number {
   const data = readAll()
   const guild = ensureGuild(data, guildId)
   const player = ensurePlayer(guild, userId, tag)
   player.points = Math.max(0, player.points - Math.abs(amount))
   writeAll(data)
+  logMovPointsAction({
+    guildId,
+    action: 'remove_points',
+    targetUserId: userId,
+    targetTag: tag,
+    amount: Math.abs(amount),
+    newTotal: player.points,
+    actorTag,
+    note,
+  })
   return player.points
 }
 
 /** Acumula segundos de Mov. Call ao total já registado da pessoa (não substitui). */
-export function addHours(guildId: string, userId: string, tag: string, seconds: number): number {
+export function addHours(guildId: string, userId: string, tag: string, seconds: number, actorTag: string, note?: string): number {
   const data = readAll()
   const guild = ensureGuild(data, guildId)
   const player = ensurePlayer(guild, userId, tag)
   player.totalSeconds = Math.max(0, player.totalSeconds + Math.abs(seconds))
   writeAll(data)
+  logMovPointsAction({
+    guildId,
+    action: 'add_hours',
+    targetUserId: userId,
+    targetTag: tag,
+    amount: Math.abs(seconds),
+    newTotal: player.totalSeconds,
+    actorTag,
+    note,
+  })
   return player.totalSeconds
 }
 
@@ -109,9 +140,19 @@ export function setBoardMessageId(guildId: string, messageId: string | null): vo
 }
 
 /** Apaga os pontos e horas de toda a gente no servidor — mantém a configuração do painel (canal, mensagem). */
-export function resetGuild(guildId: string): void {
+export function resetGuild(guildId: string, actorTag: string): void {
   const data = readAll()
   const guild = ensureGuild(data, guildId)
+  const affected = Object.keys(guild.players).length
   guild.players = {}
   writeAll(data)
+  logMovPointsAction({
+    guildId,
+    action: 'reset',
+    targetUserId: null,
+    targetTag: null,
+    amount: affected,
+    newTotal: null,
+    actorTag,
+  })
 }

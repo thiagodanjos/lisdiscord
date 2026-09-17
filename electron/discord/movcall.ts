@@ -339,7 +339,7 @@ async function processParticipants(
       bots += 1
       continue
     }
-    movPoints.addPoints(guild.id, id, member.user.tag, points)
+    movPoints.addPoints(guild.id, id, member.user.tag, points, runnerTag, `Mov. Call ${tipo === 'normal' ? 'Normal' : 'Temática/Outra'} de ${today}`)
     awarded.push(`<@${id}>`)
   }
 
@@ -498,7 +498,7 @@ async function runMovHoras(interaction: ChatInputCommandInteraction, guild: Guil
           }
 
           const totalSeconds = h * 3600 + m * 60 + s
-          const newTotal = movPoints.addHours(guild.id, targetId as string, targetTag as string, totalSeconds)
+          const newTotal = movPoints.addHours(guild.id, targetId as string, targetTag as string, totalSeconds, interaction.user.tag)
           await refreshBoard(guild)
 
           const embed = new EmbedBuilder()
@@ -565,7 +565,7 @@ async function runAdicionar(interaction: ChatInputCommandInteraction, guild: Gui
   const amount = interaction.options.getInteger('quantidade', true)
 
   try {
-    const newTotal = movPoints.addPoints(guild.id, user.id, user.tag, amount)
+    const newTotal = movPoints.addPoints(guild.id, user.id, user.tag, amount, interaction.user.tag)
     await refreshBoard(guild)
 
     const embed = new EmbedBuilder()
@@ -584,7 +584,7 @@ async function runRemover(interaction: ChatInputCommandInteraction, guild: Guild
   const amount = interaction.options.getInteger('quantidade', true)
 
   try {
-    const newTotal = movPoints.removePoints(guild.id, user.id, user.tag, amount)
+    const newTotal = movPoints.removePoints(guild.id, user.id, user.tag, amount, interaction.user.tag)
     await refreshBoard(guild)
 
     const embed = new EmbedBuilder()
@@ -653,7 +653,7 @@ async function runResetMovCall(interaction: ChatInputCommandInteraction, guild: 
 
     if (click.customId === 'resetmovcall:confirm') {
       try {
-        movPoints.resetGuild(guild.id)
+        movPoints.resetGuild(guild.id, interaction.user.tag)
         await refreshBoard(guild)
         await click.update({
           embeds: [

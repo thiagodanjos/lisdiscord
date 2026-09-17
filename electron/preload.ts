@@ -67,6 +67,7 @@ const bridge: LisDiscordBridge = {
   getMovPointsBoard: (guildId) => ipcRenderer.invoke(IPC.getMovPointsBoard, guildId),
   setMovPointsBoard: (guildId, channelId) => ipcRenderer.invoke(IPC.setMovPointsBoard, guildId, channelId),
   resetMovPoints: (guildId) => ipcRenderer.invoke(IPC.resetMovPoints, guildId),
+  listMovPointsLog: (guildId) => ipcRenderer.invoke(IPC.listMovPointsLog, guildId),
 
   listRoles: (guildId) => ipcRenderer.invoke(IPC.listRoles, guildId),
   getMemberProfile: (guildId, userId) => ipcRenderer.invoke(IPC.getMemberProfile, guildId, userId),

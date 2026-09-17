@@ -315,6 +315,21 @@ export interface ExcludedMember {
   tag: string
 }
 
+export type MovPointsLogAction = 'add_points' | 'remove_points' | 'add_hours' | 'reset'
+
+export interface MovPointsLogEntry {
+  id: string
+  guildId: string
+  date: string
+  action: MovPointsLogAction
+  targetUserId: string | null
+  targetTag: string | null
+  amount: number | null
+  newTotal: number | null
+  actorTag: string
+  note: string | null
+}
+
 // ==========================================================================
 // Upamentos (metas de cargo)
 // ==========================================================================

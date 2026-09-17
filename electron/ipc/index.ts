@@ -19,6 +19,7 @@ import type {
   ModerationLogEntry,
   MovPointsBoardConfig,
   MovPointsEntry,
+  MovPointsLogEntry,
   RestoreOptions,
   RoleGoal,
   RolePickerEntry,
@@ -48,9 +49,13 @@ import * as giveawaysStore from '../store/giveaways'
 import * as gameSettingsStore from '../store/gameSettings'
 import * as moderationLogStore from '../store/moderationLog'
 import * as movPointsStore from '../store/movPoints'
+import * as movPointsLogStore from '../store/movPointsLog'
 import * as roleGoalsStore from '../store/roleGoals'
 import * as excludedMembersStore from '../store/excludedMembers'
 import { getAppSettings, loadToken, openDataDir, saveToken } from '../store/settings'
+
+/** Identifica no log de pontos ações feitas pela app desktop (em vez de comandos do Discord). */
+const DESKTOP_APP_ACTOR = 'Aplicação desktop'
 
 const CHANNEL_KIND_MAP: Record<number, ChannelKind | undefined> = {
   0: 'text',
@@ -270,7 +275,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle(IPC.addMovPoints, async (_e, guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]> => {
     const guild = await discordManager.getClient().guilds.fetch(guildId)
     const member = await guild.members.fetch(userId)
-    movPointsStore.addPoints(guildId, userId, member.user.tag, amount)
+    movPointsStore.addPoints(guildId, userId, member.user.tag, amount, DESKTOP_APP_ACTOR)
     await refreshBoard(guild).catch(() => undefined)
     return buildFullLeaderboard(guild).catch(() => movPointsStore.getLeaderboard(guildId))
   })
@@ -278,7 +283,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle(IPC.removeMovPoints, async (_e, guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]> => {
     const guild = await discordManager.getClient().guilds.fetch(guildId)
     const member = await guild.members.fetch(userId)
-    movPointsStore.removePoints(guildId, userId, member.user.tag, amount)
+    movPointsStore.removePoints(guildId, userId, member.user.tag, amount, DESKTOP_APP_ACTOR)
     await refreshBoard(guild).catch(() => undefined)
     return buildFullLeaderboard(guild).catch(() => movPointsStore.getLeaderboard(guildId))
   })
@@ -286,7 +291,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle(IPC.addMovHours, async (_e, guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]> => {
     const guild = await discordManager.getClient().guilds.fetch(guildId)
     const member = await guild.members.fetch(userId)
-    movPointsStore.addHours(guildId, userId, member.user.tag, seconds)
+    movPointsStore.addHours(guildId, userId, member.user.tag, seconds, DESKTOP_APP_ACTOR)
     await refreshBoard(guild).catch(() => undefined)
     return buildFullLeaderboard(guild).catch(() => movPointsStore.getLeaderboard(guildId))
   })
@@ -303,7 +308,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   })
 
   ipcMain.handle(IPC.resetMovPoints, async (_e, guildId: string): Promise<MovPointsEntry[]> => {
-    movPointsStore.resetGuild(guildId)
+    movPointsStore.resetGuild(guildId, DESKTOP_APP_ACTOR)
     if (discordManager.isConnected()) {
       const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
       if (guild) {
@@ -313,6 +318,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     }
     return movPointsStore.getLeaderboard(guildId)
   })
+
+  ipcMain.handle(IPC.listMovPointsLog, async (_e, guildId: string): Promise<MovPointsLogEntry[]> => movPointsLogStore.listMovPointsLog(guildId))
 
   ipcMain.handle(IPC.listExcludedMembers, async (_e, guildId: string): Promise<ExcludedMember[]> => excludedMembersStore.listExcluded(guildId))
 

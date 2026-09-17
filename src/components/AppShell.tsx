@@ -7,6 +7,7 @@ import {
   LayoutGrid,
   Medal,
   MessageSquarePlus,
+  ScrollText,
   Server,
   Settings as SettingsIcon,
   ShieldAlert,
@@ -35,6 +36,7 @@ const NAV_SERVER = [
   { to: '/sorteios', label: 'Sorteios', icon: Gift },
   { to: '/jogos', label: 'Jogos', icon: Gamepad2 },
   { to: '/pontos-mov', label: 'Pontos MOV', icon: Medal },
+  { to: '/logs-pontos', label: 'Logs de pontos', icon: ScrollText },
   { to: '/upamentos', label: 'Upamentos', icon: TrendingUp },
   { to: '/metas', label: 'Metas', icon: Target },
 ]

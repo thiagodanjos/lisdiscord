@@ -18,6 +18,7 @@ import type {
   ModerationLogEntry,
   MovPointsBoardConfig,
   MovPointsEntry,
+  MovPointsLogEntry,
   RestoreOptions,
   RestoreProgressEvent,
   RoleGoal,
@@ -81,6 +82,7 @@ export const IPC = {
   getMovPointsBoard: 'movpoints:board:get',
   setMovPointsBoard: 'movpoints:board:set',
   resetMovPoints: 'movpoints:reset',
+  listMovPointsLog: 'movpoints:log:list',
 
   listRoles: 'guilds:roles',
   getMemberProfile: 'members:profile',
@@ -148,6 +150,7 @@ export interface LisDiscordBridge {
   getMovPointsBoard(guildId: string): Promise<MovPointsBoardConfig>
   setMovPointsBoard(guildId: string, channelId: string | null): Promise<MovPointsBoardConfig>
   resetMovPoints(guildId: string): Promise<MovPointsEntry[]>
+  listMovPointsLog(guildId: string): Promise<MovPointsLogEntry[]>
 
   listRoles(guildId: string): Promise<RolePickerEntry[]>
   getMemberProfile(guildId: string, userId: string): Promise<MemberProfile>

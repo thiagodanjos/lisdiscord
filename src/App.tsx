@@ -17,6 +17,7 @@ import Moderation from './pages/Moderation'
 import Giveaways from './pages/Giveaways'
 import Games from './pages/Games'
 import MovPoints from './pages/MovPoints'
+import PointsLog from './pages/PointsLog'
 import Goals from './pages/Goals'
 import Promotions from './pages/Promotions'
 import SettingsPage from './pages/Settings'
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/sorteios" element={<Giveaways />} />
         <Route path="/jogos" element={<Games />} />
         <Route path="/pontos-mov" element={<MovPoints />} />
+        <Route path="/logs-pontos" element={<PointsLog />} />
         <Route path="/upamentos" element={<Promotions />} />
         <Route path="/metas" element={<Goals />} />
         <Route path="/definicoes" element={<SettingsPage status={status} onStatusChange={setStatus} />} />

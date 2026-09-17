@@ -14,6 +14,8 @@ import type {
   ModerationLogEntry,
   MovPointsBoardConfig,
   MovPointsEntry,
+  MovPointsLogAction,
+  MovPointsLogEntry,
   RestoreProgressEvent,
   RoleBackup,
   RoleGoal,
@@ -183,6 +185,60 @@ let movPointsData: Record<string, MovPointsEntry[]> = {
 
 let movPointsBoardData: Record<string, MovPointsBoardConfig> = {
   g1: { channelId: 'c4', channelName: 'geral' },
+}
+
+let movPointsLogData: Record<string, MovPointsLogEntry[]> = {
+  g1: [
+    {
+      id: 'mpl1',
+      guildId: 'g1',
+      date: daysAgo(0),
+      action: 'add_points',
+      targetUserId: 'u10',
+      targetTag: 'ana.dev#0001',
+      amount: 10,
+      newTotal: 85,
+      actorTag: 'admin_lis#0001',
+      note: 'Mov. Call Normal de hoje',
+    },
+    {
+      id: 'mpl2',
+      guildId: 'g1',
+      date: daysAgo(1),
+      action: 'add_hours',
+      targetUserId: 'u12',
+      targetTag: 'sofia_gamer#7788',
+      amount: 3600,
+      newTotal: 3600,
+      actorTag: 'Aplicação desktop',
+      note: null,
+    },
+  ],
+}
+
+function logDemoMovPoints(entry: {
+  guildId: string
+  action: MovPointsLogAction
+  targetUserId: string | null
+  targetTag: string | null
+  amount: number | null
+  newTotal: number | null
+  actorTag: string
+  note?: string | null
+}): void {
+  const record: MovPointsLogEntry = {
+    id: crypto.randomUUID(),
+    date: new Date().toISOString(),
+    guildId: entry.guildId,
+    action: entry.action,
+    targetUserId: entry.targetUserId,
+    targetTag: entry.targetTag,
+    amount: entry.amount,
+    newTotal: entry.newTotal,
+    actorTag: entry.actorTag,
+    note: entry.note ?? null,
+  }
+  movPointsLogData = { ...movPointsLogData, [entry.guildId]: [record, ...(movPointsLogData[entry.guildId] ?? [])] }
 }
 
 function sortMovPoints(entries: MovPointsEntry[]): MovPointsEntry[] {
@@ -524,6 +580,15 @@ export const demoBridge: LisDiscordBridge = {
     if (existing) existing.points = Math.max(0, existing.points + amount)
     else entries.push({ userId, tag: member?.tag ?? userId, points: Math.max(0, amount), totalSeconds: 0 })
     movPointsData = { ...movPointsData, [guildId]: entries }
+    logDemoMovPoints({
+      guildId,
+      action: 'add_points',
+      targetUserId: userId,
+      targetTag: member?.tag ?? userId,
+      amount,
+      newTotal: entries.find((e) => e.userId === userId)?.points ?? amount,
+      actorTag: 'Aplicação desktop',
+    })
     return fullDemoLeaderboard(guildId)
   },
   async removeMovPoints(guildId, userId, amount) {
@@ -534,6 +599,15 @@ export const demoBridge: LisDiscordBridge = {
     if (existing) existing.points = Math.max(0, existing.points - amount)
     else entries.push({ userId, tag: member?.tag ?? userId, points: 0, totalSeconds: 0 })
     movPointsData = { ...movPointsData, [guildId]: entries }
+    logDemoMovPoints({
+      guildId,
+      action: 'remove_points',
+      targetUserId: userId,
+      targetTag: member?.tag ?? userId,
+      amount,
+      newTotal: entries.find((e) => e.userId === userId)?.points ?? 0,
+      actorTag: 'Aplicação desktop',
+    })
     return fullDemoLeaderboard(guildId)
   },
   async addMovHours(guildId, userId, seconds) {
@@ -544,6 +618,15 @@ export const demoBridge: LisDiscordBridge = {
     if (existing) existing.totalSeconds = Math.max(0, existing.totalSeconds + seconds)
     else entries.push({ userId, tag: member?.tag ?? userId, points: 0, totalSeconds: Math.max(0, seconds) })
     movPointsData = { ...movPointsData, [guildId]: entries }
+    logDemoMovPoints({
+      guildId,
+      action: 'add_hours',
+      targetUserId: userId,
+      targetTag: member?.tag ?? userId,
+      amount: seconds,
+      newTotal: entries.find((e) => e.userId === userId)?.totalSeconds ?? seconds,
+      actorTag: 'Aplicação desktop',
+    })
     return fullDemoLeaderboard(guildId)
   },
   async getMovPointsBoard(guildId) {
@@ -559,8 +642,14 @@ export const demoBridge: LisDiscordBridge = {
   },
   async resetMovPoints(guildId) {
     await delay(400)
+    const affected = (movPointsData[guildId] ?? []).length
     movPointsData = { ...movPointsData, [guildId]: [] }
+    logDemoMovPoints({ guildId, action: 'reset', targetUserId: null, targetTag: null, amount: affected, newTotal: null, actorTag: 'Aplicação desktop' })
     return fullDemoLeaderboard(guildId)
+  },
+  async listMovPointsLog(guildId) {
+    await delay()
+    return [...(movPointsLogData[guildId] ?? [])].sort((a, b) => (a.date < b.date ? 1 : -1))
   },
 
   async listExcludedMembers(guildId) {
