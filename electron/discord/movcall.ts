@@ -274,8 +274,17 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
           )
         await click.showModal(modal)
 
+        let submitted: ModalSubmitInteraction
         try {
-          const submitted = await click.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
+          submitted = await click.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
+        } catch {
+          // modal fechada sem submeter — mantém-se no passo da lista
+          await interaction.editReply({ embeds: [listEmbed()], components: [listRow()] })
+          await loop(msg)
+          return
+        }
+
+        try {
           const ids = parseParticipantsList(submitted.fields.getTextInputValue('lista'))
 
           if (ids.length === 0) {
@@ -289,9 +298,10 @@ async function runMovCall(interaction: ChatInputCommandInteraction, guild: Guild
           const resultEmbed = await processParticipants(guild, tipo ?? 'normal', ids, interaction.user.tag, today)
           await interaction.editReply({ embeds: [resultEmbed], components: [] })
           await deleteAfter(RESULT_DISPLAY_MS)
-        } catch {
-          // modal fechada sem submeter — mantém-se no passo da lista
-          await interaction.editReply({ embeds: [listEmbed()], components: [listRow()] })
+        } catch (err) {
+          console.error('[movcall] Erro ao atribuir pontos:', err)
+          errorText = `Ocorreu um erro ao atribuir os pontos e nada foi guardado. Tenta novamente.\n\`\`\`${err instanceof Error ? err.message : String(err)}\`\`\``
+          await interaction.editReply({ embeds: [errorEmbed()], components: [errorRow()] }).catch(() => undefined)
           await loop(msg)
         }
         return
@@ -466,8 +476,16 @@ async function runMovHoras(interaction: ChatInputCommandInteraction, guild: Guil
           )
         await click.showModal(modal)
 
+        let submitted: ModalSubmitInteraction
         try {
-          const submitted = await click.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
+          submitted = await click.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
+        } catch {
+          await interaction.editReply({ embeds: [timeEmbed()], components: [timeRow()] })
+          await loop(msg)
+          return
+        }
+
+        try {
           const h = parseNonNegativeInt(submitted.fields.getTextInputValue('horas'))
           const m = parseNonNegativeInt(submitted.fields.getTextInputValue('minutos'))
           const s = parseNonNegativeInt(submitted.fields.getTextInputValue('segundos'))
@@ -489,8 +507,10 @@ async function runMovHoras(interaction: ChatInputCommandInteraction, guild: Guil
             .setDescription(`**+${formatDuration(totalSeconds)}** de Mov. Call para <@${targetId}>.\nTotal acumulado: **${formatDuration(newTotal)}**.`)
           await updateFromModal(submitted, interaction, { embeds: [embed], components: [] })
           await deleteAfter(RESULT_DISPLAY_MS)
-        } catch {
-          await interaction.editReply({ embeds: [timeEmbed()], components: [timeRow()] })
+        } catch (err) {
+          console.error('[movhoras] Erro ao atribuir horas:', err)
+          errorText = `Ocorreu um erro ao atribuir as horas e nada foi guardado. Tenta novamente.\n\`\`\`${err instanceof Error ? err.message : String(err)}\`\`\``
+          await interaction.editReply({ embeds: [errorEmbed()], components: [errorRow()] }).catch(() => undefined)
           await loop(msg)
         }
         return
@@ -509,21 +529,31 @@ async function runMovHoras(interaction: ChatInputCommandInteraction, guild: Guil
 // ==========================================================================
 
 async function runVerPontos(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
-  const target = interaction.options.getUser('membro') ?? interaction.user
-  const entry = movPoints.getLeaderboard(guild.id).find((e) => e.userId === target.id)
-  const points = entry?.points ?? 0
-  const totalSeconds = entry?.totalSeconds ?? 0
+  try {
+    const target = interaction.options.getUser('membro') ?? interaction.user
+    const entry = movPoints.getLeaderboard(guild.id).find((e) => e.userId === target.id)
+    const points = entry?.points ?? 0
+    const totalSeconds = entry?.totalSeconds ?? 0
 
-  const embed = new EmbedBuilder()
-    .setColor(0xf0b232)
-    .setTitle('🏅 Pontos de MOV. Call')
-    .setDescription(`<@${target.id}> tem **${points} pontos** e **${formatDuration(totalSeconds)}** de Mov. Call neste servidor.`)
-  await interaction.reply({ embeds: [embed] })
+    const embed = new EmbedBuilder()
+      .setColor(0xf0b232)
+      .setTitle('🏅 Pontos de MOV. Call')
+      .setDescription(`<@${target.id}> tem **${points} pontos** e **${formatDuration(totalSeconds)}** de Mov. Call neste servidor.`)
+    await interaction.reply({ embeds: [embed] })
+  } catch (err) {
+    console.error('[pontosmov ver] Erro:', err)
+    await replyWithError(interaction, 'Não consegui consultar os pontos.', err)
+  }
 }
 
 async function runRanking(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
   await interaction.deferReply()
-  await interaction.editReply({ embeds: [await buildBoardEmbed(guild)] })
+  try {
+    await interaction.editReply({ embeds: [await buildBoardEmbed(guild)] })
+  } catch (err) {
+    console.error('[pontosmov ranking] Erro:', err)
+    await replyWithError(interaction, 'Não consegui montar o ranking.', err)
+  }
 }
 
 // ==========================================================================
@@ -533,39 +563,58 @@ async function runRanking(interaction: ChatInputCommandInteraction, guild: Guild
 async function runAdicionar(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
   const user = interaction.options.getUser('membro', true)
   const amount = interaction.options.getInteger('quantidade', true)
-  const newTotal = movPoints.addPoints(guild.id, user.id, user.tag, amount)
-  await refreshBoard(guild)
 
-  const embed = new EmbedBuilder()
-    .setColor(0x3ba55c)
-    .setTitle('🏅 Pontos adicionados')
-    .setDescription(`**+${amount} pontos** de MOV. Call para <@${user.id}>.\nSaldo atual: **${newTotal} pontos**.`)
-  await interaction.reply({ embeds: [embed] })
+  try {
+    const newTotal = movPoints.addPoints(guild.id, user.id, user.tag, amount)
+    await refreshBoard(guild)
+
+    const embed = new EmbedBuilder()
+      .setColor(0x3ba55c)
+      .setTitle('🏅 Pontos adicionados')
+      .setDescription(`**+${amount} pontos** de MOV. Call para <@${user.id}>.\nSaldo atual: **${newTotal} pontos**.`)
+    await interaction.reply({ embeds: [embed] })
+  } catch (err) {
+    console.error('[pontosmovadmin adicionar] Erro:', err)
+    await replyWithError(interaction, 'Não consegui adicionar os pontos.', err)
+  }
 }
 
 async function runRemover(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
   const user = interaction.options.getUser('membro', true)
   const amount = interaction.options.getInteger('quantidade', true)
-  const newTotal = movPoints.removePoints(guild.id, user.id, user.tag, amount)
-  await refreshBoard(guild)
 
-  const embed = new EmbedBuilder()
-    .setColor(0xed4245)
-    .setTitle('🏅 Pontos removidos')
-    .setDescription(`**-${amount} pontos** de MOV. Call de <@${user.id}>.\nSaldo atual: **${newTotal} pontos**.`)
-  await interaction.reply({ embeds: [embed] })
+  try {
+    const newTotal = movPoints.removePoints(guild.id, user.id, user.tag, amount)
+    await refreshBoard(guild)
+
+    const embed = new EmbedBuilder()
+      .setColor(0xed4245)
+      .setTitle('🏅 Pontos removidos')
+      .setDescription(`**-${amount} pontos** de MOV. Call de <@${user.id}>.\nSaldo atual: **${newTotal} pontos**.`)
+    await interaction.reply({ embeds: [embed] })
+  } catch (err) {
+    console.error('[pontosmovadmin remover] Erro:', err)
+    await replyWithError(interaction, 'Não consegui remover os pontos.', err)
+  }
 }
 
 async function runPainel(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
   const channel = interaction.options.getChannel('canal', true)
-  movPoints.setBoardChannel(guild.id, channel.id, channel.name)
-  await refreshBoard(guild)
 
-  const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle('🏅 Painel de pontos configurado')
-    .setDescription(`O painel de pontos de MOV. Call vai ser mantido atualizado em <#${channel.id}>.`)
-  await interaction.reply({ embeds: [embed], ephemeral: true })
+  try {
+    movPoints.setBoardChannel(guild.id, channel.id, channel.name)
+
+    const embed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle('🏅 Painel de pontos configurado')
+      .setDescription(`O painel de pontos de MOV. Call vai ser mantido atualizado em <#${channel.id}>.`)
+    await interaction.reply({ embeds: [embed], ephemeral: true })
+
+    await refreshBoard(guild).catch((err) => console.error('[pontosmovadmin painel] Falha ao publicar o painel:', err))
+  } catch (err) {
+    console.error('[pontosmovadmin painel] Erro:', err)
+    await replyWithError(interaction, 'Não consegui configurar o canal do painel.', err)
+  }
 }
 
 // ==========================================================================
@@ -603,17 +652,22 @@ async function runResetMovCall(interaction: ChatInputCommandInteraction, guild: 
     const click = await message.awaitMessageComponent({ time: 30_000, filter: (i) => i.user.id === interaction.user.id })
 
     if (click.customId === 'resetmovcall:confirm') {
-      movPoints.resetGuild(guild.id)
-      await refreshBoard(guild)
-      await click.update({
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x3ba55c)
-            .setTitle('✅ Placar reposto')
-            .setDescription('Todos os pontos e horas de Mov. Call deste servidor foram apagados.'),
-        ],
-        components: [],
-      })
+      try {
+        movPoints.resetGuild(guild.id)
+        await refreshBoard(guild)
+        await click.update({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x3ba55c)
+              .setTitle('✅ Placar reposto')
+              .setDescription('Todos os pontos e horas de Mov. Call deste servidor foram apagados.'),
+          ],
+          components: [],
+        })
+      } catch (err) {
+        console.error('[resetmovcall] Erro:', err)
+        await replyWithError(interaction, 'Não consegui repor o placar.', err)
+      }
       return
     }
 
@@ -634,7 +688,12 @@ async function runResetMovCall(interaction: ChatInputCommandInteraction, guild: 
 
 async function runInativos(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
   await interaction.deferReply()
-  await interaction.editReply({ embeds: [await buildInactiveEmbed(guild)] })
+  try {
+    await interaction.editReply({ embeds: [await buildInactiveEmbed(guild)] })
+  } catch (err) {
+    console.error('[inativos] Erro:', err)
+    await replyWithError(interaction, 'Não consegui montar a lista de inativos.', err)
+  }
 }
 
 async function buildInactiveEmbed(guild: Guild): Promise<EmbedBuilder> {
@@ -743,6 +802,21 @@ export function formatDuration(totalSeconds: number): string {
   if (m > 0) parts.push(`${m}m`)
   if (s > 0 || parts.length === 0) parts.push(`${s}s`)
   return parts.join(' ')
+}
+
+/** Responde (ou edita a resposta pendente) com um erro visível, em vez de deixar a interação cair silenciosamente. */
+async function replyWithError(interaction: ChatInputCommandInteraction, title: string, err: unknown): Promise<void> {
+  const detail = err instanceof Error ? err.message : String(err)
+  const embed = new EmbedBuilder()
+    .setColor(0xed4245)
+    .setTitle('❌ Ocorreu um erro')
+    .setDescription(`${title}\n\`\`\`${detail}\`\`\``)
+  const payload = { embeds: [embed], ephemeral: true }
+  if (interaction.deferred || interaction.replied) {
+    await interaction.editReply(payload).catch(() => undefined)
+  } else {
+    await interaction.reply(payload).catch(() => undefined)
+  }
 }
 
 /** `ModalSubmitInteraction.update()` só existe quando a modal foi aberta a partir de um componente de mensagem — o que é sempre o nosso caso, mas o TS só o sabe depois deste type guard. */

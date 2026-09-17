@@ -16,7 +16,7 @@ export default function Settings({ status, onStatusChange }: { status: BotStatus
 
   async function disconnect() {
     await bridge.disconnectBot()
-    onStatusChange({ connected: false, botTag: null, botAvatarUrl: null, guildCount: 0, messageContentEnabled: false })
+    onStatusChange({ connected: false, botTag: null, botAvatarUrl: null, guildCount: 0, messageContentEnabled: false, guildMembersEnabled: false })
   }
 
   return (
@@ -32,6 +32,7 @@ export default function Settings({ status, onStatusChange }: { status: BotStatus
               <p className="text-xs text-muted">
                 {status.guildCount} servidores
                 {!status.messageContentEnabled && ' · sem Message Content Intent (transcripts sem texto)'}
+                {!status.guildMembersEnabled && ' · sem Server Members Intent (ranking só mostra quem já tem pontos)'}
               </p>
             </div>
             <Button variant="dark" onClick={disconnect}>

@@ -105,6 +105,7 @@ export interface BotStatus {
   botAvatarUrl: string | null
   guildCount: number
   messageContentEnabled: boolean
+  guildMembersEnabled: boolean
 }
 
 export interface RestoreOptions {

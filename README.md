@@ -59,7 +59,7 @@ O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidore
 ### Para usar com um bot real
 
 1. Cria uma aplicação em [discord.com/developers/applications](https://discord.com/developers/applications) e adiciona um Bot.
-2. Em **Bot → Privileged Gateway Intents**, ativa a **Message Content Intent** (só é preciso se quiseres exportar transcripts).
+2. Em **Bot → Privileged Gateway Intents**, ativa a **Message Content Intent** (só é preciso se quiseres exportar transcripts) e a **Server Members Intent** (necessária para o ranking de pontos de Mov. Call mostrar toda a gente do servidor, não só quem já tem pontos).
 3. Em **OAuth2 → URL Generator**, marca o scope `bot`, mais o scope `applications.commands` (para os mini-jogos), e a permissão `Administrator` (ou as permissões específicas de que precisas) — usa o link gerado para convidar o bot para o teu servidor.
 4. Copia o token do bot e cola-o no ecrã inicial da app.
 

@@ -9,39 +9,50 @@ import { handleGameInteraction, registerCommandsForGuild } from './games'
  * acesso ao client ativo aos outros módulos (backup, restore, transcript,
  * moderação, sorteios, jogos).
  *
- * Intents pedidos de propósito ao mínimo: `Guilds` (obrigatório para o cache
- * de servidores/canais/cargos funcionar) e `GuildMessages` + `MessageContent`
- * (só usados para os transcripts). Sem `GuildMembers` — não precisamos da
- * lista de membros, só da contagem aproximada que já vem com o servidor
- * (e a pesquisa de membros usa a REST API, que não exige este intent).
+ * Intents pedidos: `Guilds` (obrigatório para o cache de servidores/canais/
+ * cargos funcionar) e `GuildMessages` sempre; `MessageContent` (transcripts)
+ * e `GuildMembers` (lista completa de membros do servidor — usada no
+ * ranking de pontos de Mov. Call, para mostrar toda a gente e não só quem
+ * já tem pontos) são privilegiadas e tentadas com fallback gracioso.
  */
 class DiscordManager {
   private client: Client | null = null
   private messageContentEnabled = false
+  private guildMembersEnabled = false
 
   async connect(token: string): Promise<BotStatus> {
     if (this.client) {
       await this.disconnect()
     }
 
-    // A Message Content Intent é privilegiada — só funciona se tiveres ativado o
-    // interruptor no Developer Portal. Se não tiveres, tentar pedi-la faz o login
-    // inteiro falhar ("Used disallowed intents"), não só os transcripts. Por
-    // isso tentamos primeiro com ela e, se for recusada, voltamos a tentar sem —
-    // o resto da app continua a funcionar, só os transcripts ficam sem conteúdo.
-    let client: Client
-    try {
-      client = await this.tryLogin(token, true)
-      this.messageContentEnabled = true
-    } catch (err) {
-      if (!isDisallowedIntentsError(err)) throw asFriendlyError(err)
+    // MessageContent e GuildMembers são intents privilegiadas — só funcionam se
+    // tiveres ativado o interruptor correspondente no Developer Portal. Se não
+    // tiveres, pedi-las faz o login inteiro falhar ("Used disallowed intents"),
+    // não só a funcionalidade que depende delas. Por isso tentamos combinações
+    // da mais completa para a mais mínima, até uma funcionar — o resto da app
+    // continua a funcionar mesmo sem elas, só ficam funcionalidades específicas
+    // limitadas (transcripts sem conteúdo / ranking só com quem já tem pontos).
+    const attempts: Array<{ messageContent: boolean; guildMembers: boolean }> = [
+      { messageContent: true, guildMembers: true },
+      { messageContent: false, guildMembers: true },
+      { messageContent: true, guildMembers: false },
+      { messageContent: false, guildMembers: false },
+    ]
+
+    let client: Client | null = null
+    let lastErr: unknown
+    for (const attempt of attempts) {
       try {
-        client = await this.tryLogin(token, false)
-        this.messageContentEnabled = false
-      } catch (err2) {
-        throw asFriendlyError(err2)
+        client = await this.tryLogin(token, attempt.messageContent, attempt.guildMembers)
+        this.messageContentEnabled = attempt.messageContent
+        this.guildMembersEnabled = attempt.guildMembers
+        break
+      } catch (err) {
+        if (!isDisallowedIntentsError(err)) throw asFriendlyError(err)
+        lastErr = err
       }
     }
+    if (!client) throw asFriendlyError(lastErr)
 
     client.on(Events.InteractionCreate, async (interaction) => {
       // O gateway da Discord pode, raramente, reentregar o mesmo evento (ex.: depois de um
@@ -73,10 +84,10 @@ class DiscordManager {
     return this.getStatus()
   }
 
-  private async tryLogin(token: string, withMessageContent: boolean): Promise<Client> {
-    const intents = withMessageContent
-      ? [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
-      : [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+  private async tryLogin(token: string, withMessageContent: boolean, withGuildMembers: boolean): Promise<Client> {
+    const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+    if (withMessageContent) intents.push(GatewayIntentBits.MessageContent)
+    if (withGuildMembers) intents.push(GatewayIntentBits.GuildMembers)
     const client = new Client({ intents })
     try {
       await client.login(token)
@@ -110,7 +121,7 @@ class DiscordManager {
 
   async getStatus(): Promise<BotStatus> {
     if (!this.client || !this.client.isReady() || !this.client.user) {
-      return { connected: false, botTag: null, botAvatarUrl: null, guildCount: 0, messageContentEnabled: false }
+      return { connected: false, botTag: null, botAvatarUrl: null, guildCount: 0, messageContentEnabled: false, guildMembersEnabled: false }
     }
     return {
       connected: true,
@@ -118,6 +129,7 @@ class DiscordManager {
       botAvatarUrl: this.client.user.displayAvatarURL({ size: 128 }),
       guildCount: this.client.guilds.cache.size,
       messageContentEnabled: this.messageContentEnabled,
+      guildMembersEnabled: this.guildMembersEnabled,
     }
   }
 

@@ -8,7 +8,7 @@
     "url": "https://github.com/thiagodanjos/lisdiscord.git"
   },
   "private": true,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
