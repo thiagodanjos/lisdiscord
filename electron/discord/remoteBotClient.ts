@@ -2,6 +2,20 @@
 // principal da app desktop para gerir configurações contra o bot que está mesmo a correr num
 // servidor, em vez de a app abrir a sua própria ligação separada à Discord.
 
+// O `fetch` do Node (undici) lança sempre "fetch failed" na mensagem principal — a causa real
+// (ligação recusada, ligação interrompida a meio, tempo esgotado, DNS…) fica em `err.cause`, que
+// sem isto se perdia por completo, tornando impossível distinguir "o bot caiu" de "a firewall
+// está a bloquear" ou "a ligação foi interrompida a meio do pedido" só pela mensagem mostrada.
+function describeFetchError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err)
+  const cause = (err as { cause?: unknown }).cause
+  if (cause instanceof Error) {
+    const code = (cause as { code?: string }).code
+    return code ? `${cause.message} (${code})` : cause.message
+  }
+  return err.message
+}
+
 async function remoteFetch<T>(url: string, apiKey: string, pathname: string, options?: { method?: string; body?: unknown }): Promise<T> {
   let res: Response
   try {
@@ -14,7 +28,7 @@ async function remoteFetch<T>(url: string, apiKey: string, pathname: string, opt
       body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
     })
   } catch (err) {
-    throw new Error(`Não consegui contactar o bot remoto em ${url} — confirma o endereço, a porta e a firewall.\n${err instanceof Error ? err.message : String(err)}`)
+    throw new Error(`Não consegui contactar o bot remoto em ${url} — confirma o endereço, a porta e a firewall.\n${describeFetchError(err)}`)
   }
 
   const text = await res.text().catch(() => '')
