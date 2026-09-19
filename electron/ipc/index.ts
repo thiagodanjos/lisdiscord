@@ -3,6 +3,7 @@ import type {
   AppSettings,
   BackupOptions,
   BackupSummary,
+  BotEmoji,
   BotStatus,
   ChannelKind,
   ChannelPickerEntry,
@@ -55,6 +56,7 @@ import * as movPointsStore from '../store/movPoints'
 import * as movPointsLogStore from '../store/movPointsLog'
 import * as justificationSettingsStore from '../store/justificationSettings'
 import { applyJustificationChannel } from '../discord/justifications'
+import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../discord/botEmojis'
 import { remoteApi, testRemoteBotConnection } from '../discord/remoteBotClient'
 import * as roleGoalsStore from '../store/roleGoals'
 import * as excludedMembersStore from '../store/excludedMembers'
@@ -389,6 +391,19 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     async (_e, guildId: string, kind: JustificationChannelKind, channelId: string | null): Promise<JustificationSettings> =>
       remoteApi(requireRemoteCredentials()).setJustificationChannel(guildId, kind, channelId),
   )
+
+  // ---- Biblioteca de emojis do bot ----
+  ipcMain.handle(IPC.listEmojis, async (): Promise<BotEmoji[]> => listBotEmojis(discordManager.getClient()))
+  ipcMain.handle(IPC.addEmoji, async (_e, name: string, imageDataUrl: string): Promise<BotEmoji> =>
+    addBotEmoji(discordManager.getClient(), name, imageDataUrl),
+  )
+  ipcMain.handle(IPC.deleteEmoji, async (_e, id: string): Promise<void> => deleteBotEmoji(discordManager.getClient(), id))
+
+  ipcMain.handle(IPC.listRemoteEmojis, async (): Promise<BotEmoji[]> => remoteApi(requireRemoteCredentials()).listEmojis())
+  ipcMain.handle(IPC.addRemoteEmoji, async (_e, name: string, imageDataUrl: string): Promise<BotEmoji> =>
+    remoteApi(requireRemoteCredentials()).addEmoji(name, imageDataUrl),
+  )
+  ipcMain.handle(IPC.deleteRemoteEmoji, async (_e, id: string): Promise<void> => remoteApi(requireRemoteCredentials()).deleteEmoji(id))
 
   // ---- Upamentos (metas de cargo) ----
   ipcMain.handle(IPC.listRoles, async (_e, guildId: string): Promise<RolePickerEntry[]> => {

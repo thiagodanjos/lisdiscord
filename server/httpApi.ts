@@ -12,6 +12,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { timingSafeEqual } from 'node:crypto'
 import type { ChannelPickerEntry, JustificationChannelKind } from '../shared/types'
 import { discordManager } from '../electron/discord/client'
+import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
 import { applyJustificationChannel } from '../electron/discord/justifications'
 import * as justificationSettingsStore from '../electron/store/justificationSettings'
 
@@ -94,7 +95,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
   const needsConnection =
     (req.method === 'GET' && parts.length === 2 && parts[0] === 'api' && parts[1] === 'guilds') ||
     (req.method === 'GET' && parts.length === 4 && parts[0] === 'api' && parts[1] === 'guilds' && parts[3] === 'channels') ||
-    (req.method === 'POST' && parts.length === 5 && parts[0] === 'api' && parts[1] === 'guilds' && parts[3] === 'justifications')
+    (req.method === 'POST' && parts.length === 5 && parts[0] === 'api' && parts[1] === 'guilds' && parts[3] === 'justifications') ||
+    (parts.length >= 2 && parts[0] === 'api' && parts[1] === 'emojis')
 
   if (needsConnection && !discordManager.isConnected()) {
     sendJson(res, 503, { error: 'O bot não está ligado à Discord neste momento.' })
@@ -146,6 +148,31 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
       const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
       const updated = await applyJustificationChannel(guild, guildId, kind as JustificationChannelKind, channelId)
       sendJson(res, 200, updated)
+      return
+    }
+
+    // GET /api/emojis
+    if (req.method === 'GET' && parts.length === 2 && parts[0] === 'api' && parts[1] === 'emojis') {
+      sendJson(res, 200, await listBotEmojis(discordManager.getClient()))
+      return
+    }
+
+    // POST /api/emojis  { name: string, imageDataUrl: string }
+    if (req.method === 'POST' && parts.length === 2 && parts[0] === 'api' && parts[1] === 'emojis') {
+      const body = (await readJsonBody(req)) as { name?: string; imageDataUrl?: string }
+      if (typeof body.name !== 'string' || typeof body.imageDataUrl !== 'string') {
+        sendJson(res, 400, { error: 'Faltam os campos "name" e "imageDataUrl".' })
+        return
+      }
+      const emoji = await addBotEmoji(discordManager.getClient(), body.name, body.imageDataUrl)
+      sendJson(res, 200, emoji)
+      return
+    }
+
+    // DELETE /api/emojis/:id
+    if (req.method === 'DELETE' && parts.length === 3 && parts[0] === 'api' && parts[1] === 'emojis') {
+      await deleteBotEmoji(discordManager.getClient(), parts[2])
+      sendJson(res, 200, { ok: true })
       return
     }
 

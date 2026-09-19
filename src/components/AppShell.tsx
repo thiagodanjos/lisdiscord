@@ -12,6 +12,7 @@ import {
   Server,
   Settings as SettingsIcon,
   ShieldAlert,
+  Smile,
   Target,
   TrendingUp,
 } from 'lucide-react'
@@ -39,6 +40,7 @@ const NAV_SERVER = [
   { to: '/pontos-mov', label: 'Pontos MOV', icon: Medal },
   { to: '/logs-pontos', label: 'Logs de pontos', icon: ScrollText },
   { to: '/justificativas', label: 'Justificativas', icon: MessageSquareWarning },
+  { to: '/emojis', label: 'Emojis', icon: Smile },
   { to: '/upamentos', label: 'Upamentos', icon: TrendingUp },
   { to: '/metas', label: 'Metas', icon: Target },
 ]

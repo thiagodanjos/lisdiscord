@@ -2,6 +2,7 @@ import type { LisDiscordBridge } from '../../shared/ipc'
 import type {
   BackupData,
   BackupSummary,
+  BotEmoji,
   ChannelBackup,
   DiffEntry,
   EmojiBackup,
@@ -274,6 +275,15 @@ const EMPTY_JUSTIFICATION_SETTINGS: JustificationSettings = {
 }
 
 let remoteBotConfigData: RemoteBotConfig = { url: null, hasApiKey: false }
+
+let emojiLibraryData: BotEmoji[] = [
+  { id: 'emoji1', name: 'aprovado', animated: false, url: 'https://cdn.discordapp.com/emojis/placeholder.png' },
+  { id: 'emoji2', name: 'movcall', animated: false, url: 'https://cdn.discordapp.com/emojis/placeholder.png' },
+]
+
+function fakeEmojiId(): string {
+  return `emoji${Math.random().toString(36).slice(2, 10)}`
+}
 
 /** Espelha buildFullLeaderboard do lado real: mostra sempre todos os membros (não-bots), com 0/0 para quem nunca teve pontos, exceto quem foi escondido. */
 function fullDemoLeaderboard(guildId: string): MovPointsEntry[] {
@@ -774,6 +784,35 @@ export const demoBridge: LisDiscordBridge = {
     }
     justificationSettingsData = { ...justificationSettingsData, [guildId]: updated }
     return updated
+  },
+
+  async listEmojis() {
+    await delay()
+    return emojiLibraryData
+  },
+  async addEmoji(name, imageDataUrl) {
+    await delay()
+    const emoji: BotEmoji = { id: fakeEmojiId(), name, animated: imageDataUrl.startsWith('data:image/gif'), url: imageDataUrl }
+    emojiLibraryData = [...emojiLibraryData, emoji]
+    return emoji
+  },
+  async deleteEmoji(id) {
+    await delay()
+    emojiLibraryData = emojiLibraryData.filter((e) => e.id !== id)
+  },
+  async listRemoteEmojis() {
+    await delay()
+    return emojiLibraryData
+  },
+  async addRemoteEmoji(name, imageDataUrl) {
+    await delay()
+    const emoji: BotEmoji = { id: fakeEmojiId(), name, animated: imageDataUrl.startsWith('data:image/gif'), url: imageDataUrl }
+    emojiLibraryData = [...emojiLibraryData, emoji]
+    return emoji
+  },
+  async deleteRemoteEmoji(id) {
+    await delay()
+    emojiLibraryData = emojiLibraryData.filter((e) => e.id !== id)
   },
 
   async listRoles() {

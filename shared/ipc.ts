@@ -3,6 +3,7 @@ import type {
   BackupData,
   BackupOptions,
   BackupSummary,
+  BotEmoji,
   BotStatus,
   ChannelPickerEntry,
   DiffEntry,
@@ -107,6 +108,13 @@ export const IPC = {
   listRemoteChannels: 'remoteBot:channels:list',
   getRemoteJustificationSettings: 'remoteBot:justifications:get',
   setRemoteJustificationChannel: 'remoteBot:justifications:set',
+
+  listEmojis: 'emojis:list',
+  addEmoji: 'emojis:add',
+  deleteEmoji: 'emojis:delete',
+  listRemoteEmojis: 'remoteBot:emojis:list',
+  addRemoteEmoji: 'remoteBot:emojis:add',
+  deleteRemoteEmoji: 'remoteBot:emojis:delete',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -187,4 +195,11 @@ export interface LisDiscordBridge {
   listRemoteChannels(guildId: string): Promise<ChannelPickerEntry[]>
   getRemoteJustificationSettings(guildId: string): Promise<JustificationSettings>
   setRemoteJustificationChannel(guildId: string, kind: JustificationChannelKind, channelId: string | null): Promise<JustificationSettings>
+
+  listEmojis(): Promise<BotEmoji[]>
+  addEmoji(name: string, imageDataUrl: string): Promise<BotEmoji>
+  deleteEmoji(id: string): Promise<void>
+  listRemoteEmojis(): Promise<BotEmoji[]>
+  addRemoteEmoji(name: string, imageDataUrl: string): Promise<BotEmoji>
+  deleteRemoteEmoji(id: string): Promise<void>
 }

@@ -385,3 +385,20 @@ export interface MemberProfile {
   points: number
   totalSeconds: number
 }
+
+// ==========================================================================
+// Biblioteca de emojis do bot
+// ==========================================================================
+
+/**
+ * Emoji da aplicação do bot (não de um servidor) — fica disponível em qualquer embed ou
+ * mensagem que o bot envie, em qualquer servidor onde ele esteja, usando `<:nome:id>` (ou
+ * `<a:nome:id>` se animado). É a Discord (via API da aplicação) que guarda isto, não a app —
+ * por isso app e bot remoto veem sempre a mesma lista, sem risco de ficarem dessincronizados.
+ */
+export interface BotEmoji {
+  id: string
+  name: string
+  animated: boolean
+  url: string
+}

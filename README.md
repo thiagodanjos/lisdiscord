@@ -45,6 +45,7 @@ O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidore
 - **Justificativas** — escolhe, na página **Justificativas** da app, dois canais de publicação (um para justificativas **fixas**, um para **diárias**) e dois canais de log (o alarme para administradores, também separado por fixa/diária). Ao guardar um canal de publicação, o bot publica logo lá a mensagem com as instruções e os botões **Justificar** / **Remover Justificativa**; mudar ou limpar um canal apaga automaticamente a mensagem antiga, para nunca ficar um botão órfão a funcionar num sítio que já não está configurado. Justificar abre um assistente: confirma que a justificativa é para ti próprio(a), escreve o período (nas fixas, dias da semana + horário, ex. `Segunda à sexta - 14:00 até 18:00`; nas diárias, só o horário de hoje) e o motivo, revê tudo e confirma — a mensagem final, bem formatada e com o teu nome no rodapé, é publicada ali mesmo no canal de justificativas; o canal de log correspondente (fixa → log de fixas, diária → log de diárias) só recebe um alarme resumido, com link direto para a mensagem, para avisar os administradores. Remover Justificativa pede o motivo da remoção e avisa o canal de log certo, para um administrador rever e remover manualmente. Se o bot corre 24/7 noutro sítio (ver "bot autónomo" abaixo), a secção **Bot remoto** desta página liga a app diretamente a ele — evita ter a app e o bot autónomo ligados à Discord ao mesmo tempo, o que faria cada um gravar a sua própria cópia das configurações
 - **Upamentos** — define, na página **Metas** da app, quantos pontos e horas de Mov. Call cada cargo exige para ser promovido; na página **Upamentos**, escolhe um membro para ver os cargos, pontos e horas dele, e escolhe um dos cargos dele para veres logo se já cumpre a meta (🟢 ✅ pode upar, ou 🔴 ❌ ainda não) — tudo só na app. No Discord, `/verificar @membro` mostra a mesma informação: cargos, pontos, horas, e se cada cargo já está cumprido
 - **Ajuda** — `/help` mostra todos os comandos do bot organizados por categoria, com uma explicação rápida do que cada um faz e quem pode usá-lo
+- **Emojis** — a página **Emojis** da app (ou `/addemojibot nome:… imagem:…` no Discord, precisa de "Gerir servidor") adiciona imagens (PNG/JPG/GIF/WEBP, até 256 KB) à biblioteca de emojis da aplicação do bot — ficam disponíveis em qualquer embed ou mensagem, em qualquer servidor onde o bot esteja, sem precisar de permissão de emojis num servidor específico
 
 **Geral**
 - Modo demonstração — explora a app inteira com dados fictícios, sem bot nem token nenhum
@@ -120,7 +121,9 @@ electron/
 │   ├── leaderboard.ts             # lista todos os membros do servidor via REST e junta com os pontos guardados
 │   ├── games/                      # slash commands dos mini-jogos (um módulo por jogo) + economia
 │   ├── movcall.ts                  # /movcall, /movhoras, /pontosmov, /pontosmovadmin, /resetmovcall, /inativos e o painel de pontos em tempo real
-│   └── justifications.ts            # mensagem + botões Justificar/Remover Justificativa nos canais configurados
+│   ├── justifications.ts            # mensagem + botões Justificar/Remover Justificativa nos canais configurados
+│   ├── botEmojis.ts                  # biblioteca de emojis da aplicação do bot (client.application.emojis)
+│   └── emojiCommand.ts                # /addemojibot — adiciona um emoji à biblioteca pela Discord
 ├── store/               # persistência local (JSON em disco, escrita atómica, token encriptado)
 │   └── fileStore.ts       # leitura/escrita segura de JSON partilhada por todos os ficheiros de dados
 └── ipc/                  # liga os pedidos da interface às funções acima
@@ -140,7 +143,7 @@ server/
 │                          # electron/store, sem Electron nem interface (ver
 │                          # docs/deploy-oracle.md)
 └── httpApi.ts            # API remota opcional (LISDISCORD_API_KEY) — deixa a
-                           # app desktop gerir Justificativas contra este bot
+                           # app desktop gerir Justificativas e Emojis contra este bot
 ```
 
 Na raiz, `Dockerfile` e `docker-compose.yml` empacotam o `server/` para correr num servidor 24/7.

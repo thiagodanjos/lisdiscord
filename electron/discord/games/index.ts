@@ -1,6 +1,7 @@
 import { type ChatInputCommandInteraction, EmbedBuilder, type Guild, type Interaction, type RESTPostAPIChatInputApplicationCommandsJSONBody, SlashCommandBuilder } from 'discord.js'
 import type { GameId, GameInfo } from '../../../shared/types'
 import { enabledGameIds } from '../../store/gameSettings'
+import { addEmojiBotCommandDef, handleAddEmojiBotCommand } from '../emojiCommand'
 import { handleGiveawayCommand, sorteioCommandDef } from '../giveawayCommand'
 import { handleMovCallCommand, movCallCommandDefs } from '../movcall'
 import { handleVerifyCommand, verificarCommandDef } from '../verifyCommand'
@@ -131,7 +132,7 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
  * não há duplicados nem risco de os comandos ficarem indisponíveis enquanto o global propaga.
  */
 export function buildGlobalCommandDefinitions(): CommandDef[] {
-  return [...movCallCommandDefs(), sorteioCommandDef(), verificarCommandDef(), helpCommandDef()]
+  return [...movCallCommandDefs(), sorteioCommandDef(), verificarCommandDef(), helpCommandDef(), addEmojiBotCommandDef()]
 }
 
 /** Comandos por servidor: os fixos (para ficarem disponíveis já) + os jogos que o servidor ativou. */
@@ -152,6 +153,7 @@ export async function handleGameInteraction(interaction: Interaction): Promise<v
   if (await handleMovCallCommand(interaction)) return
   if (await handleGiveawayCommand(interaction)) return
   if (await handleVerifyCommand(interaction)) return
+  if (await handleAddEmojiBotCommand(interaction)) return
 
   switch (interaction.commandName) {
     case 'trivia':

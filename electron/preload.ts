@@ -90,6 +90,13 @@ const bridge: LisDiscordBridge = {
 
   listExcludedMembers: (guildId) => ipcRenderer.invoke(IPC.listExcludedMembers, guildId),
   setMemberExcluded: (guildId, userId, tag, excluded) => ipcRenderer.invoke(IPC.setMemberExcluded, guildId, userId, tag, excluded),
+
+  listEmojis: () => ipcRenderer.invoke(IPC.listEmojis),
+  addEmoji: (name, imageDataUrl) => ipcRenderer.invoke(IPC.addEmoji, name, imageDataUrl),
+  deleteEmoji: (id) => ipcRenderer.invoke(IPC.deleteEmoji, id),
+  listRemoteEmojis: () => ipcRenderer.invoke(IPC.listRemoteEmojis),
+  addRemoteEmoji: (name, imageDataUrl) => ipcRenderer.invoke(IPC.addRemoteEmoji, name, imageDataUrl),
+  deleteRemoteEmoji: (id) => ipcRenderer.invoke(IPC.deleteRemoteEmoji, id),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

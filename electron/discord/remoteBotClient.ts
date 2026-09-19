@@ -57,5 +57,9 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
     getJustificationSettings: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/justifications`),
     setJustificationChannel: <T>(guildId: string, kind: string, channelId: string | null) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/justifications/${kind}`, { method: 'POST', body: { channelId } }),
+    listEmojis: <T>() => remoteFetch<T>(url, apiKey, '/api/emojis'),
+    addEmoji: <T>(name: string, imageDataUrl: string) =>
+      remoteFetch<T>(url, apiKey, '/api/emojis', { method: 'POST', body: { name, imageDataUrl } }),
+    deleteEmoji: (id: string) => remoteFetch<void>(url, apiKey, `/api/emojis/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   }
 }
