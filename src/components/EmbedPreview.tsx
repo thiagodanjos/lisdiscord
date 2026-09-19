@@ -1,4 +1,5 @@
 import type { EmbedDraft } from '../../shared/types'
+import { renderDiscordMarkdown } from '../lib/discordMarkdown'
 
 export function EmbedPreview({ draft, botName }: { draft: EmbedDraft; botName: string }) {
   const hasContent = draft.title || draft.description || draft.fields.some((f) => f.name && f.value)
@@ -24,7 +25,7 @@ export function EmbedPreview({ draft, botName }: { draft: EmbedDraft; botName: s
             >
               {draft.authorName && <p className="mb-1 text-xs font-semibold text-text">{draft.authorName}</p>}
               {draft.title && <p className="font-bold text-text">{draft.title}</p>}
-              {draft.description && <p className="mt-1 text-sm whitespace-pre-wrap text-muted">{draft.description}</p>}
+              {draft.description && <p className="mt-1 text-sm whitespace-pre-wrap text-muted">{renderDiscordMarkdown(draft.description)}</p>}
 
               {draft.fields.some((f) => f.name && f.value) && (
                 <div className="mt-2 grid grid-cols-2 gap-2">
@@ -33,7 +34,7 @@ export function EmbedPreview({ draft, botName }: { draft: EmbedDraft; botName: s
                     .map((f, i) => (
                       <div key={i} className={f.inline ? '' : 'col-span-2'}>
                         <p className="text-xs font-semibold text-text">{f.name}</p>
-                        <p className="text-xs text-muted">{f.value}</p>
+                        <p className="text-xs whitespace-pre-wrap text-muted">{renderDiscordMarkdown(f.value)}</p>
                       </div>
                     ))}
                 </div>
