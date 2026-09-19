@@ -30,6 +30,7 @@ export default function Messaging() {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
 
   const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
 
@@ -38,22 +39,32 @@ export default function Messaging() {
   }, [])
 
   useEffect(() => {
+    setLoadError('')
     const listGuilds = isRemote ? bridge.listRemoteGuilds : bridge.listGuilds
-    listGuilds().then((g) => {
-      setGuilds(g)
-      setGuildId(g[0]?.id ?? '')
-    })
+    listGuilds()
+      .then((g) => {
+        setGuilds(g)
+        setGuildId(g[0]?.id ?? '')
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Não consegui carregar os servidores.'))
     const listEmojis = isRemote ? bridge.listRemoteEmojis : bridge.listEmojis
     listEmojis().then(setEmojis).catch(() => setEmojis([]))
   }, [isRemote])
 
   useEffect(() => {
     if (!guildId) return
+    setLoadError('')
     const listChannels = isRemote ? bridge.listRemoteChannels : bridge.listChannels
-    listChannels(guildId).then((c) => {
-      setChannels(c)
-      setChannelId(c[0]?.id ?? '')
-    })
+    listChannels(guildId)
+      .then((c) => {
+        setChannels(c)
+        setChannelId(c[0]?.id ?? '')
+      })
+      .catch((err) => {
+        setChannels([])
+        setChannelId('')
+        setLoadError(err instanceof Error ? err.message : 'Não consegui carregar os canais.')
+      })
   }, [guildId, isRemote])
 
   async function send() {
@@ -117,6 +128,7 @@ export default function Messaging() {
           </select>
         </div>
       </div>
+      {loadError && <p className="-mt-3 text-xs text-danger">❌ {loadError}</p>}
 
       <EmbedTemplateEditor
         draft={draft}

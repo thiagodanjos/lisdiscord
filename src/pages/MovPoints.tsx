@@ -61,6 +61,7 @@ export default function MovPoints() {
   const [templateSaving, setTemplateSaving] = useState(false)
   const [templateResetting, setTemplateResetting] = useState(false)
   const [templateError, setTemplateError] = useState('')
+  const [loadError, setLoadError] = useState('')
 
   const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
 
@@ -74,19 +75,28 @@ export default function MovPoints() {
   }, [isRemote])
 
   useEffect(() => {
+    setLoadError('')
     const listGuilds = isRemote ? bridge.listRemoteGuilds : bridge.listGuilds
-    listGuilds().then((g) => {
-      setGuilds(g)
-      setGuildId(g[0]?.id ?? '')
-    })
+    listGuilds()
+      .then((g) => {
+        setGuilds(g)
+        setGuildId(g[0]?.id ?? '')
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Não consegui carregar os servidores.'))
   }, [isRemote])
 
   useEffect(() => {
     if (!guildId) return
+    setLoadError('')
     const listChannels = isRemote ? bridge.listRemoteChannels : bridge.listChannels
     const getBoard = isRemote ? bridge.getRemoteMovPointsBoard : bridge.getMovPointsBoard
     const listExcluded = isRemote ? bridge.listRemoteExcludedMembers : bridge.listExcludedMembers
-    listChannels(guildId).then(setChannels)
+    listChannels(guildId)
+      .then(setChannels)
+      .catch((err) => {
+        setChannels([])
+        setLoadError(err instanceof Error ? err.message : 'Não consegui carregar os canais.')
+      })
     getBoard(guildId).then((b) => {
       setBoard(b)
       setBoardChannelId(b.channelId ?? '')
@@ -252,6 +262,7 @@ export default function MovPoints() {
             </option>
           ))}
         </select>
+        {loadError && <p className="mt-1.5 text-xs text-danger">❌ {loadError}</p>}
       </div>
 
       <section>

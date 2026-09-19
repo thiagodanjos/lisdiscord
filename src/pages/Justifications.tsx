@@ -112,6 +112,7 @@ export default function Justifications() {
   const [templateSaving, setTemplateSaving] = useState(false)
   const [templateResetting, setTemplateResetting] = useState(false)
   const [templateError, setTemplateError] = useState('')
+  const [loadError, setLoadError] = useState('')
 
   const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
 
@@ -120,17 +121,26 @@ export default function Justifications() {
   }, [])
 
   useEffect(() => {
+    setLoadError('')
     const listGuilds = isRemote ? bridge.listRemoteGuilds : bridge.listGuilds
-    listGuilds().then((g) => {
-      setGuilds(g)
-      setGuildId(g[0]?.id ?? '')
-    })
+    listGuilds()
+      .then((g) => {
+        setGuilds(g)
+        setGuildId(g[0]?.id ?? '')
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Não consegui carregar os servidores.'))
   }, [isRemote])
 
   useEffect(() => {
     if (!guildId) return
+    setLoadError('')
     const listChannels = isRemote ? bridge.listRemoteChannels : bridge.listChannels
-    listChannels(guildId).then(setChannels)
+    listChannels(guildId)
+      .then(setChannels)
+      .catch((err) => {
+        setChannels([])
+        setLoadError(err instanceof Error ? err.message : 'Não consegui carregar os canais.')
+      })
     loadSettings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guildId, isRemote])
@@ -328,6 +338,7 @@ export default function Justifications() {
             </option>
           ))}
         </select>
+        {loadError && <p className="mt-1.5 text-xs text-danger">❌ {loadError}</p>}
       </div>
 
       <div className="flex flex-col gap-6">
