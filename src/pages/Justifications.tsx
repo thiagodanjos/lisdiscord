@@ -111,6 +111,7 @@ export default function Justifications() {
   const [templateCustomized, setTemplateCustomized] = useState(false)
   const [templateSaving, setTemplateSaving] = useState(false)
   const [templateResetting, setTemplateResetting] = useState(false)
+  const [templateError, setTemplateError] = useState('')
 
   const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
 
@@ -169,6 +170,7 @@ export default function Justifications() {
 
   async function openTemplateEditor(kind: EmbedTemplateKind) {
     setEditingTemplate(kind)
+    setTemplateError('')
     const getTemplate = isRemote ? bridge.getRemoteEmbedTemplate : bridge.getEmbedTemplate
     const { draft, customized } = await getTemplate(guildId, kind)
     setTemplateDraft(draft)
@@ -178,10 +180,13 @@ export default function Justifications() {
   async function saveTemplate() {
     if (!editingTemplate) return
     setTemplateSaving(true)
+    setTemplateError('')
     try {
       const setTemplate = isRemote ? bridge.setRemoteEmbedTemplate : bridge.setEmbedTemplate
       const { customized } = await setTemplate(guildId, editingTemplate, templateDraft)
       setTemplateCustomized(customized)
+    } catch (err) {
+      setTemplateError(err instanceof Error ? err.message : 'Ocorreu um erro inesperado.')
     } finally {
       setTemplateSaving(false)
     }
@@ -398,6 +403,7 @@ export default function Justifications() {
           saving={templateSaving}
           resetting={templateResetting}
           customized={templateCustomized}
+          errorMessage={templateError}
         />
       </Modal>
     </div>

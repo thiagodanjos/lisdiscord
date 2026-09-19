@@ -33,6 +33,7 @@ export function EmbedTemplateEditor({
   saveLabel = 'Guardar',
   saveIcon: SaveIcon = Save,
   saveDisabled,
+  errorMessage,
 }: {
   draft: EmbedDraft
   onChange: (draft: EmbedDraft) => void
@@ -48,6 +49,7 @@ export function EmbedTemplateEditor({
   saveLabel?: string
   saveIcon?: typeof Save
   saveDisabled?: boolean
+  errorMessage?: string
 }) {
   const titleRef = useRef<HTMLInputElement>(null)
 
@@ -175,6 +177,7 @@ export function EmbedTemplateEditor({
             </Button>
           )}
         </div>
+        {errorMessage && <p className="text-xs text-danger">❌ {errorMessage}</p>}
       </div>
 
       <div>

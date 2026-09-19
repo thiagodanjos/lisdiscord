@@ -60,6 +60,7 @@ export default function MovPoints() {
   const [templateCustomized, setTemplateCustomized] = useState(false)
   const [templateSaving, setTemplateSaving] = useState(false)
   const [templateResetting, setTemplateResetting] = useState(false)
+  const [templateError, setTemplateError] = useState('')
 
   const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
 
@@ -129,6 +130,7 @@ export default function MovPoints() {
 
   async function openTemplateEditor() {
     setEditingTemplate(true)
+    setTemplateError('')
     const getTemplate = isRemote ? bridge.getRemoteEmbedTemplate : bridge.getEmbedTemplate
     const { draft, customized } = await getTemplate(guildId, 'pontosBoard')
     setTemplateDraft(draft)
@@ -137,10 +139,13 @@ export default function MovPoints() {
 
   async function saveTemplate() {
     setTemplateSaving(true)
+    setTemplateError('')
     try {
       const setTemplate = isRemote ? bridge.setRemoteEmbedTemplate : bridge.setEmbedTemplate
       const { customized } = await setTemplate(guildId, 'pontosBoard', templateDraft)
       setTemplateCustomized(customized)
+    } catch (err) {
+      setTemplateError(err instanceof Error ? err.message : 'Ocorreu um erro inesperado.')
     } finally {
       setTemplateSaving(false)
     }
@@ -497,6 +502,7 @@ export default function MovPoints() {
           saving={templateSaving}
           resetting={templateResetting}
           customized={templateCustomized}
+          errorMessage={templateError}
           placeholderHint='Usa {lista} na descrição (ou num campo) para indicar onde entra a lista de membros — {servidor} e {atualizado} também podem ser usados em qualquer texto.'
           previewPlaceholders={{
             lista: previewLista(leaderboard),

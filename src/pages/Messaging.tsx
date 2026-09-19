@@ -29,6 +29,7 @@ export default function Messaging() {
   const [emojis, setEmojis] = useState<BotEmoji[]>([])
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [error, setError] = useState('')
 
   const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
 
@@ -58,12 +59,15 @@ export default function Messaging() {
   async function send() {
     if (!channelId) return
     setSending(true)
+    setError('')
     try {
       const sendEmbed = isRemote ? bridge.sendRemoteEmbed : bridge.sendEmbed
       await sendEmbed(guildId, channelId, draft)
       setSent(true)
       setTimeout(() => setSent(false), 3000)
       setDraft(EMPTY_DRAFT)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ocorreu um erro inesperado.')
     } finally {
       setSending(false)
     }
@@ -125,6 +129,7 @@ export default function Messaging() {
         saveLabel={sent ? 'Enviado ✓' : 'Enviar mensagem'}
         saveIcon={Send}
         saveDisabled={!channelId}
+        errorMessage={error}
       />
     </div>
   )
