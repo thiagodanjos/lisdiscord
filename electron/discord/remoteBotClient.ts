@@ -61,5 +61,39 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
     addEmoji: <T>(name: string, imageDataUrl: string) =>
       remoteFetch<T>(url, apiKey, '/api/emojis', { method: 'POST', body: { name, imageDataUrl } }),
     deleteEmoji: (id: string) => remoteFetch<void>(url, apiKey, `/api/emojis/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+    listMovPoints: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints`),
+    addMovPoints: <T>(guildId: string, userId: string, amount: number) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/${encodeURIComponent(userId)}/add`, { method: 'POST', body: { amount } }),
+    removeMovPoints: <T>(guildId: string, userId: string, amount: number) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/${encodeURIComponent(userId)}/remove`, { method: 'POST', body: { amount } }),
+    addMovHours: <T>(guildId: string, userId: string, seconds: number) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/${encodeURIComponent(userId)}/hours`, { method: 'POST', body: { seconds } }),
+    getMovPointsBoard: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/board`),
+    setMovPointsBoard: <T>(guildId: string, channelId: string | null) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/board`, { method: 'POST', body: { channelId } }),
+    resetMovPoints: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/reset`, { method: 'POST' }),
+    listMovPointsLog: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/log`),
+    listExcludedMembers: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/excluded`),
+    setMemberExcluded: <T>(guildId: string, userId: string, tag: string, excluded: boolean) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/excluded/${encodeURIComponent(userId)}`, {
+        method: 'POST',
+        body: { tag, excluded },
+      }),
+
+    searchMembers: <T>(guildId: string, query: string) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/members/search?q=${encodeURIComponent(query)}`),
+    getMemberProfile: <T>(guildId: string, userId: string) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}/profile`),
+    listRoles: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/roles`),
+
+    listRoleGoals: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/goals`),
+    setRoleGoal: <T>(guildId: string, roleId: string, roleName: string, pointsGoal: number, hoursGoal: number) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/goals/${encodeURIComponent(roleId)}`, {
+        method: 'POST',
+        body: { roleName, pointsGoal, hoursGoal },
+      }),
+    removeRoleGoal: <T>(guildId: string, roleId: string) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/goals/${encodeURIComponent(roleId)}`, { method: 'DELETE' }),
   }
 }

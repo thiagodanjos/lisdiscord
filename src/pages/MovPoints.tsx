@@ -3,11 +3,21 @@ import { Clock3, Eye, EyeOff, Medal, Minus, Plus, Radio, RotateCcw, Search } fro
 import { bridge } from '../lib/bridge'
 import { formatDuration } from '../lib/format'
 import { Avatar, Badge, Button, Card, ConfirmDialog, EmptyState, SectionHeading } from '../components/ui'
-import type { ChannelPickerEntry, ExcludedMember, GuildSummary, MemberSearchResult, MovPointsBoardConfig, MovPointsEntry } from '../../shared/types'
+import type {
+  ChannelPickerEntry,
+  ExcludedMember,
+  GuildSummary,
+  MemberSearchResult,
+  MovPointsBoardConfig,
+  MovPointsEntry,
+  RemoteBotConfig,
+} from '../../shared/types'
 
 const POLL_INTERVAL_MS = 8_000
+const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
 
 export default function MovPoints() {
+  const [remoteConfig, setRemoteConfig] = useState<RemoteBotConfig>(EMPTY_REMOTE_CONFIG)
   const [guilds, setGuilds] = useState<GuildSummary[]>([])
   const [guildId, setGuildId] = useState('')
   const [channels, setChannels] = useState<ChannelPickerEntry[]>([])
@@ -30,48 +40,61 @@ export default function MovPoints() {
   const [excludedMembers, setExcludedMembers] = useState<ExcludedMember[]>([])
   const [togglingExclusion, setTogglingExclusion] = useState<string | null>(null)
 
+  const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
+
   useEffect(() => {
-    bridge.listGuilds().then((g) => {
-      setGuilds(g)
-      setGuildId(g[0]?.id ?? '')
-    })
+    bridge.getRemoteBotConfig().then(setRemoteConfig)
   }, [])
 
   useEffect(() => {
+    const listGuilds = isRemote ? bridge.listRemoteGuilds : bridge.listGuilds
+    listGuilds().then((g) => {
+      setGuilds(g)
+      setGuildId(g[0]?.id ?? '')
+    })
+  }, [isRemote])
+
+  useEffect(() => {
     if (!guildId) return
-    bridge.listChannels(guildId).then(setChannels)
-    bridge.getMovPointsBoard(guildId).then((b) => {
+    const listChannels = isRemote ? bridge.listRemoteChannels : bridge.listChannels
+    const getBoard = isRemote ? bridge.getRemoteMovPointsBoard : bridge.getMovPointsBoard
+    const listExcluded = isRemote ? bridge.listRemoteExcludedMembers : bridge.listExcludedMembers
+    listChannels(guildId).then(setChannels)
+    getBoard(guildId).then((b) => {
       setBoard(b)
       setBoardChannelId(b.channelId ?? '')
     })
-    bridge.listExcludedMembers(guildId).then(setExcludedMembers)
+    listExcluded(guildId).then(setExcludedMembers)
     loadLeaderboard()
 
     const interval = setInterval(loadLeaderboard, POLL_INTERVAL_MS)
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guildId])
+  }, [guildId, isRemote])
 
   useEffect(() => {
     if (!guildId || !query.trim()) {
       setResults([])
       return
     }
+    const searchMembers = isRemote ? bridge.searchRemoteMembers : bridge.searchMembers
     const timeout = setTimeout(() => {
-      bridge.searchMembers(guildId, query).then(setResults)
+      searchMembers(guildId, query).then(setResults)
     }, 300)
     return () => clearTimeout(timeout)
-  }, [guildId, query])
+  }, [guildId, query, isRemote])
 
   function loadLeaderboard() {
     if (!guildId) return
-    bridge.listMovPoints(guildId).then(setLeaderboard)
+    const listMovPoints = isRemote ? bridge.listRemoteMovPoints : bridge.listMovPoints
+    listMovPoints(guildId).then(setLeaderboard)
   }
 
   async function saveBoard() {
     setSavingBoard(true)
     try {
-      const updated = await bridge.setMovPointsBoard(guildId, boardChannelId || null)
+      const setBoard_ = isRemote ? bridge.setRemoteMovPointsBoard : bridge.setMovPointsBoard
+      const updated = await setBoard_(guildId, boardChannelId || null)
       setBoard(updated)
     } finally {
       setSavingBoard(false)
@@ -82,10 +105,9 @@ export default function MovPoints() {
     if (!target) return
     setBusy(true)
     try {
-      const updated =
-        direction === 1
-          ? await bridge.addMovPoints(guildId, target.id, amount)
-          : await bridge.removeMovPoints(guildId, target.id, amount)
+      const addPoints = isRemote ? bridge.addRemoteMovPoints : bridge.addMovPoints
+      const removePoints = isRemote ? bridge.removeRemoteMovPoints : bridge.removeMovPoints
+      const updated = direction === 1 ? await addPoints(guildId, target.id, amount) : await removePoints(guildId, target.id, amount)
       setLeaderboard(updated)
       setTarget(null)
       setQuery('')
@@ -101,7 +123,8 @@ export default function MovPoints() {
     if (totalSeconds <= 0) return
     setBusyHours(true)
     try {
-      const updated = await bridge.addMovHours(guildId, target.id, totalSeconds)
+      const addHours = isRemote ? bridge.addRemoteMovHours : bridge.addMovHours
+      const updated = await addHours(guildId, target.id, totalSeconds)
       setLeaderboard(updated)
       setTarget(null)
       setQuery('')
@@ -117,7 +140,8 @@ export default function MovPoints() {
   async function resetPoints() {
     setResetting(true)
     try {
-      const updated = await bridge.resetMovPoints(guildId)
+      const reset = isRemote ? bridge.resetRemoteMovPoints : bridge.resetMovPoints
+      const updated = await reset(guildId)
       setLeaderboard(updated)
       setConfirmResetOpen(false)
     } finally {
@@ -128,7 +152,8 @@ export default function MovPoints() {
   async function toggleExclusion(userId: string, tag: string, excluded: boolean) {
     setTogglingExclusion(userId)
     try {
-      const updatedExcluded = await bridge.setMemberExcluded(guildId, userId, tag, excluded)
+      const setExcluded = isRemote ? bridge.setRemoteMemberExcluded : bridge.setMemberExcluded
+      const updatedExcluded = await setExcluded(guildId, userId, tag, excluded)
       setExcludedMembers(updatedExcluded)
       loadLeaderboard()
     } finally {
@@ -143,6 +168,13 @@ export default function MovPoints() {
       <SectionHeading
         title="Pontos de MOV. Call"
         subtitle="Pontuação por participação em Mov. Calls, com um painel público sempre atualizado"
+        action={
+          isRemote ? (
+            <Badge tone="success">
+              <Radio size={11} className="mr-1 inline" /> A usar o bot remoto
+            </Badge>
+          ) : undefined
+        }
       />
 
       <div>

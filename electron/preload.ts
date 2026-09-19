@@ -97,6 +97,26 @@ const bridge: LisDiscordBridge = {
   listRemoteEmojis: () => ipcRenderer.invoke(IPC.listRemoteEmojis),
   addRemoteEmoji: (name, imageDataUrl) => ipcRenderer.invoke(IPC.addRemoteEmoji, name, imageDataUrl),
   deleteRemoteEmoji: (id) => ipcRenderer.invoke(IPC.deleteRemoteEmoji, id),
+
+  listRemoteMovPoints: (guildId) => ipcRenderer.invoke(IPC.listRemoteMovPoints, guildId),
+  addRemoteMovPoints: (guildId, userId, amount) => ipcRenderer.invoke(IPC.addRemoteMovPoints, guildId, userId, amount),
+  removeRemoteMovPoints: (guildId, userId, amount) => ipcRenderer.invoke(IPC.removeRemoteMovPoints, guildId, userId, amount),
+  addRemoteMovHours: (guildId, userId, seconds) => ipcRenderer.invoke(IPC.addRemoteMovHours, guildId, userId, seconds),
+  getRemoteMovPointsBoard: (guildId) => ipcRenderer.invoke(IPC.getRemoteMovPointsBoard, guildId),
+  setRemoteMovPointsBoard: (guildId, channelId) => ipcRenderer.invoke(IPC.setRemoteMovPointsBoard, guildId, channelId),
+  resetRemoteMovPoints: (guildId) => ipcRenderer.invoke(IPC.resetRemoteMovPoints, guildId),
+  listRemoteMovPointsLog: (guildId) => ipcRenderer.invoke(IPC.listRemoteMovPointsLog, guildId),
+  listRemoteExcludedMembers: (guildId) => ipcRenderer.invoke(IPC.listRemoteExcludedMembers, guildId),
+  setRemoteMemberExcluded: (guildId, userId, tag, excluded) => ipcRenderer.invoke(IPC.setRemoteMemberExcluded, guildId, userId, tag, excluded),
+
+  searchRemoteMembers: (guildId, query) => ipcRenderer.invoke(IPC.searchRemoteMembers, guildId, query),
+  getRemoteMemberProfile: (guildId, userId) => ipcRenderer.invoke(IPC.getRemoteMemberProfile, guildId, userId),
+  listRemoteRoles: (guildId) => ipcRenderer.invoke(IPC.listRemoteRoles, guildId),
+
+  listRemoteRoleGoals: (guildId) => ipcRenderer.invoke(IPC.listRemoteRoleGoals, guildId),
+  setRemoteRoleGoal: (guildId, roleId, roleName, pointsGoal, hoursGoal) =>
+    ipcRenderer.invoke(IPC.setRemoteRoleGoal, guildId, roleId, roleName, pointsGoal, hoursGoal),
+  removeRemoteRoleGoal: (guildId, roleId) => ipcRenderer.invoke(IPC.removeRemoteRoleGoal, guildId, roleId),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

@@ -405,6 +405,62 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   )
   ipcMain.handle(IPC.deleteRemoteEmoji, async (_e, id: string): Promise<void> => remoteApi(requireRemoteCredentials()).deleteEmoji(id))
 
+  // ---- Bot remoto: Pontos de Mov. Call ----
+  ipcMain.handle(IPC.listRemoteMovPoints, async (_e, guildId: string): Promise<MovPointsEntry[]> =>
+    remoteApi(requireRemoteCredentials()).listMovPoints(guildId),
+  )
+  ipcMain.handle(IPC.addRemoteMovPoints, async (_e, guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]> =>
+    remoteApi(requireRemoteCredentials()).addMovPoints(guildId, userId, amount),
+  )
+  ipcMain.handle(IPC.removeRemoteMovPoints, async (_e, guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]> =>
+    remoteApi(requireRemoteCredentials()).removeMovPoints(guildId, userId, amount),
+  )
+  ipcMain.handle(IPC.addRemoteMovHours, async (_e, guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]> =>
+    remoteApi(requireRemoteCredentials()).addMovHours(guildId, userId, seconds),
+  )
+  ipcMain.handle(IPC.getRemoteMovPointsBoard, async (_e, guildId: string): Promise<MovPointsBoardConfig> =>
+    remoteApi(requireRemoteCredentials()).getMovPointsBoard(guildId),
+  )
+  ipcMain.handle(IPC.setRemoteMovPointsBoard, async (_e, guildId: string, channelId: string | null): Promise<MovPointsBoardConfig> =>
+    remoteApi(requireRemoteCredentials()).setMovPointsBoard(guildId, channelId),
+  )
+  ipcMain.handle(IPC.resetRemoteMovPoints, async (_e, guildId: string): Promise<MovPointsEntry[]> =>
+    remoteApi(requireRemoteCredentials()).resetMovPoints(guildId),
+  )
+  ipcMain.handle(IPC.listRemoteMovPointsLog, async (_e, guildId: string): Promise<MovPointsLogEntry[]> =>
+    remoteApi(requireRemoteCredentials()).listMovPointsLog(guildId),
+  )
+  ipcMain.handle(IPC.listRemoteExcludedMembers, async (_e, guildId: string): Promise<ExcludedMember[]> =>
+    remoteApi(requireRemoteCredentials()).listExcludedMembers(guildId),
+  )
+  ipcMain.handle(
+    IPC.setRemoteMemberExcluded,
+    async (_e, guildId: string, userId: string, tag: string, excluded: boolean): Promise<ExcludedMember[]> =>
+      remoteApi(requireRemoteCredentials()).setMemberExcluded(guildId, userId, tag, excluded),
+  )
+
+  ipcMain.handle(IPC.searchRemoteMembers, async (_e, guildId: string, query: string): Promise<MemberSearchResult[]> =>
+    remoteApi(requireRemoteCredentials()).searchMembers(guildId, query),
+  )
+  ipcMain.handle(IPC.getRemoteMemberProfile, async (_e, guildId: string, userId: string): Promise<MemberProfile> =>
+    remoteApi(requireRemoteCredentials()).getMemberProfile(guildId, userId),
+  )
+  ipcMain.handle(IPC.listRemoteRoles, async (_e, guildId: string): Promise<RolePickerEntry[]> =>
+    remoteApi(requireRemoteCredentials()).listRoles(guildId),
+  )
+
+  ipcMain.handle(IPC.listRemoteRoleGoals, async (_e, guildId: string): Promise<RoleGoal[]> =>
+    remoteApi(requireRemoteCredentials()).listRoleGoals(guildId),
+  )
+  ipcMain.handle(
+    IPC.setRemoteRoleGoal,
+    async (_e, guildId: string, roleId: string, roleName: string, pointsGoal: number, hoursGoal: number): Promise<RoleGoal[]> =>
+      remoteApi(requireRemoteCredentials()).setRoleGoal(guildId, roleId, roleName, pointsGoal, hoursGoal),
+  )
+  ipcMain.handle(IPC.removeRemoteRoleGoal, async (_e, guildId: string, roleId: string): Promise<RoleGoal[]> =>
+    remoteApi(requireRemoteCredentials()).removeRoleGoal(guildId, roleId),
+  )
+
   // ---- Upamentos (metas de cargo) ----
   ipcMain.handle(IPC.listRoles, async (_e, guildId: string): Promise<RolePickerEntry[]> => {
     const guild = await discordManager.getClient().guilds.fetch(guildId)

@@ -115,6 +115,25 @@ export const IPC = {
   listRemoteEmojis: 'remoteBot:emojis:list',
   addRemoteEmoji: 'remoteBot:emojis:add',
   deleteRemoteEmoji: 'remoteBot:emojis:delete',
+
+  listRemoteMovPoints: 'remoteBot:movpoints:list',
+  addRemoteMovPoints: 'remoteBot:movpoints:add',
+  removeRemoteMovPoints: 'remoteBot:movpoints:remove',
+  addRemoteMovHours: 'remoteBot:movpoints:hours:add',
+  getRemoteMovPointsBoard: 'remoteBot:movpoints:board:get',
+  setRemoteMovPointsBoard: 'remoteBot:movpoints:board:set',
+  resetRemoteMovPoints: 'remoteBot:movpoints:reset',
+  listRemoteMovPointsLog: 'remoteBot:movpoints:log:list',
+  listRemoteExcludedMembers: 'remoteBot:movpoints:excluded:list',
+  setRemoteMemberExcluded: 'remoteBot:movpoints:excluded:set',
+
+  searchRemoteMembers: 'remoteBot:members:search',
+  getRemoteMemberProfile: 'remoteBot:members:profile',
+  listRemoteRoles: 'remoteBot:guilds:roles',
+
+  listRemoteRoleGoals: 'remoteBot:goals:list',
+  setRemoteRoleGoal: 'remoteBot:goals:set',
+  removeRemoteRoleGoal: 'remoteBot:goals:remove',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -202,4 +221,23 @@ export interface LisDiscordBridge {
   listRemoteEmojis(): Promise<BotEmoji[]>
   addRemoteEmoji(name: string, imageDataUrl: string): Promise<BotEmoji>
   deleteRemoteEmoji(id: string): Promise<void>
+
+  listRemoteMovPoints(guildId: string): Promise<MovPointsEntry[]>
+  addRemoteMovPoints(guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]>
+  removeRemoteMovPoints(guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]>
+  addRemoteMovHours(guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]>
+  getRemoteMovPointsBoard(guildId: string): Promise<MovPointsBoardConfig>
+  setRemoteMovPointsBoard(guildId: string, channelId: string | null): Promise<MovPointsBoardConfig>
+  resetRemoteMovPoints(guildId: string): Promise<MovPointsEntry[]>
+  listRemoteMovPointsLog(guildId: string): Promise<MovPointsLogEntry[]>
+  listRemoteExcludedMembers(guildId: string): Promise<ExcludedMember[]>
+  setRemoteMemberExcluded(guildId: string, userId: string, tag: string, excluded: boolean): Promise<ExcludedMember[]>
+
+  searchRemoteMembers(guildId: string, query: string): Promise<MemberSearchResult[]>
+  getRemoteMemberProfile(guildId: string, userId: string): Promise<MemberProfile>
+  listRemoteRoles(guildId: string): Promise<RolePickerEntry[]>
+
+  listRemoteRoleGoals(guildId: string): Promise<RoleGoal[]>
+  setRemoteRoleGoal(guildId: string, roleId: string, roleName: string, pointsGoal: number, hoursGoal: number): Promise<RoleGoal[]>
+  removeRemoteRoleGoal(guildId: string, roleId: string): Promise<RoleGoal[]>
 }

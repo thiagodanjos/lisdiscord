@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Clock3, Medal, Plus, Target, Trash2 } from 'lucide-react'
+import { Clock3, Medal, Plus, Radio, Target, Trash2 } from 'lucide-react'
 import { bridge } from '../lib/bridge'
-import { Button, Card, ConfirmDialog, EmptyState, Modal, SectionHeading } from '../components/ui'
-import type { GuildSummary, RoleGoal, RolePickerEntry } from '../../shared/types'
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Modal, SectionHeading } from '../components/ui'
+import type { GuildSummary, RemoteBotConfig, RoleGoal, RolePickerEntry } from '../../shared/types'
+
+const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
 
 export default function Goals() {
+  const [remoteConfig, setRemoteConfig] = useState<RemoteBotConfig>(EMPTY_REMOTE_CONFIG)
   const [guilds, setGuilds] = useState<GuildSummary[]>([])
   const [guildId, setGuildId] = useState('')
   const [roles, setRoles] = useState<RolePickerEntry[]>([])
@@ -18,25 +21,35 @@ export default function Goals() {
   const [saving, setSaving] = useState(false)
   const [toDelete, setToDelete] = useState<RoleGoal | null>(null)
 
+  const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
+
   useEffect(() => {
-    bridge.listGuilds().then((g) => {
+    bridge.getRemoteBotConfig().then(setRemoteConfig)
+  }, [])
+
+  useEffect(() => {
+    const listGuilds = isRemote ? bridge.listRemoteGuilds : bridge.listGuilds
+    listGuilds().then((g) => {
       setGuilds(g)
       setGuildId(g[0]?.id ?? '')
     })
-  }, [])
+  }, [isRemote])
 
   useEffect(() => {
     if (!guildId) return
     setLoading(true)
-    Promise.all([bridge.listRoles(guildId), bridge.listRoleGoals(guildId)]).then(([r, g]) => {
+    const listRoles = isRemote ? bridge.listRemoteRoles : bridge.listRoles
+    const listRoleGoals = isRemote ? bridge.listRemoteRoleGoals : bridge.listRoleGoals
+    Promise.all([listRoles(guildId), listRoleGoals(guildId)]).then(([r, g]) => {
       setRoles(r)
       setGoals(g)
       setLoading(false)
     })
-  }, [guildId])
+  }, [guildId, isRemote])
 
   function reloadGoals() {
-    bridge.listRoleGoals(guildId).then(setGoals)
+    const listRoleGoals = isRemote ? bridge.listRemoteRoleGoals : bridge.listRoleGoals
+    listRoleGoals(guildId).then(setGoals)
   }
 
   function openNew() {
@@ -60,7 +73,8 @@ export default function Goals() {
     const roleName = roles.find((r) => r.id === roleId)?.name ?? roleId
     setSaving(true)
     try {
-      await bridge.setRoleGoal(guildId, roleId, roleName, pointsGoal, hoursGoal)
+      const setRoleGoal = isRemote ? bridge.setRemoteRoleGoal : bridge.setRoleGoal
+      await setRoleGoal(guildId, roleId, roleName, pointsGoal, hoursGoal)
       setEditing(false)
       reloadGoals()
     } finally {
@@ -70,7 +84,8 @@ export default function Goals() {
 
   async function confirmDelete() {
     if (!toDelete) return
-    await bridge.removeRoleGoal(guildId, toDelete.roleId)
+    const removeRoleGoal = isRemote ? bridge.removeRemoteRoleGoal : bridge.removeRoleGoal
+    await removeRoleGoal(guildId, toDelete.roleId)
     reloadGoals()
   }
 
@@ -80,10 +95,17 @@ export default function Goals() {
         title="Metas"
         subtitle="Define quantos pontos e horas de Mov. Call cada cargo exige — usado pelos Upamentos e pelo /verificar"
         action={
-          <Button onClick={openNew} disabled={roles.length === 0}>
-            <Plus size={14} />
-            Nova meta
-          </Button>
+          <div className="flex items-center gap-3">
+            {isRemote && (
+              <Badge tone="success">
+                <Radio size={11} className="mr-1 inline" /> A usar o bot remoto
+              </Badge>
+            )}
+            <Button onClick={openNew} disabled={roles.length === 0}>
+              <Plus size={14} />
+              Nova meta
+            </Button>
+          </div>
         }
       />
 

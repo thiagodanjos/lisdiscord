@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Clock3, Medal, Search, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Medal, Radio, Search, XCircle } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatDuration } from '../lib/format'
 import { Avatar, Badge, Card, EmptyState, SectionHeading } from '../components/ui'
-import type { GuildSummary, MemberProfile, MemberSearchResult, RoleGoal } from '../../shared/types'
+import type { GuildSummary, MemberProfile, MemberSearchResult, RemoteBotConfig, RoleGoal } from '../../shared/types'
+
+const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
 
 export default function Promotions() {
+  const [remoteConfig, setRemoteConfig] = useState<RemoteBotConfig>(EMPTY_REMOTE_CONFIG)
   const [guilds, setGuilds] = useState<GuildSummary[]>([])
   const [guildId, setGuildId] = useState('')
   const [goals, setGoals] = useState<RoleGoal[]>([])
@@ -16,38 +19,48 @@ export default function Promotions() {
   const [loadingProfile, setLoadingProfile] = useState(false)
   const [selectedRoleId, setSelectedRoleId] = useState('')
 
+  const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
+
   useEffect(() => {
-    bridge.listGuilds().then((g) => {
-      setGuilds(g)
-      setGuildId(g[0]?.id ?? '')
-    })
+    bridge.getRemoteBotConfig().then(setRemoteConfig)
   }, [])
 
   useEffect(() => {
+    const listGuilds = isRemote ? bridge.listRemoteGuilds : bridge.listGuilds
+    listGuilds().then((g) => {
+      setGuilds(g)
+      setGuildId(g[0]?.id ?? '')
+    })
+  }, [isRemote])
+
+  useEffect(() => {
     if (!guildId) return
-    bridge.listRoleGoals(guildId).then(setGoals)
+    const listRoleGoals = isRemote ? bridge.listRemoteRoleGoals : bridge.listRoleGoals
+    listRoleGoals(guildId).then(setGoals)
     setProfile(null)
     setSelectedRoleId('')
     setQuery('')
     setResults([])
-  }, [guildId])
+  }, [guildId, isRemote])
 
   useEffect(() => {
     if (!guildId || !query.trim()) {
       setResults([])
       return
     }
+    const searchMembers = isRemote ? bridge.searchRemoteMembers : bridge.searchMembers
     const timeout = setTimeout(() => {
-      bridge.searchMembers(guildId, query).then((r) => setResults(r.filter((m) => !m.isBot)))
+      searchMembers(guildId, query).then((r) => setResults(r.filter((m) => !m.isBot)))
     }, 300)
     return () => clearTimeout(timeout)
-  }, [guildId, query])
+  }, [guildId, query, isRemote])
 
   async function pick(member: MemberSearchResult) {
     setQuery('')
     setResults([])
     setLoadingProfile(true)
-    const p = await bridge.getMemberProfile(guildId, member.id)
+    const getMemberProfile = isRemote ? bridge.getRemoteMemberProfile : bridge.getMemberProfile
+    const p = await getMemberProfile(guildId, member.id)
     setProfile(p)
     setSelectedRoleId(p.roles[0]?.id ?? '')
     setLoadingProfile(false)
@@ -60,7 +73,17 @@ export default function Promotions() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeading title="Upamentos" subtitle="Escolhe um membro e um dos cargos dele para veres se já cumpre a meta de pontos e horas" />
+      <SectionHeading
+        title="Upamentos"
+        subtitle="Escolhe um membro e um dos cargos dele para veres se já cumpre a meta de pontos e horas"
+        action={
+          isRemote ? (
+            <Badge tone="success">
+              <Radio size={11} className="mr-1 inline" /> A usar o bot remoto
+            </Badge>
+          ) : undefined
+        }
+      />
 
       <div>
         <label className="text-xs font-semibold tracking-wide text-faint uppercase">Servidor</label>

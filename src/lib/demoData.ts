@@ -703,6 +703,42 @@ export const demoBridge: LisDiscordBridge = {
     return updated
   },
 
+  // Bot remoto: no modo demonstração, usam exatamente os mesmos dados fictícios que a versão local.
+  async listRemoteMovPoints(guildId) {
+    await delay()
+    return fullDemoLeaderboard(guildId)
+  },
+  async addRemoteMovPoints(guildId, userId, amount) {
+    return demoBridge.addMovPoints(guildId, userId, amount)
+  },
+  async removeRemoteMovPoints(guildId, userId, amount) {
+    return demoBridge.removeMovPoints(guildId, userId, amount)
+  },
+  async addRemoteMovHours(guildId, userId, seconds) {
+    return demoBridge.addMovHours(guildId, userId, seconds)
+  },
+  async getRemoteMovPointsBoard(guildId) {
+    return demoBridge.getMovPointsBoard(guildId)
+  },
+  async setRemoteMovPointsBoard(guildId, channelId) {
+    return demoBridge.setMovPointsBoard(guildId, channelId)
+  },
+  async resetRemoteMovPoints(guildId) {
+    return demoBridge.resetMovPoints(guildId)
+  },
+  async listRemoteMovPointsLog(guildId) {
+    return demoBridge.listMovPointsLog(guildId)
+  },
+  async listRemoteExcludedMembers(guildId) {
+    return demoBridge.listExcludedMembers(guildId)
+  },
+  async setRemoteMemberExcluded(guildId, userId, tag, excluded) {
+    return demoBridge.setMemberExcluded(guildId, userId, tag, excluded)
+  },
+  async searchRemoteMembers(guildId, query) {
+    return demoBridge.searchMembers(guildId, query)
+  },
+
   async getJustificationSettings(guildId) {
     await delay()
     return justificationSettingsData[guildId] ?? EMPTY_JUSTIFICATION_SETTINGS
@@ -850,5 +886,21 @@ export const demoBridge: LisDiscordBridge = {
     const updated = (roleGoalsData[guildId] ?? []).filter((g) => g.roleId !== roleId)
     roleGoalsData = { ...roleGoalsData, [guildId]: updated }
     return updated
+  },
+
+  async getRemoteMemberProfile(guildId, userId) {
+    return demoBridge.getMemberProfile(guildId, userId)
+  },
+  async listRemoteRoles(guildId) {
+    return demoBridge.listRoles(guildId)
+  },
+  async listRemoteRoleGoals(guildId) {
+    return demoBridge.listRoleGoals(guildId)
+  },
+  async setRemoteRoleGoal(guildId, roleId, roleName, pointsGoal, hoursGoal) {
+    return demoBridge.setRoleGoal(guildId, roleId, roleName, pointsGoal, hoursGoal)
+  },
+  async removeRemoteRoleGoal(guildId, roleId) {
+    return demoBridge.removeRoleGoal(guildId, roleId)
   },
 }

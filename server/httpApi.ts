@@ -10,11 +10,29 @@
 // firewall da máquina a apenas os IPs de confiança, além de guardar bem a chave.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
-import type { ChannelPickerEntry, JustificationChannelKind } from '../shared/types'
+import type { ChannelPickerEntry, JustificationChannelKind, MovPointsEntry } from '../shared/types'
 import { discordManager } from '../electron/discord/client'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
 import { applyJustificationChannel } from '../electron/discord/justifications'
+import { getMemberProfile, listGuildRoles } from '../electron/discord/memberProfile'
+import { buildFullLeaderboard } from '../electron/discord/leaderboard'
+import { refreshBoard } from '../electron/discord/movcall'
+import * as moderation from '../electron/discord/moderation'
 import * as justificationSettingsStore from '../electron/store/justificationSettings'
+import * as movPointsStore from '../electron/store/movPoints'
+import * as movPointsLogStore from '../electron/store/movPointsLog'
+import * as excludedMembersStore from '../electron/store/excludedMembers'
+import * as roleGoalsStore from '../electron/store/roleGoals'
+
+/** Identifica no log de pontos ações feitas pelo bot remoto (partilhado com a app desktop). */
+const REMOTE_API_ACTOR = 'Aplicação desktop (via bot remoto)'
+
+async function fullLeaderboard(guildId: string): Promise<MovPointsEntry[]> {
+  if (!discordManager.isConnected()) return movPointsStore.getLeaderboard(guildId)
+  const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
+  if (!guild) return movPointsStore.getLeaderboard(guildId)
+  return buildFullLeaderboard(guild).catch(() => movPointsStore.getLeaderboard(guildId))
+}
 
 const CHANNEL_KIND_MAP: Record<number, ChannelPickerEntry['kind']> = {
   0: 'text',
@@ -89,14 +107,25 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     return
   }
 
+  // Rotas debaixo de /api/guilds/:guildId/... têm sempre este prefixo — computa-se uma vez para
+  // nunca haver o risco de um caminho não relacionado (ex.: /outracoisa/x/y/roles) apanhar por
+  // engano uma condição que só olha para as partes finais do caminho.
+  const isGuildRoute = parts[0] === 'api' && parts[1] === 'guilds' && parts.length >= 3
+  const isEmojiRoute = parts[0] === 'api' && parts[1] === 'emojis'
+
   // GET /api/guilds/:guildId/justifications não precisa de ligação à Discord — só lê um ficheiro
   // local — por isso a verificação de "bot ligado" fica dentro de cada rota que precisa mesmo dela,
   // em vez de bloquear tudo (incluindo rotas desconhecidas, que devem dar sempre 404).
   const needsConnection =
-    (req.method === 'GET' && parts.length === 2 && parts[0] === 'api' && parts[1] === 'guilds') ||
-    (req.method === 'GET' && parts.length === 4 && parts[0] === 'api' && parts[1] === 'guilds' && parts[3] === 'channels') ||
-    (req.method === 'POST' && parts.length === 5 && parts[0] === 'api' && parts[1] === 'guilds' && parts[3] === 'justifications') ||
-    (parts.length >= 2 && parts[0] === 'api' && parts[1] === 'emojis')
+    (req.method === 'GET' && parts.length === 2 && isGuildRoute) ||
+    (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'channels') ||
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'justifications') ||
+    isEmojiRoute ||
+    (req.method === 'POST' && parts.length === 6 && isGuildRoute && parts[3] === 'movpoints' && ['add', 'remove', 'hours'].includes(parts[5])) ||
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'movpoints' && parts[4] === 'board') ||
+    (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'members' && parts[4] === 'search') ||
+    (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'roles') ||
+    (req.method === 'GET' && parts.length === 6 && isGuildRoute && parts[3] === 'members' && parts[5] === 'profile')
 
   if (needsConnection && !discordManager.isConnected()) {
     sendJson(res, 503, { error: 'O bot não está ligado à Discord neste momento.' })
@@ -148,6 +177,129 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
       const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
       const updated = await applyJustificationChannel(guild, guildId, kind as JustificationChannelKind, channelId)
       sendJson(res, 200, updated)
+      return
+    }
+
+    // GET /api/guilds/:guildId/movpoints
+    if (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'movpoints') {
+      sendJson(res, 200, await fullLeaderboard(parts[2]))
+      return
+    }
+
+    // POST /api/guilds/:guildId/movpoints/board  { channelId: string | null }
+    if (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'movpoints' && parts[4] === 'board') {
+      const guildId = parts[2]
+      const body = (await readJsonBody(req)) as { channelId?: string | null }
+      const channelId = typeof body.channelId === 'string' ? body.channelId : null
+      if (!channelId) {
+        sendJson(res, 200, movPointsStore.setBoardChannel(guildId, null, null))
+        return
+      }
+      const guild = await discordManager.getClient().guilds.fetch(guildId)
+      const channel = await guild.channels.fetch(channelId)
+      const config = movPointsStore.setBoardChannel(guildId, channelId, channel?.name ?? channelId)
+      await refreshBoard(guild).catch(() => undefined)
+      sendJson(res, 200, config)
+      return
+    }
+
+    // GET /api/guilds/:guildId/movpoints/board
+    if (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'movpoints' && parts[4] === 'board') {
+      sendJson(res, 200, movPointsStore.getBoardConfig(parts[2]))
+      return
+    }
+
+    // GET /api/guilds/:guildId/movpoints/log
+    if (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'movpoints' && parts[4] === 'log') {
+      sendJson(res, 200, movPointsLogStore.listMovPointsLog(parts[2]))
+      return
+    }
+
+    // POST /api/guilds/:guildId/movpoints/reset
+    if (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'movpoints' && parts[4] === 'reset') {
+      const guildId = parts[2]
+      movPointsStore.resetGuild(guildId, REMOTE_API_ACTOR)
+      if (discordManager.isConnected()) {
+        const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
+        if (guild) await refreshBoard(guild).catch(() => undefined)
+      }
+      sendJson(res, 200, await fullLeaderboard(guildId))
+      return
+    }
+
+    // GET /api/guilds/:guildId/movpoints/excluded
+    if (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'movpoints' && parts[4] === 'excluded') {
+      sendJson(res, 200, excludedMembersStore.listExcluded(parts[2]))
+      return
+    }
+
+    // POST /api/guilds/:guildId/movpoints/excluded/:userId  { tag: string, excluded: boolean }
+    if (req.method === 'POST' && parts.length === 6 && isGuildRoute && parts[3] === 'movpoints' && parts[4] === 'excluded') {
+      const guildId = parts[2]
+      const userId = parts[5]
+      const body = (await readJsonBody(req)) as { tag?: string; excluded?: boolean }
+      const updated = excludedMembersStore.setExcluded(guildId, userId, body.tag ?? userId, Boolean(body.excluded))
+      if (discordManager.isConnected()) {
+        const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
+        if (guild) await refreshBoard(guild).catch(() => undefined)
+      }
+      sendJson(res, 200, updated)
+      return
+    }
+
+    // POST /api/guilds/:guildId/movpoints/:userId/add|remove|hours  { amount } | { seconds }
+    if (req.method === 'POST' && parts.length === 6 && isGuildRoute && parts[3] === 'movpoints' && ['add', 'remove', 'hours'].includes(parts[5])) {
+      const guildId = parts[2]
+      const userId = parts[4]
+      const action = parts[5]
+      const guild = await discordManager.getClient().guilds.fetch(guildId)
+      const member = await guild.members.fetch(userId)
+      const body = (await readJsonBody(req)) as { amount?: number; seconds?: number }
+      if (action === 'add') movPointsStore.addPoints(guildId, userId, member.user.tag, Number(body.amount) || 0, REMOTE_API_ACTOR)
+      else if (action === 'remove') movPointsStore.removePoints(guildId, userId, member.user.tag, Number(body.amount) || 0, REMOTE_API_ACTOR)
+      else movPointsStore.addHours(guildId, userId, member.user.tag, Number(body.seconds) || 0, REMOTE_API_ACTOR)
+      await refreshBoard(guild).catch(() => undefined)
+      sendJson(res, 200, await fullLeaderboard(guildId))
+      return
+    }
+
+    // GET /api/guilds/:guildId/members/search?q=...
+    if (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'members' && parts[4] === 'search') {
+      const guild = await discordManager.getClient().guilds.fetch(parts[2])
+      sendJson(res, 200, await moderation.searchMembers(guild, url.searchParams.get('q') ?? ''))
+      return
+    }
+
+    // GET /api/guilds/:guildId/members/:userId/profile
+    if (req.method === 'GET' && parts.length === 6 && isGuildRoute && parts[3] === 'members' && parts[5] === 'profile') {
+      const guild = await discordManager.getClient().guilds.fetch(parts[2])
+      sendJson(res, 200, await getMemberProfile(guild, parts[4]))
+      return
+    }
+
+    // GET /api/guilds/:guildId/roles
+    if (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'roles') {
+      const guild = await discordManager.getClient().guilds.fetch(parts[2])
+      sendJson(res, 200, await listGuildRoles(guild))
+      return
+    }
+
+    // GET /api/guilds/:guildId/goals
+    if (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'goals') {
+      sendJson(res, 200, roleGoalsStore.listGoals(parts[2]))
+      return
+    }
+
+    // POST /api/guilds/:guildId/goals/:roleId  { roleName, pointsGoal, hoursGoal }
+    if (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'goals') {
+      const body = (await readJsonBody(req)) as { roleName?: string; pointsGoal?: number; hoursGoal?: number }
+      sendJson(res, 200, roleGoalsStore.setGoal(parts[2], parts[4], body.roleName ?? parts[4], Number(body.pointsGoal) || 0, Number(body.hoursGoal) || 0))
+      return
+    }
+
+    // DELETE /api/guilds/:guildId/goals/:roleId
+    if (req.method === 'DELETE' && parts.length === 5 && isGuildRoute && parts[3] === 'goals') {
+      sendJson(res, 200, roleGoalsStore.removeGoal(parts[2], parts[4]))
       return
     }
 

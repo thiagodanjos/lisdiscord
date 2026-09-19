@@ -1,37 +1,54 @@
 import { useEffect, useState } from 'react'
-import { Minus, Plus, RotateCcw, ScrollText, Timer } from 'lucide-react'
+import { Minus, Plus, Radio, RotateCcw, ScrollText, Timer } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatDuration, formatRelativeDate } from '../lib/format'
 import { Avatar, Badge, Card, SectionHeading } from '../components/ui'
-import type { GuildSummary, MovPointsLogAction, MovPointsLogEntry } from '../../shared/types'
+import type { GuildSummary, MovPointsLogAction, MovPointsLogEntry, RemoteBotConfig } from '../../shared/types'
+
+const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
 
 export default function PointsLog() {
+  const [remoteConfig, setRemoteConfig] = useState<RemoteBotConfig>(EMPTY_REMOTE_CONFIG)
   const [guilds, setGuilds] = useState<GuildSummary[]>([])
   const [guildId, setGuildId] = useState('')
   const [log, setLog] = useState<MovPointsLogEntry[]>([])
   const [loading, setLoading] = useState(true)
 
+  const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
+
   useEffect(() => {
-    bridge.listGuilds().then((g) => {
+    bridge.getRemoteBotConfig().then(setRemoteConfig)
+  }, [])
+
+  useEffect(() => {
+    const listGuilds = isRemote ? bridge.listRemoteGuilds : bridge.listGuilds
+    listGuilds().then((g) => {
       setGuilds(g)
       setGuildId(g[0]?.id ?? '')
     })
-  }, [])
+  }, [isRemote])
 
   useEffect(() => {
     if (!guildId) return
     setLoading(true)
-    bridge
-      .listMovPointsLog(guildId)
+    const listLog = isRemote ? bridge.listRemoteMovPointsLog : bridge.listMovPointsLog
+    listLog(guildId)
       .then(setLog)
       .finally(() => setLoading(false))
-  }, [guildId])
+  }, [guildId, isRemote])
 
   return (
     <div className="flex flex-col gap-8">
       <SectionHeading
         title="Logs de pontos"
         subtitle="Histórico completo de quem adicionou, removeu ou repôs pontos e horas de Mov. Call — e quando"
+        action={
+          isRemote ? (
+            <Badge tone="success">
+              <Radio size={11} className="mr-1 inline" /> A usar o bot remoto
+            </Badge>
+          ) : undefined
+        }
       />
 
       <div>
