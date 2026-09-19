@@ -62,6 +62,7 @@ export const IPC = {
   openDataDir: 'settings:openDataDir',
 
   sendEmbed: 'messaging:sendEmbed',
+  sendRemoteEmbed: 'remoteBot:messaging:sendEmbed',
 
   searchMembers: 'moderation:searchMembers',
   banMember: 'moderation:ban',
@@ -175,6 +176,7 @@ export interface LisDiscordBridge {
   openDataDir(): Promise<void>
 
   sendEmbed(guildId: string, channelId: string, embed: EmbedDraft): Promise<void>
+  sendRemoteEmbed(guildId: string, channelId: string, embed: EmbedDraft): Promise<void>
 
   searchMembers(guildId: string, query: string): Promise<MemberSearchResult[]>
   banMember(guildId: string, userId: string, reason: string, deleteMessageSeconds: number): Promise<void>

@@ -1,7 +1,10 @@
+import { useRef } from 'react'
 import { Plus, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { Button, Card } from './ui'
 import { EmbedPreview } from './EmbedPreview'
+import { EmojiPickerButton } from './EmojiPickerButton'
 import { RichTextField } from './RichTextField'
+import { insertAtSelection, type TextSelection } from '../lib/textEditing'
 import type { BotEmoji, EmbedDraft } from '../../shared/types'
 
 const inputClass = 'w-full rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text placeholder:text-faint focus:border-accent focus:outline-none'
@@ -46,8 +49,21 @@ export function EmbedTemplateEditor({
   saveIcon?: typeof Save
   saveDisabled?: boolean
 }) {
+  const titleRef = useRef<HTMLInputElement>(null)
+
   function updateField(index: number, patch: Partial<EmbedDraft['fields'][number]>) {
     onChange({ ...draft, fields: draft.fields.map((f, i) => (i === index ? { ...f, ...patch } : f)) })
+  }
+
+  function insertInTitle(tag: string) {
+    const el = titleRef.current
+    const sel: TextSelection = { start: el?.selectionStart ?? draft.title.length, end: el?.selectionEnd ?? draft.title.length }
+    const result = insertAtSelection(draft.title, sel, tag)
+    onChange({ ...draft, title: result.value })
+    requestAnimationFrame(() => {
+      el?.focus()
+      el?.setSelectionRange(result.selection.start, result.selection.end)
+    })
   }
 
   const previewDraft: EmbedDraft = {
@@ -63,9 +79,19 @@ export function EmbedTemplateEditor({
       <div className="flex flex-col gap-3">
         {placeholderHint && <p className="text-xs text-faint">{placeholderHint}</p>}
 
-        <Field label="Título">
-          <input value={draft.title} onChange={(e) => onChange({ ...draft, title: e.target.value })} className={inputClass} maxLength={256} />
-        </Field>
+        <div>
+          <label className="text-xs font-semibold tracking-wide text-faint uppercase">Título</label>
+          <div className="mt-1.5 flex items-center gap-2">
+            <input
+              ref={titleRef}
+              value={draft.title}
+              onChange={(e) => onChange({ ...draft, title: e.target.value })}
+              className={inputClass}
+              maxLength={256}
+            />
+            <EmojiPickerButton emojis={emojis} onPick={insertInTitle} />
+          </div>
+        </div>
 
         <RichTextField
           label="Descrição"

@@ -167,14 +167,14 @@ export default function Goals() {
         </div>
       )}
 
-      <Modal open={editing} onClose={() => setEditing(false)} title="Meta de cargo">
-        <form onSubmit={submit} className="flex flex-col gap-4">
+      <Modal open={editing} onClose={() => setEditing(false)} title="Meta de cargo" width="lg">
+        <form onSubmit={submit} className="flex flex-col gap-5 py-1">
           <div>
-            <label className="text-xs font-semibold tracking-wide text-faint uppercase">Cargo</label>
+            <label className="text-sm font-semibold tracking-wide text-faint uppercase">Cargo</label>
             <select
               value={roleId}
               onChange={(e) => setRoleId(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-border bg-raised px-4 py-3 text-base text-text focus:border-accent focus:outline-none"
             >
               {roles.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -184,30 +184,30 @@ export default function Goals() {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold tracking-wide text-faint uppercase">Pontos mínimos</label>
+              <label className="text-sm font-semibold tracking-wide text-faint uppercase">Pontos mínimos</label>
               <input
                 type="number"
                 min={0}
                 value={pointsGoal}
                 onChange={(e) => setPointsGoal(Math.max(0, Number(e.target.value)))}
-                className="mt-1.5 w-full rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+                className="mt-2 w-full rounded-lg border border-border bg-raised px-4 py-3 text-base text-text focus:border-accent focus:outline-none"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold tracking-wide text-faint uppercase">Horas mínimas</label>
+              <label className="text-sm font-semibold tracking-wide text-faint uppercase">Horas mínimas</label>
               <input
                 type="number"
                 min={0}
                 value={hoursGoal}
                 onChange={(e) => setHoursGoal(Math.max(0, Number(e.target.value)))}
-                className="mt-1.5 w-full rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+                className="mt-2 w-full rounded-lg border border-border bg-raised px-4 py-3 text-base text-text focus:border-accent focus:outline-none"
               />
             </div>
           </div>
 
-          <p className="text-xs text-faint">
+          <p className="rounded-lg bg-card/60 p-3 text-sm text-faint">
             Um membro só aparece pronto para este cargo nos Upamentos (e no /verificar) quando tiver pelo menos estes pontos E estas
             horas de Mov. Call.
           </p>

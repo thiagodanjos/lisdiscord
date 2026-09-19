@@ -38,6 +38,7 @@ const bridge: LisDiscordBridge = {
   openDataDir: () => ipcRenderer.invoke(IPC.openDataDir),
 
   sendEmbed: (guildId, channelId, embed) => ipcRenderer.invoke(IPC.sendEmbed, guildId, channelId, embed),
+  sendRemoteEmbed: (guildId, channelId, embed) => ipcRenderer.invoke(IPC.sendRemoteEmbed, guildId, channelId, embed),
 
   searchMembers: (guildId, query) => ipcRenderer.invoke(IPC.searchMembers, guildId, query),
   banMember: (guildId, userId, reason, deleteMessageSeconds) =>

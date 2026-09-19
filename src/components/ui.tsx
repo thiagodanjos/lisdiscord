@@ -121,9 +121,8 @@ export function Modal({ open, onClose, title, children, width = 'md' }: { open: 
 
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div
-        onClick={(e) => e.stopPropagation()}
         className={cn(
           'flex max-h-[85vh] w-full flex-col rounded-2xl border border-border bg-raised shadow-card',
           width === 'lg' ? 'max-w-2xl' : 'max-w-md',

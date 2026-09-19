@@ -102,5 +102,8 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/embed-templates/${kind}`, { method: 'POST', body: { draft } }),
     resetEmbedTemplate: <T>(guildId: string, kind: string) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/embed-templates/${kind}`, { method: 'DELETE' }),
+
+    sendEmbed: (guildId: string, channelId: string, draft: unknown) =>
+      remoteFetch<void>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/messages`, { method: 'POST', body: { channelId, draft } }),
   }
 }

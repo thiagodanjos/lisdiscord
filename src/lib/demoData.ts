@@ -531,6 +531,9 @@ export const demoBridge: LisDiscordBridge = {
   async sendEmbed() {
     await delay(500)
   },
+  async sendRemoteEmbed() {
+    await delay(500)
+  },
 
   async searchMembers(_guildId, query) {
     await delay()

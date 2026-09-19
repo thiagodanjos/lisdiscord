@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Send } from 'lucide-react'
+import { Radio, Send } from 'lucide-react'
 import { bridge } from '../lib/bridge'
-import { SectionHeading } from '../components/ui'
+import { Badge, SectionHeading } from '../components/ui'
 import { EmbedTemplateEditor } from '../components/EmbedTemplateEditor'
-import type { BotEmoji, ChannelPickerEntry, EmbedDraft, GuildSummary } from '../../shared/types'
+import type { BotEmoji, ChannelPickerEntry, EmbedDraft, GuildSummary, RemoteBotConfig } from '../../shared/types'
 
 const EMPTY_DRAFT: EmbedDraft = {
   title: '',
@@ -17,7 +17,10 @@ const EMPTY_DRAFT: EmbedDraft = {
   timestamp: true,
 }
 
+const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
+
 export default function Messaging() {
+  const [remoteConfig, setRemoteConfig] = useState<RemoteBotConfig>(EMPTY_REMOTE_CONFIG)
   const [guilds, setGuilds] = useState<GuildSummary[]>([])
   const [channels, setChannels] = useState<ChannelPickerEntry[]>([])
   const [guildId, setGuildId] = useState('')
@@ -27,27 +30,37 @@ export default function Messaging() {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
 
+  const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
+
   useEffect(() => {
-    bridge.listGuilds().then((g) => {
-      setGuilds(g)
-      setGuildId(g[0]?.id ?? '')
-    })
-    bridge.listEmojis().then(setEmojis).catch(() => setEmojis([]))
+    bridge.getRemoteBotConfig().then(setRemoteConfig)
   }, [])
 
   useEffect(() => {
+    const listGuilds = isRemote ? bridge.listRemoteGuilds : bridge.listGuilds
+    listGuilds().then((g) => {
+      setGuilds(g)
+      setGuildId(g[0]?.id ?? '')
+    })
+    const listEmojis = isRemote ? bridge.listRemoteEmojis : bridge.listEmojis
+    listEmojis().then(setEmojis).catch(() => setEmojis([]))
+  }, [isRemote])
+
+  useEffect(() => {
     if (!guildId) return
-    bridge.listChannels(guildId).then((c) => {
+    const listChannels = isRemote ? bridge.listRemoteChannels : bridge.listChannels
+    listChannels(guildId).then((c) => {
       setChannels(c)
       setChannelId(c[0]?.id ?? '')
     })
-  }, [guildId])
+  }, [guildId, isRemote])
 
   async function send() {
     if (!channelId) return
     setSending(true)
     try {
-      await bridge.sendEmbed(guildId, channelId, draft)
+      const sendEmbed = isRemote ? bridge.sendRemoteEmbed : bridge.sendEmbed
+      await sendEmbed(guildId, channelId, draft)
       setSent(true)
       setTimeout(() => setSent(false), 3000)
       setDraft(EMPTY_DRAFT)
@@ -58,7 +71,17 @@ export default function Messaging() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeading title="Mensagens" subtitle="Envia uma mensagem com embed, bonita e formatada, para um canal" />
+      <SectionHeading
+        title="Mensagens"
+        subtitle="Envia uma mensagem com embed, bonita e formatada, para um canal"
+        action={
+          isRemote ? (
+            <Badge tone="success">
+              <Radio size={11} className="mr-1 inline" /> A usar o bot remoto
+            </Badge>
+          ) : undefined
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 max-w-xl">
         <div>

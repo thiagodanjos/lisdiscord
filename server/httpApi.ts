@@ -15,6 +15,7 @@ import type { ChannelPickerEntry, EmbedDraft, EmbedTemplateKind, JustificationCh
 import { discordManager } from '../electron/discord/client'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
 import { applyJustificationChannel, postJustificationMessage } from '../electron/discord/justifications'
+import { sendEmbedMessage } from '../electron/discord/messaging'
 import { getMemberProfile, listGuildRoles } from '../electron/discord/memberProfile'
 import { buildFullLeaderboard } from '../electron/discord/leaderboard'
 import { refreshBoard } from '../electron/discord/movcall'
@@ -146,7 +147,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'movpoints' && parts[4] === 'board') ||
     (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'members' && parts[4] === 'search') ||
     (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'roles') ||
-    (req.method === 'GET' && parts.length === 6 && isGuildRoute && parts[3] === 'members' && parts[5] === 'profile')
+    (req.method === 'GET' && parts.length === 6 && isGuildRoute && parts[3] === 'members' && parts[5] === 'profile') ||
+    (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'messages')
 
   if (needsConnection && !discordManager.isConnected()) {
     sendJson(res, 503, { error: 'O bot não está ligado à Discord neste momento.' })
@@ -321,6 +323,20 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     // DELETE /api/guilds/:guildId/goals/:roleId
     if (req.method === 'DELETE' && parts.length === 5 && isGuildRoute && parts[3] === 'goals') {
       sendJson(res, 200, roleGoalsStore.removeGoal(parts[2], parts[4]))
+      return
+    }
+
+    // POST /api/guilds/:guildId/messages  { channelId: string, draft: EmbedDraft }
+    if (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'messages') {
+      const guildId = parts[2]
+      const body = (await readJsonBody(req)) as { channelId?: string; draft?: EmbedDraft }
+      if (!body.channelId || !body.draft) {
+        sendJson(res, 400, { error: 'Faltam os campos "channelId" e "draft".' })
+        return
+      }
+      const guild = await discordManager.getClient().guilds.fetch(guildId)
+      await sendEmbedMessage(guild, body.channelId, body.draft)
+      sendJson(res, 200, { ok: true })
       return
     }
 

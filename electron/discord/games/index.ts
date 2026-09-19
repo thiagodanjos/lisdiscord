@@ -1,7 +1,7 @@
 import { type ChatInputCommandInteraction, EmbedBuilder, type Guild, type Interaction, type RESTPostAPIChatInputApplicationCommandsJSONBody, SlashCommandBuilder } from 'discord.js'
 import type { GameId, GameInfo } from '../../../shared/types'
 import { enabledGameIds } from '../../store/gameSettings'
-import { addEmojiBotCommandDef, handleAddEmojiBotCommand } from '../emojiCommand'
+import { addEmojiBotCommandDef, copyEmojiCommandDef, handleAddEmojiBotCommand, handleCopyEmojiCommand } from '../emojiCommand'
 import { handleGiveawayCommand, sorteioCommandDef } from '../giveawayCommand'
 import { handleMovCallCommand, movCallCommandDefs } from '../movcall'
 import { handleVerifyCommand, verificarCommandDef } from '../verifyCommand'
@@ -109,6 +109,17 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
       '`/sorteio` — cria um sorteio por reação 🎉, com assistente para escolher canal, título/prémio, duração exata e nº de vencedores. Depois de terminar, um botão "Rerolar vencedor(es)" permite escolher outro vencedor. *(gestores)*',
     )
 
+  const emojiEmbed = new EmbedBuilder()
+    .setColor(0xeb459e)
+    .setTitle('😀 Emojis do bot')
+    .setDescription(
+      [
+        '`/addemojibot nome: imagem:` — adiciona uma imagem (PNG/JPG/GIF, até 256 KB) à biblioteca de emojis do bot. *(gestores)*',
+        '`/copiaremoji emoji: [nome:]` — copia um emoji já existente (de qualquer servidor, mesmo onde o bot não está) para a biblioteca do bot. *(gestores)*',
+        '_Os emojis da biblioteca ficam disponíveis em qualquer embed editável na app (Mensagens, Pontos MOV, Justificativas)._',
+      ].join('\n'),
+    )
+
   const gamesList = GAMES.filter((g) => enabled.includes(g.id))
   const gamesEmbed = new EmbedBuilder()
     .setColor(0x3ba55c)
@@ -120,7 +131,7 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
         : '_Nenhum jogo está ativado neste servidor. Ativa em "Jogos", na app desktop._',
     )
 
-  return [movEmbed, giveawayEmbed, gamesEmbed]
+  return [movEmbed, giveawayEmbed, emojiEmbed, gamesEmbed]
 }
 
 /**
@@ -132,7 +143,7 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
  * não há duplicados nem risco de os comandos ficarem indisponíveis enquanto o global propaga.
  */
 export function buildGlobalCommandDefinitions(): CommandDef[] {
-  return [...movCallCommandDefs(), sorteioCommandDef(), verificarCommandDef(), helpCommandDef(), addEmojiBotCommandDef()]
+  return [...movCallCommandDefs(), sorteioCommandDef(), verificarCommandDef(), helpCommandDef(), addEmojiBotCommandDef(), copyEmojiCommandDef()]
 }
 
 /** Comandos por servidor: os fixos (para ficarem disponíveis já) + os jogos que o servidor ativou. */
@@ -154,6 +165,7 @@ export async function handleGameInteraction(interaction: Interaction): Promise<v
   if (await handleGiveawayCommand(interaction)) return
   if (await handleVerifyCommand(interaction)) return
   if (await handleAddEmojiBotCommand(interaction)) return
+  if (await handleCopyEmojiCommand(interaction)) return
 
   switch (interaction.commandName) {
     case 'trivia':

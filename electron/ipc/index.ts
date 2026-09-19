@@ -179,6 +179,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     await sendEmbedMessage(guild, channelId, embed)
   })
 
+  ipcMain.handle(IPC.sendRemoteEmbed, async (_e, guildId: string, channelId: string, embed: EmbedDraft): Promise<void> => {
+    await remoteApi(requireRemoteCredentials()).sendEmbed(guildId, channelId, embed)
+  })
+
   // ---- Moderação ----
   ipcMain.handle(IPC.searchMembers, async (_e, guildId: string, query: string): Promise<MemberSearchResult[]> => {
     const guild = await discordManager.getClient().guilds.fetch(guildId)
