@@ -1,4 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
+import type { Guild } from 'discord.js'
 import type {
   AppSettings,
   BackupOptions,
@@ -9,6 +10,8 @@ import type {
   ChannelPickerEntry,
   DiffEntry,
   EmbedDraft,
+  EmbedTemplateKind,
+  EmbedTemplateResponse,
   ExcludedMember,
   GameId,
   GameInfo,
@@ -55,12 +58,13 @@ import * as moderationLogStore from '../store/moderationLog'
 import * as movPointsStore from '../store/movPoints'
 import * as movPointsLogStore from '../store/movPointsLog'
 import * as justificationSettingsStore from '../store/justificationSettings'
-import { applyJustificationChannel } from '../discord/justifications'
+import { applyJustificationChannel, postJustificationMessage } from '../discord/justifications'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../discord/botEmojis'
 import { remoteApi, testRemoteBotConnection } from '../discord/remoteBotClient'
 import * as roleGoalsStore from '../store/roleGoals'
 import * as excludedMembersStore from '../store/excludedMembers'
 import * as remoteBotStore from '../store/remoteBot'
+import * as embedTemplatesStore from '../store/embedTemplates'
 import { getAppSettings, loadToken, openDataDir, saveToken } from '../store/settings'
 
 /** Identifica no log de pontos ações feitas pela app desktop (em vez de comandos do Discord). */
@@ -484,6 +488,66 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     IPC.removeRoleGoal,
     async (_e, guildId: string, roleId: string): Promise<RoleGoal[]> => roleGoalsStore.removeGoal(guildId, roleId),
   )
+
+  // ---- Templates de embed (placar de pontos, inativos, mensagens de justificativas) ----
+  ipcMain.handle(IPC.getEmbedTemplate, async (_e, guildId: string, kind: EmbedTemplateKind): Promise<EmbedTemplateResponse> => ({
+    draft: embedTemplatesStore.getTemplate(guildId, kind),
+    customized: embedTemplatesStore.isCustomized(guildId, kind),
+  }))
+
+  ipcMain.handle(
+    IPC.setEmbedTemplate,
+    async (_e, guildId: string, kind: EmbedTemplateKind, draft: EmbedDraft): Promise<EmbedTemplateResponse> => {
+      embedTemplatesStore.setTemplate(guildId, kind, draft)
+      if (discordManager.isConnected()) {
+        const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
+        if (guild) await refreshEmbedTemplateTarget(guild, kind)
+      }
+      return { draft, customized: true }
+    },
+  )
+
+  ipcMain.handle(IPC.resetEmbedTemplate, async (_e, guildId: string, kind: EmbedTemplateKind): Promise<EmbedTemplateResponse> => {
+    const draft = embedTemplatesStore.resetTemplate(guildId, kind)
+    if (discordManager.isConnected()) {
+      const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
+      if (guild) await refreshEmbedTemplateTarget(guild, kind)
+    }
+    return { draft, customized: false }
+  })
+
+  ipcMain.handle(IPC.getRemoteEmbedTemplate, async (_e, guildId: string, kind: EmbedTemplateKind): Promise<EmbedTemplateResponse> =>
+    remoteApi(requireRemoteCredentials()).getEmbedTemplate(guildId, kind),
+  )
+  ipcMain.handle(
+    IPC.setRemoteEmbedTemplate,
+    async (_e, guildId: string, kind: EmbedTemplateKind, draft: EmbedDraft): Promise<EmbedTemplateResponse> =>
+      remoteApi(requireRemoteCredentials()).setEmbedTemplate(guildId, kind, draft),
+  )
+  ipcMain.handle(IPC.resetRemoteEmbedTemplate, async (_e, guildId: string, kind: EmbedTemplateKind): Promise<EmbedTemplateResponse> =>
+    remoteApi(requireRemoteCredentials()).resetEmbedTemplate(guildId, kind),
+  )
+}
+
+/**
+ * Depois de guardar ou repor um template, atualiza logo a mensagem já publicada na Discord (o
+ * painel de pontos, ou a mensagem instrutiva de justificativas) — sem isto, a alteração só se
+ * veria na próxima vez que algo mudasse pontos ou o canal fosse reconfigurado.
+ */
+async function refreshEmbedTemplateTarget(guild: Guild, kind: EmbedTemplateKind): Promise<void> {
+  if (kind === 'pontosBoard') {
+    await refreshBoard(guild).catch(() => undefined)
+    return
+  }
+  if (kind === 'justificationFixed' || kind === 'justificationDaily') {
+    const type = kind === 'justificationFixed' ? 'fixed' : 'daily'
+    const settings = justificationSettingsStore.getSettings(guild.id)
+    const channelId = type === 'fixed' ? settings.fixedPostChannelId : settings.dailyPostChannelId
+    if (!channelId) return
+    const existingMessageId = justificationSettingsStore.getPostMessageId(guild.id, type)
+    const messageId = await postJustificationMessage(guild, type, channelId, existingMessageId).catch(() => null)
+    if (messageId) justificationSettingsStore.setPostMessageId(guild.id, type, messageId)
+  }
 }
 
 /** Corre à parte do registo dos handlers: religa agendamentos e, se houver token guardado, liga o bot sozinho. */

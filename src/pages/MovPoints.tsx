@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Clock3, Eye, EyeOff, Medal, Minus, Plus, Radio, RotateCcw, Search } from 'lucide-react'
+import { Clock3, Eye, EyeOff, Medal, Minus, Palette, Plus, Radio, RotateCcw, Search } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatDuration } from '../lib/format'
-import { Avatar, Badge, Button, Card, ConfirmDialog, EmptyState, SectionHeading } from '../components/ui'
+import { Avatar, Badge, Button, Card, ConfirmDialog, EmptyState, Modal, SectionHeading } from '../components/ui'
+import { EmbedTemplateEditor } from '../components/EmbedTemplateEditor'
 import type {
+  BotEmoji,
   ChannelPickerEntry,
+  EmbedDraft,
   ExcludedMember,
   GuildSummary,
   MemberSearchResult,
@@ -15,6 +18,17 @@ import type {
 
 const POLL_INTERVAL_MS = 8_000
 const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
+const EMPTY_EMBED_DRAFT: EmbedDraft = {
+  title: '',
+  description: '',
+  color: '#5865F2',
+  imageUrl: '',
+  thumbnailUrl: '',
+  footer: '',
+  authorName: '',
+  fields: [],
+  timestamp: true,
+}
 
 export default function MovPoints() {
   const [remoteConfig, setRemoteConfig] = useState<RemoteBotConfig>(EMPTY_REMOTE_CONFIG)
@@ -40,11 +54,23 @@ export default function MovPoints() {
   const [excludedMembers, setExcludedMembers] = useState<ExcludedMember[]>([])
   const [togglingExclusion, setTogglingExclusion] = useState<string | null>(null)
 
+  const [emojis, setEmojis] = useState<BotEmoji[]>([])
+  const [editingTemplate, setEditingTemplate] = useState(false)
+  const [templateDraft, setTemplateDraft] = useState<EmbedDraft>(EMPTY_EMBED_DRAFT)
+  const [templateCustomized, setTemplateCustomized] = useState(false)
+  const [templateSaving, setTemplateSaving] = useState(false)
+  const [templateResetting, setTemplateResetting] = useState(false)
+
   const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
 
   useEffect(() => {
     bridge.getRemoteBotConfig().then(setRemoteConfig)
   }, [])
+
+  useEffect(() => {
+    const listEmojis = isRemote ? bridge.listRemoteEmojis : bridge.listEmojis
+    listEmojis().then(setEmojis).catch(() => setEmojis([]))
+  }, [isRemote])
 
   useEffect(() => {
     const listGuilds = isRemote ? bridge.listRemoteGuilds : bridge.listGuilds
@@ -98,6 +124,37 @@ export default function MovPoints() {
       setBoard(updated)
     } finally {
       setSavingBoard(false)
+    }
+  }
+
+  async function openTemplateEditor() {
+    setEditingTemplate(true)
+    const getTemplate = isRemote ? bridge.getRemoteEmbedTemplate : bridge.getEmbedTemplate
+    const { draft, customized } = await getTemplate(guildId, 'pontosBoard')
+    setTemplateDraft(draft)
+    setTemplateCustomized(customized)
+  }
+
+  async function saveTemplate() {
+    setTemplateSaving(true)
+    try {
+      const setTemplate = isRemote ? bridge.setRemoteEmbedTemplate : bridge.setEmbedTemplate
+      const { customized } = await setTemplate(guildId, 'pontosBoard', templateDraft)
+      setTemplateCustomized(customized)
+    } finally {
+      setTemplateSaving(false)
+    }
+  }
+
+  async function resetTemplate() {
+    setTemplateResetting(true)
+    try {
+      const reset = isRemote ? bridge.resetRemoteEmbedTemplate : bridge.resetEmbedTemplate
+      const { draft, customized } = await reset(guildId, 'pontosBoard')
+      setTemplateDraft(draft)
+      setTemplateCustomized(customized)
+    } finally {
+      setTemplateResetting(false)
     }
   }
 
@@ -221,6 +278,10 @@ export default function MovPoints() {
           </select>
           <Button onClick={saveBoard} loading={savingBoard} disabled={boardChannelId === (board?.channelId ?? '')}>
             Guardar
+          </Button>
+          <Button variant="dark" onClick={openTemplateEditor}>
+            <Palette size={14} />
+            Personalizar placar
           </Button>
         </div>
       </section>
@@ -424,6 +485,33 @@ export default function MovPoints() {
         danger
         confirmLabel={resetting ? 'A apagar…' : 'Sim, apagar tudo'}
       />
+
+      <Modal open={editingTemplate} onClose={() => setEditingTemplate(false)} title="Personalizar placar de pontos" width="lg">
+        <EmbedTemplateEditor
+          draft={templateDraft}
+          onChange={setTemplateDraft}
+          emojis={emojis}
+          botName="LisDiscord Bot"
+          onSave={saveTemplate}
+          onReset={resetTemplate}
+          saving={templateSaving}
+          resetting={templateResetting}
+          customized={templateCustomized}
+          placeholderHint='Usa {lista} na descrição (ou num campo) para indicar onde entra a lista de membros — {servidor} e {atualizado} também podem ser usados em qualquer texto.'
+          previewPlaceholders={{
+            lista: previewLista(leaderboard),
+            servidor: guilds.find((g) => g.id === guildId)?.name ?? 'este servidor',
+            atualizado: 'agora mesmo',
+          }}
+        />
+      </Modal>
     </div>
   )
+}
+
+function previewLista(leaderboard: MovPointsEntry[]): string {
+  const medals = ['🥇', '🥈', '🥉']
+  const top = leaderboard.slice(0, 3)
+  if (top.length === 0) return '_Este servidor ainda não tem membros para mostrar._'
+  return top.map((entry, i) => `${medals[i] ?? `${i + 1}.`} @${entry.tag} — ${entry.points} pontos`).join('\n')
 }

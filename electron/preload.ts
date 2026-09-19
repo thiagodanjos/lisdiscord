@@ -117,6 +117,13 @@ const bridge: LisDiscordBridge = {
   setRemoteRoleGoal: (guildId, roleId, roleName, pointsGoal, hoursGoal) =>
     ipcRenderer.invoke(IPC.setRemoteRoleGoal, guildId, roleId, roleName, pointsGoal, hoursGoal),
   removeRemoteRoleGoal: (guildId, roleId) => ipcRenderer.invoke(IPC.removeRemoteRoleGoal, guildId, roleId),
+
+  getEmbedTemplate: (guildId, kind) => ipcRenderer.invoke(IPC.getEmbedTemplate, guildId, kind),
+  setEmbedTemplate: (guildId, kind, draft) => ipcRenderer.invoke(IPC.setEmbedTemplate, guildId, kind, draft),
+  resetEmbedTemplate: (guildId, kind) => ipcRenderer.invoke(IPC.resetEmbedTemplate, guildId, kind),
+  getRemoteEmbedTemplate: (guildId, kind) => ipcRenderer.invoke(IPC.getRemoteEmbedTemplate, guildId, kind),
+  setRemoteEmbedTemplate: (guildId, kind, draft) => ipcRenderer.invoke(IPC.setRemoteEmbedTemplate, guildId, kind, draft),
+  resetRemoteEmbedTemplate: (guildId, kind) => ipcRenderer.invoke(IPC.resetRemoteEmbedTemplate, guildId, kind),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

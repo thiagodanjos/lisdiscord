@@ -20,6 +20,8 @@ import {
 } from 'discord.js'
 import type { MovCallType, MovPointsEntry } from '../../shared/types'
 import * as movPoints from '../store/movPoints'
+import * as embedTemplates from '../store/embedTemplates'
+import { buildEmbedFromDraft } from './embedTemplate'
 import { buildFullLeaderboard } from './leaderboard'
 
 const POINTS_BY_TYPE: Record<MovCallType, number> = { normal: 10, tematica: 15 }
@@ -710,15 +712,10 @@ async function buildInactiveEmbed(guild: Guild): Promise<EmbedBuilder> {
 
   const lines = shown.map((entry) => `⚠️ <@${entry.userId}> — ${entry.points} pontos · ${formatDuration(entry.totalSeconds)}`)
   if (remaining > 0) lines.push(`_+ ${remaining} membro(s) inativo(s) não mostrado(s)._`)
+  const lista = lines.length > 0 ? lines.join('\n') : '_Ninguém está abaixo do limite — toda a gente tem pontos e pelo menos 5 horas de Mov. Call._'
 
-  return new EmbedBuilder()
-    .setColor(0xed4245)
-    .setTitle('⚠️ MEMBROS INATIVOS')
-    .setDescription(
-      lines.length > 0 ? lines.join('\n') : '_Ninguém está abaixo do limite — toda a gente tem pontos e pelo menos 5 horas de Mov. Call._',
-    )
-    .setFooter({ text: `${guild.name} · sem pontos ou menos de 5h de Mov. Call · não inclui bots` })
-    .setTimestamp(new Date())
+  const draft = embedTemplates.getTemplate(guild.id, 'inativos')
+  return buildEmbedFromDraft(draft, { lista, servidor: guild.name })
 }
 
 // ==========================================================================
@@ -757,13 +754,10 @@ async function buildBoardEmbed(guild: Guild): Promise<EmbedBuilder> {
     return `${medals[i] ?? `${i + 1}.`} <@${entry.userId}> — ${entry.points} pontos${hoursText}`
   })
   if (remaining > 0) lines.push(`_+ ${remaining} membro(s) não mostrado(s)._`)
+  const lista = lines.length > 0 ? lines.join('\n') : '_Este servidor ainda não tem membros para mostrar._'
 
-  return new EmbedBuilder()
-    .setColor(0xf0b232)
-    .setTitle('🏅 PONTOS DE MOV. CALL')
-    .setDescription(lines.length > 0 ? lines.join('\n') : '_Este servidor ainda não tem membros para mostrar._')
-    .setFooter({ text: `${guild.name} · atualizado em ${formatBrasiliaDate(new Date())}` })
-    .setTimestamp(new Date())
+  const draft = embedTemplates.getTemplate(guild.id, 'pontosBoard')
+  return buildEmbedFromDraft(draft, { lista, servidor: guild.name, atualizado: formatBrasiliaDate(new Date()) })
 }
 
 // ==========================================================================

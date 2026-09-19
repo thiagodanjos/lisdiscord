@@ -1,8 +1,30 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Calendar, CalendarClock, Cable, MessageSquareWarning, Pin, Radio } from 'lucide-react'
+import { AlertTriangle, Calendar, CalendarClock, Cable, MessageSquareWarning, Palette, Pin, Radio } from 'lucide-react'
 import { bridge } from '../lib/bridge'
-import { Badge, Button, Card, SectionHeading } from '../components/ui'
-import type { ChannelPickerEntry, GuildSummary, JustificationChannelKind, JustificationSettings, RemoteBotConfig } from '../../shared/types'
+import { Badge, Button, Card, Modal, SectionHeading } from '../components/ui'
+import { EmbedTemplateEditor } from '../components/EmbedTemplateEditor'
+import type {
+  BotEmoji,
+  ChannelPickerEntry,
+  EmbedDraft,
+  EmbedTemplateKind,
+  GuildSummary,
+  JustificationChannelKind,
+  JustificationSettings,
+  RemoteBotConfig,
+} from '../../shared/types'
+
+const EMPTY_EMBED_DRAFT: EmbedDraft = {
+  title: '',
+  description: '',
+  color: '#5865F2',
+  imageUrl: '',
+  thumbnailUrl: '',
+  footer: '',
+  authorName: '',
+  fields: [],
+  timestamp: true,
+}
 
 const EMPTY_SETTINGS: JustificationSettings = {
   fixedPostChannelId: null,
@@ -24,6 +46,7 @@ const FIELDS: {
   icon: typeof Pin
   idKey: keyof JustificationSettings
   nameKey: keyof JustificationSettings
+  templateKind?: EmbedTemplateKind
 }[] = [
   {
     kind: 'fixedPost',
@@ -32,6 +55,7 @@ const FIELDS: {
     icon: Calendar,
     idKey: 'fixedPostChannelId',
     nameKey: 'fixedPostChannelName',
+    templateKind: 'justificationFixed',
   },
   {
     kind: 'dailyPost',
@@ -40,6 +64,7 @@ const FIELDS: {
     icon: CalendarClock,
     idKey: 'dailyPostChannelId',
     nameKey: 'dailyPostChannelName',
+    templateKind: 'justificationDaily',
   },
   {
     kind: 'fixedLog',
@@ -80,6 +105,13 @@ export default function Justifications() {
   const [saving, setSaving] = useState<JustificationChannelKind | null>(null)
   const [errors, setErrors] = useState<Partial<Record<JustificationChannelKind, string>>>({})
 
+  const [emojis, setEmojis] = useState<BotEmoji[]>([])
+  const [editingTemplate, setEditingTemplate] = useState<EmbedTemplateKind | null>(null)
+  const [templateDraft, setTemplateDraft] = useState<EmbedDraft>(EMPTY_EMBED_DRAFT)
+  const [templateCustomized, setTemplateCustomized] = useState(false)
+  const [templateSaving, setTemplateSaving] = useState(false)
+  const [templateResetting, setTemplateResetting] = useState(false)
+
   const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
 
   useEffect(() => {
@@ -101,6 +133,11 @@ export default function Justifications() {
     loadSettings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guildId, isRemote])
+
+  useEffect(() => {
+    const listEmojis = isRemote ? bridge.listRemoteEmojis : bridge.listEmojis
+    listEmojis().then(setEmojis).catch(() => setEmojis([]))
+  }, [isRemote])
 
   function loadSettings() {
     if (!guildId) return
@@ -127,6 +164,39 @@ export default function Justifications() {
       setErrors((prev) => ({ ...prev, [kind]: err instanceof Error ? err.message : 'Ocorreu um erro inesperado.' }))
     } finally {
       setSaving(null)
+    }
+  }
+
+  async function openTemplateEditor(kind: EmbedTemplateKind) {
+    setEditingTemplate(kind)
+    const getTemplate = isRemote ? bridge.getRemoteEmbedTemplate : bridge.getEmbedTemplate
+    const { draft, customized } = await getTemplate(guildId, kind)
+    setTemplateDraft(draft)
+    setTemplateCustomized(customized)
+  }
+
+  async function saveTemplate() {
+    if (!editingTemplate) return
+    setTemplateSaving(true)
+    try {
+      const setTemplate = isRemote ? bridge.setRemoteEmbedTemplate : bridge.setEmbedTemplate
+      const { customized } = await setTemplate(guildId, editingTemplate, templateDraft)
+      setTemplateCustomized(customized)
+    } finally {
+      setTemplateSaving(false)
+    }
+  }
+
+  async function resetTemplate() {
+    if (!editingTemplate) return
+    setTemplateResetting(true)
+    try {
+      const reset = isRemote ? bridge.resetRemoteEmbedTemplate : bridge.resetEmbedTemplate
+      const { draft, customized } = await reset(guildId, editingTemplate)
+      setTemplateDraft(draft)
+      setTemplateCustomized(customized)
+    } finally {
+      setTemplateResetting(false)
     }
   }
 
@@ -292,6 +362,12 @@ export default function Justifications() {
                 <Button onClick={() => save(field.kind)} loading={saving === field.kind} disabled={drafts[field.kind] === (currentId ?? '')}>
                   Guardar
                 </Button>
+                {field.templateKind && (
+                  <Button variant="dark" onClick={() => openTemplateEditor(field.templateKind!)}>
+                    <Palette size={14} />
+                    Personalizar mensagem
+                  </Button>
+                )}
               </div>
               {errors[field.kind] && <p className="text-xs text-danger">❌ {errors[field.kind]}</p>}
             </Card>
@@ -310,6 +386,20 @@ export default function Justifications() {
           justificar-se — é para lá que cada justificativa (e cada pedido de remoção) é enviada, para os administradores verificarem.
         </p>
       </Card>
+
+      <Modal open={editingTemplate !== null} onClose={() => setEditingTemplate(null)} title="Personalizar mensagem" width="lg">
+        <EmbedTemplateEditor
+          draft={templateDraft}
+          onChange={setTemplateDraft}
+          emojis={emojis}
+          botName="LisDiscord Bot"
+          onSave={saveTemplate}
+          onReset={resetTemplate}
+          saving={templateSaving}
+          resetting={templateResetting}
+          customized={templateCustomized}
+        />
+      </Modal>
     </div>
   )
 }

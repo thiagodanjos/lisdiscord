@@ -45,6 +45,7 @@ export const paths = {
   justificationSettingsFile: path.join(root, 'justification-settings.json'),
   remoteBotFile: path.join(root, 'remote-bot.json'),
   remoteBotKeyFile: path.join(root, 'remote-bot-key.enc'),
+  embedTemplatesFile: path.join(root, 'embed-templates.json'),
 }
 
 export function ensureDataDirs(): void {

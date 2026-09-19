@@ -8,6 +8,8 @@ import type {
   ChannelPickerEntry,
   DiffEntry,
   EmbedDraft,
+  EmbedTemplateKind,
+  EmbedTemplateResponse,
   ExcludedMember,
   GameId,
   GameInfo,
@@ -134,6 +136,13 @@ export const IPC = {
   listRemoteRoleGoals: 'remoteBot:goals:list',
   setRemoteRoleGoal: 'remoteBot:goals:set',
   removeRemoteRoleGoal: 'remoteBot:goals:remove',
+
+  getEmbedTemplate: 'embedTemplates:get',
+  setEmbedTemplate: 'embedTemplates:set',
+  resetEmbedTemplate: 'embedTemplates:reset',
+  getRemoteEmbedTemplate: 'remoteBot:embedTemplates:get',
+  setRemoteEmbedTemplate: 'remoteBot:embedTemplates:set',
+  resetRemoteEmbedTemplate: 'remoteBot:embedTemplates:reset',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -240,4 +249,11 @@ export interface LisDiscordBridge {
   listRemoteRoleGoals(guildId: string): Promise<RoleGoal[]>
   setRemoteRoleGoal(guildId: string, roleId: string, roleName: string, pointsGoal: number, hoursGoal: number): Promise<RoleGoal[]>
   removeRemoteRoleGoal(guildId: string, roleId: string): Promise<RoleGoal[]>
+
+  getEmbedTemplate(guildId: string, kind: EmbedTemplateKind): Promise<EmbedTemplateResponse>
+  setEmbedTemplate(guildId: string, kind: EmbedTemplateKind, draft: EmbedDraft): Promise<EmbedTemplateResponse>
+  resetEmbedTemplate(guildId: string, kind: EmbedTemplateKind): Promise<EmbedTemplateResponse>
+  getRemoteEmbedTemplate(guildId: string, kind: EmbedTemplateKind): Promise<EmbedTemplateResponse>
+  setRemoteEmbedTemplate(guildId: string, kind: EmbedTemplateKind, draft: EmbedDraft): Promise<EmbedTemplateResponse>
+  resetRemoteEmbedTemplate(guildId: string, kind: EmbedTemplateKind): Promise<EmbedTemplateResponse>
 }

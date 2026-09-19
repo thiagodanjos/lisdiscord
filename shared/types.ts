@@ -215,6 +215,20 @@ export interface EmbedDraft {
   timestamp: boolean
 }
 
+/**
+ * Os embeds fixos que o bot publica sozinho (placar de pontos, inativos, mensagens de
+ * justificativas) — antes só editáveis no código, agora um `EmbedDraft` como qualquer outro,
+ * guardado por servidor. `pontosBoard` e `inativos` podem usar `{lista}` na descrição (e nos
+ * campos) para indicar onde entra a lista dinâmica de membros — sem esse token, a lista não
+ * aparece em lado nenhum, por isso o editor avisa disso.
+ */
+export type EmbedTemplateKind = 'pontosBoard' | 'inativos' | 'justificationFixed' | 'justificationDaily'
+
+export interface EmbedTemplateResponse {
+  draft: EmbedDraft
+  customized: boolean
+}
+
 // ==========================================================================
 // Moderação
 // ==========================================================================

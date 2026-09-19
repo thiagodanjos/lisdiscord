@@ -5,6 +5,8 @@ import type {
   BotEmoji,
   ChannelBackup,
   DiffEntry,
+  EmbedDraft,
+  EmbedTemplateKind,
   EmojiBackup,
   ExcludedMember,
   GameId,
@@ -284,6 +286,31 @@ let emojiLibraryData: BotEmoji[] = [
 function fakeEmojiId(): string {
   return `emoji${Math.random().toString(36).slice(2, 10)}`
 }
+
+function emptyEmbedDraft(partial: Partial<EmbedDraft>): EmbedDraft {
+  return { title: '', description: '', color: '#5865F2', imageUrl: '', thumbnailUrl: '', footer: '', authorName: '', fields: [], timestamp: true, ...partial }
+}
+
+const DEFAULT_DEMO_TEMPLATES: Record<EmbedTemplateKind, EmbedDraft> = {
+  pontosBoard: emptyEmbedDraft({ title: '🏅 PONTOS DE MOV. CALL', description: '{lista}', color: '#F0B232', footer: '{servidor} · atualizado em {atualizado}' }),
+  inativos: emptyEmbedDraft({ title: '⚠️ MEMBROS INATIVOS', description: '{lista}', color: '#ED4245', footer: '{servidor} · sem pontos ou menos de 5h de Mov. Call' }),
+  justificationFixed: emptyEmbedDraft({
+    title: '👑 Usem este canal para fazer as justificativas fixas',
+    description: 'Quando vais ter um compromisso toda a semana, sempre no mesmo horário.',
+    color: '#F0B232',
+    footer: 'A tua justificativa fica registada com o teu nome.',
+    timestamp: false,
+  }),
+  justificationDaily: emptyEmbedDraft({
+    title: '👑 Usem este canal para fazer as justificativas diárias',
+    description: 'Quando vais ter um compromisso de última hora, só por hoje.',
+    color: '#5865F2',
+    footer: 'A tua justificativa fica registada com o teu nome.',
+    timestamp: false,
+  }),
+}
+
+let embedTemplatesData: Record<string, Partial<Record<EmbedTemplateKind, EmbedDraft>>> = {}
 
 /** Espelha buildFullLeaderboard do lado real: mostra sempre todos os membros (não-bots), com 0/0 para quem nunca teve pontos, exceto quem foi escondido. */
 function fullDemoLeaderboard(guildId: string): MovPointsEntry[] {
@@ -902,5 +929,32 @@ export const demoBridge: LisDiscordBridge = {
   },
   async removeRemoteRoleGoal(guildId, roleId) {
     return demoBridge.removeRoleGoal(guildId, roleId)
+  },
+
+  async getEmbedTemplate(guildId, kind) {
+    await delay()
+    const draft = embedTemplatesData[guildId]?.[kind] ?? DEFAULT_DEMO_TEMPLATES[kind]
+    return { draft, customized: Boolean(embedTemplatesData[guildId]?.[kind]) }
+  },
+  async setEmbedTemplate(guildId, kind, draft) {
+    await delay()
+    embedTemplatesData = { ...embedTemplatesData, [guildId]: { ...embedTemplatesData[guildId], [kind]: draft } }
+    return { draft, customized: true }
+  },
+  async resetEmbedTemplate(guildId, kind) {
+    await delay()
+    const guildTemplates = { ...embedTemplatesData[guildId] }
+    delete guildTemplates[kind]
+    embedTemplatesData = { ...embedTemplatesData, [guildId]: guildTemplates }
+    return { draft: DEFAULT_DEMO_TEMPLATES[kind], customized: false }
+  },
+  async getRemoteEmbedTemplate(guildId, kind) {
+    return demoBridge.getEmbedTemplate(guildId, kind)
+  },
+  async setRemoteEmbedTemplate(guildId, kind, draft) {
+    return demoBridge.setEmbedTemplate(guildId, kind, draft)
+  },
+  async resetRemoteEmbedTemplate(guildId, kind) {
+    return demoBridge.resetEmbedTemplate(guildId, kind)
   },
 }

@@ -46,6 +46,7 @@ O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidore
 - **Upamentos** — define, na página **Metas** da app, quantos pontos e horas de Mov. Call cada cargo exige para ser promovido; na página **Upamentos**, escolhe um membro para ver os cargos, pontos e horas dele, e escolhe um dos cargos dele para veres logo se já cumpre a meta (🟢 ✅ pode upar, ou 🔴 ❌ ainda não) — tudo só na app. No Discord, `/verificar @membro` mostra a mesma informação: cargos, pontos, horas, e se cada cargo já está cumprido
 - **Ajuda** — `/help` mostra todos os comandos do bot organizados por categoria, com uma explicação rápida do que cada um faz e quem pode usá-lo
 - **Emojis** — a página **Emojis** da app (ou `/addemojibot nome:… imagem:…` no Discord, precisa de "Gerir servidor") adiciona imagens (PNG/JPG/GIF/WEBP, até 256 KB) à biblioteca de emojis da aplicação do bot — ficam disponíveis em qualquer embed ou mensagem, em qualquer servidor onde o bot esteja, sem precisar de permissão de emojis num servidor específico
+- **Personalizar embeds fixos** — o botão **Personalizar placar** (em Pontos MOV) e **Personalizar mensagem** (em Justificativas, nos canais de publicação fixa e diária) abrem um editor completo — título, descrição, cor, imagem, miniatura, rodapé, autor, campos e emojis do bot (incluindo pré-visualização em tempo real) — para os embeds que o bot publica sozinho; **Repor original** volta ao texto de fábrica a qualquer momento. O placar de pontos usa `{lista}`, `{servidor}` e `{atualizado}` como marcadores para a parte que continua dinâmica
 
 **Geral**
 - Modo demonstração — explora a app inteira com dados fictícios, sem bot nem token nenhum
@@ -123,7 +124,8 @@ electron/
 │   ├── movcall.ts                  # /movcall, /movhoras, /pontosmov, /pontosmovadmin, /resetmovcall, /inativos e o painel de pontos em tempo real
 │   ├── justifications.ts            # mensagem + botões Justificar/Remover Justificativa nos canais configurados
 │   ├── botEmojis.ts                  # biblioteca de emojis da aplicação do bot (client.application.emojis)
-│   └── emojiCommand.ts                # /addemojibot — adiciona um emoji à biblioteca pela Discord
+│   ├── emojiCommand.ts                # /addemojibot — adiciona um emoji à biblioteca pela Discord
+│   └── embedTemplate.ts                # constrói um embed a partir de um EmbedDraft (com marcadores {token})
 ├── store/               # persistência local (JSON em disco, escrita atómica, token encriptado)
 │   └── fileStore.ts       # leitura/escrita segura de JSON partilhada por todos os ficheiros de dados
 └── ipc/                  # liga os pedidos da interface às funções acima

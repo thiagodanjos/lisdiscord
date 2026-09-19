@@ -15,6 +15,8 @@ import {
   UserSelectMenuBuilder,
 } from 'discord.js'
 import type { JustificationChannelKind, JustificationSettings, JustificationType } from '../../shared/types'
+import { buildEmbedFromDraft } from './embedTemplate'
+import * as embedTemplates from '../store/embedTemplates'
 import * as justificationSettingsStore from '../store/justificationSettings'
 
 const SETUP_TIMEOUT_MS = 10 * 60_000
@@ -43,7 +45,7 @@ export async function postJustificationMessage(
     throw new Error('Não encontrei esse canal ou ele não aceita mensagens de texto.')
   }
 
-  const embed = buildInstructionEmbed(type)
+  const embed = buildInstructionEmbed(type, guild)
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId(`justification:file:${type}`).setLabel('Justificar').setStyle(ButtonStyle.Primary).setEmoji('📝'),
     new ButtonBuilder()
@@ -135,35 +137,10 @@ export async function applyJustificationChannel(
   return updated
 }
 
-function buildInstructionEmbed(type: JustificationType): EmbedBuilder {
-  if (type === 'fixed') {
-    return new EmbedBuilder()
-      .setColor(0xf0b232)
-      .setTitle('👑 Usem este canal para fazer as justificativas fixas')
-      .setDescription(
-        '> **Quando utilizar a justificativa fixa?** 🤔\n\n' +
-          'Quando vais ter um compromisso **toda a semana**, sempre no mesmo horário, e por isso não vais conseguir participar de algumas atividades.\n\n' +
-          '**Exemplos:**\n' +
-          '• Estudas de manhã → todas as atividades de manhã não vais conseguir participar;\n' +
-          '• Trabalhas à tarde → todas as atividades de tarde não vais conseguir participar;\n\n' +
-          'Clica em **Justificar** abaixo, confirma que és tu, indica os **dias da semana e o horário** (ex: *Segunda à sexta - 14:00 até 18:00*) e o motivo. No fim, revê e confirma o envio.',
-      )
-      .setFooter({ text: 'A tua justificativa fica registada com o teu nome — usa com responsabilidade.' })
-  }
-
-  return new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle('👑 Usem este canal para fazer as justificativas diárias')
-    .setDescription(
-      '> **Quando utilizar a justificativa diária?** 🤑\n\n' +
-        'Quando vais ter um compromisso de **última hora**, só por hoje, e por isso não vais conseguir participar de alguma atividade.\n\n' +
-        '**Exemplos:**\n' +
-        '• Precisas de sair da Mov porque vais ao mercado;\n' +
-        '• Precisas de ir ao hospital;\n' +
-        '• Vais sair de casa, etc;\n\n' +
-        'Clica em **Justificar** abaixo, confirma que és tu, indica o **horário de hoje** (ex: *14:00 até 18:00*) e o motivo. No fim, revê e confirma o envio.',
-    )
-    .setFooter({ text: 'A tua justificativa fica registada com o teu nome — usa com responsabilidade.' })
+function buildInstructionEmbed(type: JustificationType, guild: Guild): EmbedBuilder {
+  const kind = type === 'fixed' ? 'justificationFixed' : 'justificationDaily'
+  const draft = embedTemplates.getTemplate(guild.id, kind)
+  return buildEmbedFromDraft(draft, { servidor: guild.name })
 }
 
 // ==========================================================================

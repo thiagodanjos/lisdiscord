@@ -10,10 +10,11 @@
 // firewall da máquina a apenas os IPs de confiança, além de guardar bem a chave.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
-import type { ChannelPickerEntry, JustificationChannelKind, MovPointsEntry } from '../shared/types'
+import type { Guild } from 'discord.js'
+import type { ChannelPickerEntry, EmbedDraft, EmbedTemplateKind, JustificationChannelKind, MovPointsEntry } from '../shared/types'
 import { discordManager } from '../electron/discord/client'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
-import { applyJustificationChannel } from '../electron/discord/justifications'
+import { applyJustificationChannel, postJustificationMessage } from '../electron/discord/justifications'
 import { getMemberProfile, listGuildRoles } from '../electron/discord/memberProfile'
 import { buildFullLeaderboard } from '../electron/discord/leaderboard'
 import { refreshBoard } from '../electron/discord/movcall'
@@ -23,6 +24,26 @@ import * as movPointsStore from '../electron/store/movPoints'
 import * as movPointsLogStore from '../electron/store/movPointsLog'
 import * as excludedMembersStore from '../electron/store/excludedMembers'
 import * as roleGoalsStore from '../electron/store/roleGoals'
+import * as embedTemplatesStore from '../electron/store/embedTemplates'
+
+const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = ['pontosBoard', 'inativos', 'justificationFixed', 'justificationDaily']
+
+/** Mesma lógica que o IPC da app usa — atualiza logo a mensagem já publicada quando o template muda. */
+async function refreshEmbedTemplateTarget(guild: Guild, kind: EmbedTemplateKind): Promise<void> {
+  if (kind === 'pontosBoard') {
+    await refreshBoard(guild).catch(() => undefined)
+    return
+  }
+  if (kind === 'justificationFixed' || kind === 'justificationDaily') {
+    const type = kind === 'justificationFixed' ? 'fixed' : 'daily'
+    const settings = justificationSettingsStore.getSettings(guild.id)
+    const channelId = type === 'fixed' ? settings.fixedPostChannelId : settings.dailyPostChannelId
+    if (!channelId) return
+    const existingMessageId = justificationSettingsStore.getPostMessageId(guild.id, type)
+    const messageId = await postJustificationMessage(guild, type, channelId, existingMessageId).catch(() => null)
+    if (messageId) justificationSettingsStore.setPostMessageId(guild.id, type, messageId)
+  }
+}
 
 /** Identifica no log de pontos ações feitas pelo bot remoto (partilhado com a app desktop). */
 const REMOTE_API_ACTOR = 'Aplicação desktop (via bot remoto)'
@@ -300,6 +321,60 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     // DELETE /api/guilds/:guildId/goals/:roleId
     if (req.method === 'DELETE' && parts.length === 5 && isGuildRoute && parts[3] === 'goals') {
       sendJson(res, 200, roleGoalsStore.removeGoal(parts[2], parts[4]))
+      return
+    }
+
+    // GET /api/guilds/:guildId/embed-templates/:kind
+    if (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'embed-templates') {
+      const kind = parts[4]
+      if (!EMBED_TEMPLATE_KINDS.includes(kind as EmbedTemplateKind)) {
+        sendJson(res, 400, { error: `Tipo de template inválido: ${kind}` })
+        return
+      }
+      const guildId = parts[2]
+      sendJson(res, 200, {
+        draft: embedTemplatesStore.getTemplate(guildId, kind as EmbedTemplateKind),
+        customized: embedTemplatesStore.isCustomized(guildId, kind as EmbedTemplateKind),
+      })
+      return
+    }
+
+    // POST /api/guilds/:guildId/embed-templates/:kind  { draft: EmbedDraft }
+    if (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'embed-templates') {
+      const kind = parts[4]
+      if (!EMBED_TEMPLATE_KINDS.includes(kind as EmbedTemplateKind)) {
+        sendJson(res, 400, { error: `Tipo de template inválido: ${kind}` })
+        return
+      }
+      const guildId = parts[2]
+      const body = (await readJsonBody(req)) as { draft?: EmbedDraft }
+      if (!body.draft) {
+        sendJson(res, 400, { error: 'Falta o campo "draft".' })
+        return
+      }
+      embedTemplatesStore.setTemplate(guildId, kind as EmbedTemplateKind, body.draft)
+      if (discordManager.isConnected()) {
+        const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
+        if (guild) await refreshEmbedTemplateTarget(guild, kind as EmbedTemplateKind)
+      }
+      sendJson(res, 200, { draft: body.draft, customized: true })
+      return
+    }
+
+    // DELETE /api/guilds/:guildId/embed-templates/:kind
+    if (req.method === 'DELETE' && parts.length === 5 && isGuildRoute && parts[3] === 'embed-templates') {
+      const kind = parts[4]
+      if (!EMBED_TEMPLATE_KINDS.includes(kind as EmbedTemplateKind)) {
+        sendJson(res, 400, { error: `Tipo de template inválido: ${kind}` })
+        return
+      }
+      const guildId = parts[2]
+      const draft = embedTemplatesStore.resetTemplate(guildId, kind as EmbedTemplateKind)
+      if (discordManager.isConnected()) {
+        const guild = await discordManager.getClient().guilds.fetch(guildId).catch(() => null)
+        if (guild) await refreshEmbedTemplateTarget(guild, kind as EmbedTemplateKind)
+      }
+      sendJson(res, 200, { draft, customized: false })
       return
     }
 

@@ -95,5 +95,12 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
       }),
     removeRoleGoal: <T>(guildId: string, roleId: string) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/goals/${encodeURIComponent(roleId)}`, { method: 'DELETE' }),
+
+    getEmbedTemplate: <T>(guildId: string, kind: string) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/embed-templates/${kind}`),
+    setEmbedTemplate: <T>(guildId: string, kind: string, draft: unknown) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/embed-templates/${kind}`, { method: 'POST', body: { draft } }),
+    resetEmbedTemplate: <T>(guildId: string, kind: string) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/embed-templates/${kind}`, { method: 'DELETE' }),
   }
 }
