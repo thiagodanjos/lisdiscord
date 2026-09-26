@@ -130,6 +130,8 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
     setVerificationSettings: <T>(guildId: string, settings: unknown) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification/settings`, { method: 'POST', body: { settings } }),
     listVerifications: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification`),
+    getVerificationDiagnostics: <T>(guildId: string) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification/diagnostics`),
 
     sendEmbed: <T>(guildId: string, channelId: string, draft: unknown, options?: unknown) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/messages`, { method: 'POST', body: { channelId, draft, options } }),

@@ -24,6 +24,7 @@ import type {
   JustificationSettings,
   MovNotice,
   MovNoticeInput,
+  VerificationDiagnostics,
   VerificationEntry,
   VerificationSettings,
   LoginHistoryEntry,
@@ -81,7 +82,7 @@ import * as auth from '../auth/auth'
 import * as movNoticesStore from '../store/movNotices'
 import * as verificationStore from '../store/verification'
 import { createNotice } from '../discord/movNotices'
-import { applyVerificationSettings } from '../discord/verification'
+import { applyVerificationSettings, getVerificationDiagnostics } from '../discord/verification'
 
 /** Identifica no log de pontos ações feitas pela app desktop (em vez de comandos do Discord). */
 const DESKTOP_APP_ACTOR = 'Aplicação desktop'
@@ -456,6 +457,12 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   )
   ipcMain.handle(IPC.setRemoteVerificationSettings, async (_e, guildId: string, settings: VerificationSettings): Promise<VerificationSettings> =>
     remoteApi(requireRemoteCredentials()).setVerificationSettings(guildId, settings),
+  )
+  ipcMain.handle(IPC.getVerificationDiagnostics, async (_e, guildId: string): Promise<VerificationDiagnostics> =>
+    getVerificationDiagnostics(discordManager.isConnected() ? discordManager.getClient() : null, guildId),
+  )
+  ipcMain.handle(IPC.getRemoteVerificationDiagnostics, async (_e, guildId: string): Promise<VerificationDiagnostics> =>
+    remoteApi(requireRemoteCredentials()).getVerificationDiagnostics(guildId),
   )
   ipcMain.handle(IPC.listRemoteVerifications, async (_e, guildId: string): Promise<VerificationEntry[]> =>
     remoteApi(requireRemoteCredentials()).listVerifications(guildId),

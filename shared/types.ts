@@ -627,6 +627,22 @@ export interface VerificationEntry {
   rolesRemoved?: string[]
 }
 
+export interface VerificationEvent {
+  at: string
+  level: 'info' | 'warn' | 'error'
+  text: string
+}
+
+/** O que a página Verificação mostra no diagnóstico — tudo o que pode impedir a verificação de funcionar. */
+export interface VerificationDiagnostics {
+  connected: boolean
+  messageContent: boolean
+  channelOk: boolean
+  missingPermissions: string[]
+  pingRoleOk: boolean
+  events: VerificationEvent[]
+}
+
 export const VERIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{criada}', '{entrou}', '{servidor}'] as const
 export const VERIFICATION_LOG_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{estado}', '{moderador}', '{cargosDados}', '{cargosTirados}', '{servidor}'] as const
 export const VERIFY_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{pontos}', '{horas}', '{cargos}', '{cumpridos}', '{total}', '{servidor}'] as const

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, AtSign, BadgeCheck, Camera, CheckCircle2, Clock3, Hash, ImageIcon, Palette, Radio, ScrollText, ShieldCheck, XCircle } from 'lucide-react'
+import { Activity, AlertTriangle, AtSign, BadgeCheck, Camera, CheckCircle2, Clock3, Hash, ImageIcon, Palette, Radio, ScrollText, ShieldCheck, XCircle } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { cleanIpcError } from '../lib/errors'
 import { formatDateTime, formatRelativeDate } from '../lib/format'
@@ -8,12 +8,12 @@ import { TemplateEditorModal } from '../components/TemplateEditorModal'
 import {
   VERIFICATION_LOG_PLACEHOLDERS,
   VERIFICATION_PLACEHOLDERS,
-  type BotStatus,
   type ChannelPickerEntry,
   type EmbedTemplateKind,
   type GuildSummary,
   type RemoteBotConfig,
   type RolePickerEntry,
+  type VerificationDiagnostics,
   type VerificationEntry,
   type VerificationSettings,
 } from '../../shared/types'
@@ -66,6 +66,18 @@ function RoleChips({ roles, selected, onChange, tone }: { roles: RolePickerEntry
   )
 }
 
+function Check({ ok, label, fail }: { ok: boolean; label: string; fail: string }) {
+  return (
+    <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 ${ok ? 'border-success/30 bg-success/5' : 'border-danger/40 bg-danger/10'}`}>
+      {ok ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-success" /> : <AlertTriangle size={15} className="mt-0.5 shrink-0 text-danger" />}
+      <div>
+        <p className="text-xs font-semibold text-text">{label}</p>
+        {!ok && <p className="mt-0.5 text-[11px] text-danger">{fail}</p>}
+      </div>
+    </div>
+  )
+}
+
 const STEPS = [
   { icon: Camera, title: 'O membro manda a foto', text: 'Print do perfil com os cargos, no canal de verificação.' },
   { icon: ImageIcon, title: 'O bot recria em embed', text: 'Apaga a mensagem original e publica o embed com a foto e ✅ ❌.' },
@@ -75,7 +87,7 @@ const STEPS = [
 
 export default function Verification() {
   const [remoteConfig, setRemoteConfig] = useState<RemoteBotConfig>(EMPTY_REMOTE_CONFIG)
-  const [status, setStatus] = useState<BotStatus | null>(null)
+  const [diagnostics, setDiagnostics] = useState<VerificationDiagnostics | null>(null)
   const [guilds, setGuilds] = useState<GuildSummary[]>([])
   const [guildId, setGuildId] = useState('')
   const [channels, setChannels] = useState<ChannelPickerEntry[]>([])
@@ -94,7 +106,6 @@ export default function Verification() {
 
   useEffect(() => {
     bridge.getRemoteBotConfig().then(setRemoteConfig)
-    bridge.getStatus().then(setStatus).catch(() => setStatus(null))
   }, [])
 
   useEffect(() => {
@@ -127,6 +138,8 @@ export default function Verification() {
     const load = () => {
       const list = isRemote ? bridge.listRemoteVerifications : bridge.listVerifications
       list(guildId).then(setEntries).catch(() => undefined)
+      const diagnose = isRemote ? bridge.getRemoteVerificationDiagnostics : bridge.getVerificationDiagnostics
+      diagnose(guildId).then(setDiagnostics).catch(() => setDiagnostics(null))
     }
     load()
     const id = setInterval(load, POLL_INTERVAL_MS)
@@ -150,6 +163,8 @@ export default function Verification() {
       const saved = await setRemote(guildId, draft)
       setSettings(saved)
       setDraft(saved)
+      const diagnose = isRemote ? bridge.getRemoteVerificationDiagnostics : bridge.getVerificationDiagnostics
+      diagnose(guildId).then(setDiagnostics).catch(() => undefined)
       setSavedOk(true)
       setTimeout(() => setSavedOk(false), 2500)
     } catch (err) {
@@ -200,17 +215,6 @@ export default function Verification() {
         {loadError && <p className="mt-1.5 text-xs text-danger">❌ {loadError}</p>}
       </div>
 
-      {!isRemote && status?.connected && !status.messageContentEnabled && (
-        <Card className="flex items-start gap-3 border-warning/40 text-xs text-muted">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning" />
-          <p>
-            A intent <span className="font-semibold text-text">Message Content</span> está desligada — sem ela a Discord não manda as imagens ao bot e a
-            verificação fica parada. Ativa-a em <span className="font-semibold text-text">Developer Portal → Bot → Privileged Gateway Intents</span> e liga o
-            bot outra vez.
-          </p>
-        </Card>
-      )}
-
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {STEPS.map((step, i) => (
           <Card key={step.title} className="flex items-start gap-3">
@@ -225,6 +229,51 @@ export default function Verification() {
           </Card>
         ))}
       </div>
+
+      {diagnostics && settings.channelId && (
+        <Card className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Activity size={16} className="text-accent" />
+            <h3 className="text-sm font-black tracking-wide uppercase">Diagnóstico</h3>
+            <span className="text-[11px] text-faint">· atualiza sozinho a cada 15 s</span>
+          </div>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+            <Check ok={diagnostics.connected} label="Bot ligado à Discord" fail="O bot não está ligado." />
+            <Check
+              ok={diagnostics.messageContent}
+              label="Intent Message Content"
+              fail="Desligada — ativa em Developer Portal → Bot → Privileged Gateway Intents e reinicia o bot."
+            />
+            <Check
+              ok={diagnostics.channelOk && diagnostics.missingPermissions.length === 0}
+              label={`Permissões em #${settings.channelName ?? 'canal'}`}
+              fail={diagnostics.channelOk ? `Faltam: ${diagnostics.missingPermissions.join(', ')}` : 'O canal já não existe.'}
+            />
+            <Check ok={diagnostics.pingRoleOk} label="Cargo a marcar" fail="O cargo escolhido já não existe." />
+          </div>
+          <div>
+            <Label>O que o bot fez recentemente</Label>
+            {diagnostics.events.length === 0 ? (
+              <p className="mt-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-faint">
+                Ainda não chegou nenhuma mensagem ao bot neste canal desde que ele arrancou. Manda uma foto no canal — se continuar vazio, o bot não está
+                a receber as mensagens (confirma a intent Message Content e que o bot remoto foi atualizado).
+              </p>
+            ) : (
+              <div className="mt-1.5 flex max-h-56 flex-col overflow-y-auto rounded-lg border border-border bg-black/20">
+                {diagnostics.events.map((ev, idx) => (
+                  <div key={idx} className="flex items-start gap-3 border-t border-border/60 px-3 py-2 text-xs first:border-t-0">
+                    <span className={ev.level === 'error' ? 'text-danger' : ev.level === 'warn' ? 'text-warning' : 'text-accent'}>●</span>
+                    <span className="flex-1 text-muted">{ev.text}</span>
+                    <span className="shrink-0 text-faint" title={formatDateTime(ev.at)}>
+                      {formatRelativeDate(ev.at)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Card className="flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -332,7 +381,7 @@ export default function Verification() {
         <Toggle
           checked={draft.deleteNonImage}
           onChange={(v) => setDraft({ ...draft, deleteNonImage: v })}
-          label="Apagar mensagens sem imagem no canal (com um aviso que desaparece sozinho) — mensagens da gestão nunca são apagadas"
+          label="Apagar mensagens sem imagem no canal (com um aviso que desaparece sozinho) — texto da gestão nunca é apagado"
         />
 
         <div className="flex flex-wrap items-center gap-3">

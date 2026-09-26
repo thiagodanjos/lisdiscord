@@ -30,7 +30,7 @@ import * as embedTemplatesStore from '../electron/store/embedTemplates'
 import * as movNoticesStore from '../electron/store/movNotices'
 import * as verificationStore from '../electron/store/verification'
 import { createNotice } from '../electron/discord/movNotices'
-import { applyVerificationSettings } from '../electron/discord/verification'
+import { applyVerificationSettings, getVerificationDiagnostics } from '../electron/discord/verification'
 
 /** Mesma lógica que o IPC da app usa — atualiza logo a mensagem já publicada quando o template muda. */
 async function refreshEmbedTemplateTarget(guild: Guild, kind: EmbedTemplateKind): Promise<void> {
@@ -434,6 +434,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     // GET /api/guilds/:guildId/verification
     if (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'verification') {
       sendJson(res, 200, verificationStore.listVerifications(parts[2]))
+      return
+    }
+
+    // GET /api/guilds/:guildId/verification/diagnostics
+    if (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'verification' && parts[4] === 'diagnostics') {
+      sendJson(res, 200, await getVerificationDiagnostics(discordManager.isConnected() ? discordManager.getClient() : null, parts[2]))
       return
     }
 

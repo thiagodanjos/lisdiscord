@@ -41,6 +41,7 @@ import type {
   TimeoutDuration,
   Transcript,
   TranscriptSummary,
+  VerificationDiagnostics,
   VerificationEntry,
   VerificationSettings,
 } from './types'
@@ -180,6 +181,8 @@ export const IPC = {
   getRemoteVerificationSettings: 'remoteBot:verification:settings:get',
   setRemoteVerificationSettings: 'remoteBot:verification:settings:set',
   listRemoteVerifications: 'remoteBot:verification:list',
+  getVerificationDiagnostics: 'verification:diagnostics',
+  getRemoteVerificationDiagnostics: 'remoteBot:verification:diagnostics',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -322,4 +325,6 @@ export interface LisDiscordBridge {
   getRemoteVerificationSettings(guildId: string): Promise<VerificationSettings>
   setRemoteVerificationSettings(guildId: string, settings: VerificationSettings): Promise<VerificationSettings>
   listRemoteVerifications(guildId: string): Promise<VerificationEntry[]>
+  getVerificationDiagnostics(guildId: string): Promise<VerificationDiagnostics>
+  getRemoteVerificationDiagnostics(guildId: string): Promise<VerificationDiagnostics>
 }

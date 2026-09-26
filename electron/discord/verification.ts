@@ -16,7 +16,7 @@ import {
   TimestampStyles,
   type User,
 } from 'discord.js'
-import type { VerificationEntry, VerificationSettings } from '../../shared/types'
+import type { VerificationDiagnostics, VerificationEntry, VerificationEvent, VerificationSettings } from '../../shared/types'
 import * as store from '../store/verification'
 import { getTemplate, isCustomized } from '../store/embedTemplates'
 import { buildEmbedFromDraft } from './embedTemplate'
@@ -31,7 +31,57 @@ const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i
 
 /** Pedidos a ser decididos agora mesmo — evita dois gestores a aprovar o mesmo ao mesmo tempo. */
 const processing = new Set<string>()
-let warnedNoMessageContent = false
+
+/** Últimos acontecimentos por servidor (só em memória) — mostrados no diagnóstico da app. */
+const MAX_EVENTS = 25
+const recentEvents = new Map<string, VerificationEvent[]>()
+
+function logEvent(guildId: string, level: VerificationEvent['level'], text: string): void {
+  const list = recentEvents.get(guildId) ?? []
+  list.unshift({ at: new Date().toISOString(), level, text })
+  recentEvents.set(guildId, list.slice(0, MAX_EVENTS))
+  if (level === 'error') console.error(`[verificação] ${text}`)
+}
+
+const CHANNEL_PERMISSIONS = [
+  [PermissionFlagsBits.ViewChannel, 'Ver canal'],
+  [PermissionFlagsBits.SendMessages, 'Enviar mensagens'],
+  [PermissionFlagsBits.EmbedLinks, 'Inserir links'],
+  [PermissionFlagsBits.AttachFiles, 'Anexar ficheiros'],
+  [PermissionFlagsBits.AddReactions, 'Adicionar reações'],
+  [PermissionFlagsBits.ManageMessages, 'Gerir mensagens'],
+  [PermissionFlagsBits.ReadMessageHistory, 'Ler histórico de mensagens'],
+] as const
+
+function hasMessageContent(client: Client): boolean {
+  return new IntentsBitField(client.options.intents).has(GatewayIntentBits.MessageContent)
+}
+
+/** Verifica tudo o que a verificação precisa, para a app mostrar exatamente o que está a falhar. */
+export async function getVerificationDiagnostics(client: Client | null, guildId: string): Promise<VerificationDiagnostics> {
+  const events = recentEvents.get(guildId) ?? []
+  if (!client || !client.isReady()) {
+    return { connected: false, messageContent: false, channelOk: false, missingPermissions: [], pingRoleOk: false, events }
+  }
+  const settings = store.getVerificationSettings(guildId)
+  const guild = await client.guilds.fetch(guildId).catch(() => null)
+  let channelOk = false
+  let missingPermissions: string[] = []
+  let pingRoleOk = !settings.pingRoleId
+  if (guild) {
+    const me = guild.members.me ?? (await guild.members.fetchMe().catch(() => null))
+    if (settings.channelId && me) {
+      const channel = await guild.channels.fetch(settings.channelId).catch(() => null)
+      if (channel && channel.isTextBased()) {
+        channelOk = true
+        const perms = channel.permissionsFor(me)
+        missingPermissions = CHANNEL_PERMISSIONS.filter(([flag]) => !perms?.has(flag)).map(([, label]) => label)
+      }
+    }
+    if (settings.pingRoleId) pingRoleOk = Boolean(await guild.roles.fetch(settings.pingRoleId).catch(() => null))
+  }
+  return { connected: true, messageContent: hasMessageContent(client), channelOk, missingPermissions, pingRoleOk, events }
+}
 
 // ==========================================================================
 // Definições (app / bot remoto)
@@ -54,17 +104,8 @@ export async function applyVerificationSettings(guild: Guild, input: Verificatio
   if (next.channelId) {
     const channel = await guild.channels.fetch(next.channelId).catch(() => null)
     if (!channel || !channel.isTextBased() || channel.isThread()) throw new Error('O canal de verificação tem de ser um canal de texto.')
-    const needed = [
-      [PermissionFlagsBits.ViewChannel, 'Ver canal'],
-      [PermissionFlagsBits.SendMessages, 'Enviar mensagens'],
-      [PermissionFlagsBits.EmbedLinks, 'Inserir links'],
-      [PermissionFlagsBits.AttachFiles, 'Anexar ficheiros'],
-      [PermissionFlagsBits.AddReactions, 'Adicionar reações'],
-      [PermissionFlagsBits.ManageMessages, 'Gerir mensagens'],
-      [PermissionFlagsBits.ReadMessageHistory, 'Ler histórico de mensagens'],
-    ] as const
     const perms = channel.permissionsFor(me)
-    const missing = needed.filter(([flag]) => !perms?.has(flag)).map(([, label]) => label)
+    const missing = CHANNEL_PERMISSIONS.filter(([flag]) => !perms?.has(flag)).map(([, label]) => label)
     if (missing.length > 0) throw new Error(`O bot precisa destas permissões em #${channel.name}: ${missing.join(', ')}.`)
     next.channelName = channel.name
   } else {
@@ -163,19 +204,24 @@ export async function handleVerificationMessage(message: Message): Promise<void>
 
   // Sem a intent MessageContent a Discord não manda os anexos — sem isto, TODAS as fotos pareciam
   // "mensagens sem imagem" e eram apagadas.
-  if (!new IntentsBitField(message.client.options.intents).has(GatewayIntentBits.MessageContent)) {
-    if (!warnedNoMessageContent) {
-      console.warn('[verificação] A intent "Message Content" está desligada — ativa-a no Developer Portal para a verificação por foto funcionar.')
-      warnedNoMessageContent = true
-    }
+  if (!hasMessageContent(message.client)) {
+    logEvent(
+      message.guildId,
+      'error',
+      `Mensagem de ${message.author.tag} ignorada: a intent "Message Content" está desligada — sem ela a Discord não manda as imagens ao bot.`,
+    )
     return
   }
 
   const member = message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null))
-  if (member && isApprover(member, settings)) return // gestores podem falar à vontade no canal
-
   const images = [...message.attachments.values()].filter(isImage)
   if (images.length === 0) {
+    // Texto da gestão fica sempre (podem conversar no canal); imagens são processadas venham de quem vierem.
+    if (member && isApprover(member, settings)) {
+      logEvent(message.guildId, 'info', `Mensagem sem imagem de ${message.author.tag} (gestão) deixada no canal.`)
+      return
+    }
+    logEvent(message.guildId, 'info', `Mensagem sem imagem de ${message.author.tag}${settings.deleteNonImage ? ' — apagada com aviso' : ' — ignorada'}.`)
     if (settings.deleteNonImage) {
       await message.delete().catch(() => undefined)
       await tempWarning(message, `📸 ${message.author}, neste canal envia só a **foto do teu perfil com os cargos** (como imagem).`)
@@ -185,6 +231,7 @@ export async function handleVerificationMessage(message: Message): Promise<void>
 
   const usable = images.filter((a) => a.size <= MAX_IMAGE_BYTES).slice(0, MAX_IMAGES)
   if (usable.length === 0) {
+    logEvent(message.guildId, 'warn', `Imagem de ${message.author.tag} com mais de 10 MB — não processada.`)
     await tempWarning(message, `❌ ${message.author}, a imagem é demasiado grande (máx. 10 MB). Tira um print mais pequeno e envia outra vez.`)
     return
   }
@@ -193,7 +240,7 @@ export async function handleVerificationMessage(message: Message): Promise<void>
   try {
     files = await Promise.all(usable.map((a, i) => download(a.url, `verificacao-${message.author.id}-${i + 1}.${extensionOf(a)}`)))
   } catch (err) {
-    console.error('[verificação] Falha a descarregar a foto:', err)
+    logEvent(message.guildId, 'error', `Não consegui descarregar a foto de ${message.author.tag}: ${err instanceof Error ? err.message : String(err)}`)
     return
   }
 
@@ -222,10 +269,10 @@ export async function handleVerificationMessage(message: Message): Promise<void>
   try {
     sent = await message.channel.send({ embeds: [embed, ...extra], files, allowedMentions: { parse: [] } })
   } catch (err) {
-    console.error('[verificação] Não consegui publicar o embed da verificação:', err)
+    logEvent(message.guildId, 'error', `Não consegui publicar o embed de ${message.author.tag}: ${err instanceof Error ? err.message : String(err)}`)
     return
   }
-  await message.delete().catch(() => undefined)
+  await message.delete().catch((err) => logEvent(message.guildId, 'warn', `Não consegui apagar a foto original: ${err instanceof Error ? err.message : String(err)}`))
   await sent.react(APPROVE).catch(() => undefined)
   await sent.react(REJECT).catch(() => undefined)
 
@@ -234,9 +281,13 @@ export async function handleVerificationMessage(message: Message): Promise<void>
   if (settings.pingRoleId && pingText) {
     const ping = await message.channel
       .send({ content: pingText.slice(0, 2000), allowedMentions: { roles: [settings.pingRoleId], users: [] } })
-      .catch(() => null)
+      .catch((err) => {
+        logEvent(message.guildId, 'warn', `Não consegui mandar a marcação: ${err instanceof Error ? err.message : String(err)}`)
+        return null
+      })
     pingMessageId = ping?.id ?? null
   }
+  logEvent(message.guildId, 'info', `Pedido criado para ${message.author.tag} (${files.length} imagem(ns)).`)
 
   store.addPending({
     guildId: message.guildId,
@@ -278,6 +329,7 @@ export async function handleVerificationReaction(
   const moderator = await guild.members.fetch(user.id).catch(() => null)
   if (!moderator || moderator.user.bot) return
   if (!isApprover(moderator, settings)) {
+    logEvent(guild.id, 'info', `Reação ${emoji} de ${moderator.user.tag} removida — não tem cargo de aprovação.`)
     await reaction.users.remove(user.id).catch(() => undefined)
     return
   }
@@ -295,14 +347,14 @@ export async function handleVerificationReaction(
           await target.roles
             .add(id, `Verificação aprovada por ${moderator.user.tag}`)
             .then(() => added.push(guild.roles.cache.get(id)?.name ?? id))
-            .catch((err) => console.error('[verificação] Falha a dar cargo:', err))
+            .catch((err) => logEvent(guild.id, 'error', `Falha a dar @${guild.roles.cache.get(id)?.name ?? id}: ${err instanceof Error ? err.message : String(err)}`))
         }
         for (const id of settings.removeRoleIds) {
           if (!target.roles.cache.has(id)) continue
           await target.roles
             .remove(id, `Verificação aprovada por ${moderator.user.tag}`)
             .then(() => removed.push(guild.roles.cache.get(id)?.name ?? id))
-            .catch((err) => console.error('[verificação] Falha a tirar cargo:', err))
+            .catch((err) => logEvent(guild.id, 'error', `Falha a tirar @${guild.roles.cache.get(id)?.name ?? id}: ${err instanceof Error ? err.message : String(err)}`))
         }
       }
     }
@@ -312,7 +364,12 @@ export async function handleVerificationReaction(
 
     const decided = store.decide(entry.id, approved ? 'approved' : 'rejected', { id: moderator.id, tag: moderator.user.tag }, { added, removed })
     await deleteRequestMessages(guild, entry)
-    if (decided && settings.logChannelId) await postLog(guild, settings.logChannelId, decided, logFiles).catch((err) => console.error('[verificação] Falha no log:', err))
+    if (decided) logEvent(guild.id, 'info', `${entry.userTag} ${approved ? 'aprovado ✅' : 'recusado ❌'} por ${moderator.user.tag}.`)
+    if (decided && settings.logChannelId) {
+      await postLog(guild, settings.logChannelId, decided, logFiles).catch((err) =>
+        logEvent(guild.id, 'error', `Falha a mandar o log: ${err instanceof Error ? err.message : String(err)}`),
+      )
+    }
   } finally {
     processing.delete(entry.id)
   }

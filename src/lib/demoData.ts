@@ -1267,4 +1267,21 @@ export const demoBridge: LisDiscordBridge = {
   async listRemoteVerifications(guildId) {
     return demoBridge.listVerifications(guildId)
   },
+  async getVerificationDiagnostics() {
+    await delay()
+    return {
+      connected: true,
+      messageContent: true,
+      channelOk: true,
+      missingPermissions: [],
+      pingRoleOk: true,
+      events: [
+        { at: new Date(Date.now() - 60_000).toISOString(), level: 'info' as const, text: 'Pedido criado para joao99#0420 (1 imagem(ns)).' },
+        { at: new Date(Date.now() - 3_600_000).toISOString(), level: 'info' as const, text: 'sofia_gamer#7788 aprovado ✅ por ana.dev#0001.' },
+      ],
+    }
+  },
+  async getRemoteVerificationDiagnostics(guildId) {
+    return demoBridge.getVerificationDiagnostics(guildId)
+  },
 }
