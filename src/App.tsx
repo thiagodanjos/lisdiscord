@@ -50,11 +50,11 @@ export default function App() {
       return
     }
     setPhase('connecting')
+    setStatus(current)
     try {
       setStatus(await bridge.autoConnectBot())
       setConnectError(undefined)
     } catch (err) {
-      setStatus(current)
       setConnectError(`Não consegui ligar com o token guardado: ${cleanIpcError(err)}`)
     }
     setPhase('ready')
@@ -86,7 +86,18 @@ export default function App() {
 
   if (phase === 'loading') return <div className="app-backdrop h-screen" />
   if (phase === 'auth') return <Auth hasAccount={auth?.hasAccount ?? false} onAuthenticated={afterLogin} />
-  if (phase === 'connecting') return <ConnectingScreen username={auth?.user?.username ?? ''} />
+  if (phase === 'connecting') {
+    return (
+      <ConnectingScreen
+        username={auth?.user?.username ?? ''}
+        onSkip={() => {
+          // A ligação continua; quando terminar, o afterLogin atualiza o estado do bot sozinho.
+          setSkipLocalBot(true)
+          setPhase('ready')
+        }}
+      />
+    )
+  }
 
   if (!demoMode && !status?.connected && !skipLocalBot) {
     return (

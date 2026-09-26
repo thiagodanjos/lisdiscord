@@ -7,6 +7,7 @@ import { handleHelpCommand, helpCommandDef } from '../helpCommand'
 import { addEmoteServerCommandDef, addStickerCommandDef, handleServerAssetsCommand } from '../serverAssetsCommands'
 import { handleUtilityCommand, utilityCommandDefs } from '../utilityCommands'
 import { avisoMovCommandDef, handleAvisoMovCommand } from '../movNotices'
+import { commandsHash, isUpToDate, markSynced } from '../../store/commandSync'
 import { handleGiveawayCommand, sorteioCommandDef } from '../giveawayCommand'
 import { handleMovCallCommand, movCallCommandDefs } from '../movcall'
 import { handleVerifyCommand, verificarCommandDef } from '../verifyCommand'
@@ -106,8 +107,14 @@ export function buildCommandDefinitions(enabled: GameId[]): CommandDef[] {
   return [...enabled.flatMap((id) => commandDefsForGame(id)), ...buildGlobalCommandDefinitions()]
 }
 
+/** Regista os comandos do servidor — só quando a lista mudou desde o último registo (ver commandSync). */
 export async function registerCommandsForGuild(guild: Guild, enabled: GameId[]): Promise<void> {
-  await guild.commands.set(buildCommandDefinitions(enabled))
+  const defs = buildCommandDefinitions(enabled)
+  const key = `${guild.client.application?.id ?? 'app'}:${guild.id}`
+  const hash = commandsHash(defs)
+  if (isUpToDate(key, hash)) return
+  await guild.commands.set(defs)
+  markSynced(key, hash)
 }
 
 export async function handleGameInteraction(interaction: Interaction): Promise<void> {

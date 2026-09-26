@@ -6,6 +6,7 @@ import { buildGlobalCommandDefinitions, handleGameInteraction, registerCommandsF
 import { handleJustificationButtons } from './justifications'
 import { applyBranding } from './branding'
 import { startReminderLoop } from './utilityCommands'
+import { commandsHash, isUpToDate, markSynced } from '../store/commandSync'
 import { handleAvisoMovButtons, startMovNoticeLoop } from './movNotices'
 import { handleVerificationMessage, handleVerificationMessageDelete, handleVerificationReaction } from './verification'
 
@@ -111,10 +112,9 @@ class DiscordManager {
     if (client.isReady()) this.stopBranding = applyBranding(client)
     this.stopReminders = startReminderLoop(client)
     this.stopNotices = startMovNoticeLoop(client)
-    await this.registerGlobalCommands().catch((err) => {
-      console.error('Falha a registar comandos globais (secção "Commands" do perfil não vai aparecer):', err)
-    })
-    await this.registerAllCommands()
+    // Registar comandos nunca pode prender a ligação (e com ela a app, presa em "A ligar o bot…"):
+    // corre em segundo plano, e só envia o que mudou desde o último registo.
+    void this.syncCommands(client)
     return this.getStatus()
   }
 
@@ -124,7 +124,15 @@ class DiscordManager {
     if (withGuildMembers) intents.push(GatewayIntentBits.GuildMembers)
     // Partials: as reações de verificação têm de funcionar em mensagens que já não estão em cache
     // (ex.: o bot reiniciou entre a foto ser enviada e o gestor reagir).
-    const client = new Client({ intents, partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User] })
+    const client = new Client({
+      intents,
+      partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User],
+      rest: {
+        // Por omissão o discord.js fica à espera quando a Discord limita os pedidos — no limite diário
+        // de criação de comandos isso são horas. Nesses casos, falhar logo (e tentar no próximo arranque).
+        rejectOnRateLimit: (data) => data.timeToReset > 60_000,
+      },
+    })
     try {
       await client.login(token)
       // `login()` resolve assim que a ligação ao gateway é estabelecida — não
@@ -196,6 +204,14 @@ class DiscordManager {
     return out.sort((a, b) => a.name.localeCompare(b.name))
   }
 
+  private async syncCommands(client: Client): Promise<void> {
+    await this.registerGlobalCommands().catch((err) => {
+      console.error('Falha a registar comandos globais (secção "Commands" do perfil não vai aparecer):', err)
+    })
+    if (this.client !== client) return // desligou entretanto
+    await this.registerAllCommands().catch((err) => console.error('Falha a registar comandos por servidor:', err))
+  }
+
   /**
    * Regista os comandos fixos (Mov. Call, sorteio, verificar, help) globalmente — uma só vez,
    * não por servidor. É isto que faz a secção "Commands" aparecer no cartão de perfil do bot
@@ -204,7 +220,13 @@ class DiscordManager {
    */
   async registerGlobalCommands(): Promise<void> {
     const client = this.getClient()
-    await client.application?.commands.set(buildGlobalCommandDefinitions())
+    if (!client.application) return
+    const defs = buildGlobalCommandDefinitions()
+    const key = `${client.application.id}:global`
+    const hash = commandsHash(defs)
+    if (isUpToDate(key, hash)) return
+    await client.application.commands.set(defs)
+    markSynced(key, hash)
   }
 
   /** Regista os slash commands (jogos) em todos os servidores, de acordo com as preferências guardadas de cada um. */

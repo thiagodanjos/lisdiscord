@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Database, Eye, EyeOff, Lock, PlayCircle, ShieldCheck, User } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { useUiStore } from '../store/ui'
@@ -170,19 +170,38 @@ export default function Auth({ hasAccount, onAuthenticated }: { hasAccount: bool
 }
 
 /** Ecrã de espera enquanto o bot liga com o token guardado. */
-export function ConnectingScreen({ username }: { username: string }) {
+/** Segundos até aparecer o botão para entrar sem esperar pela ligação do bot. */
+const SKIP_AFTER_S = 8
+
+export function ConnectingScreen({ username, onSkip }: { username: string; onSkip: () => void }) {
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setElapsed((s) => s + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+
   return (
     <AuthBackdrop>
       <div className="glass neon-ring flex flex-col items-center rounded-2xl border border-border p-10 text-center">
-        <div className="relative flex size-20 items-center justify-center">
+        <Logo size="sm" />
+        <div className="relative mt-6 flex size-14 items-center justify-center">
           <span className="absolute inset-0 animate-ping rounded-full bg-accent/20" />
-          <span className="absolute inset-2 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
-          <Logo size="sm" />
+          <span className="absolute inset-1 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
         </div>
         <h2 className="mt-6 text-lg font-black tracking-tight uppercase">A ligar o bot…</h2>
         <p className="mt-1 text-sm text-muted">
           Olá, <span className="font-semibold text-text">{username}</span> — a usar o token guardado na tua conta.
         </p>
+        {elapsed >= SKIP_AFTER_S && (
+          <div className="mt-6 flex flex-col items-center gap-2">
+            <p className="max-w-sm text-xs text-faint">
+              Está a demorar mais do que o normal. Podes entrar já — a ligação continua em segundo plano (e, com o bot remoto configurado, a app funciona na mesma).
+            </p>
+            <Button variant="dark" onClick={onSkip}>
+              Entrar sem esperar
+            </Button>
+          </div>
+        )}
       </div>
     </AuthBackdrop>
   )
