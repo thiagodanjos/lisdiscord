@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   ChevronDown,
   ChevronRight,
   Clock3,
@@ -12,6 +13,7 @@ import {
   LayoutGrid,
   LogOut,
   Medal,
+  Megaphone,
   MessageSquarePlus,
   MessageSquareWarning,
   Radio,
@@ -61,6 +63,7 @@ const NAV: NavSection[] = [
     label: 'Comunicação',
     items: [
       { to: '/mensagens', label: 'Mensagens & Embeds', icon: MessageSquarePlus },
+      { to: '/avisos-mov', label: 'Avisos MOV', icon: Megaphone },
       { to: '/emojis', label: 'Emojis do bot', icon: Smile },
       { to: '/sorteios', label: 'Sorteios', icon: Gift },
       { to: '/jogos', label: 'Jogos', icon: Gamepad2 },
@@ -86,6 +89,7 @@ const NAV: NavSection[] = [
     id: 'equipa',
     label: 'Equipa',
     items: [
+      { to: '/verificacao', label: 'Verificação', icon: BadgeCheck },
       { to: '/justificativas', label: 'Justificativas', icon: MessageSquareWarning },
       { to: '/metas', label: 'Metas', icon: Target },
       { to: '/upamentos', label: 'Upamentos', icon: TrendingUp },

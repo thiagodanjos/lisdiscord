@@ -22,6 +22,10 @@ import type {
   GuildSummary,
   JustificationChannelKind,
   JustificationSettings,
+  MovNotice,
+  MovNoticeInput,
+  VerificationEntry,
+  VerificationSettings,
   LoginHistoryEntry,
   MemberProfile,
   MemberSearchResult,
@@ -74,6 +78,10 @@ import * as remoteBotStore from '../store/remoteBot'
 import * as embedTemplatesStore from '../store/embedTemplates'
 import { getAppSettings, openDataDir } from '../store/settings'
 import * as auth from '../auth/auth'
+import * as movNoticesStore from '../store/movNotices'
+import * as verificationStore from '../store/verification'
+import { createNotice } from '../discord/movNotices'
+import { applyVerificationSettings } from '../discord/verification'
 
 /** Identifica no log de pontos ações feitas pela app desktop (em vez de comandos do Discord). */
 const DESKTOP_APP_ACTOR = 'Aplicação desktop'
@@ -413,6 +421,44 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
       }
       return updated
     },
+  )
+
+  // ---- Avisos MOV (/avisomov) ----
+  ipcMain.handle(IPC.listMovNotices, async (_e, guildId: string): Promise<MovNotice[]> => movNoticesStore.listNotices(guildId))
+  ipcMain.handle(IPC.createMovNotice, async (_e, guildId: string, input: MovNoticeInput): Promise<MovNotice> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    const username = auth.getAuthState().user?.username
+    return createNotice(guild, input, { id: 'app', tag: username ? `${username} (app)` : 'Aplicação LisDiscord', avatar: null }, 'app')
+  })
+  ipcMain.handle(IPC.cancelMovNotice, async (_e, guildId: string, id: string): Promise<MovNotice[]> => {
+    movNoticesStore.cancelNotice(guildId, id)
+    return movNoticesStore.listNotices(guildId)
+  })
+  ipcMain.handle(IPC.listRemoteMovNotices, async (_e, guildId: string): Promise<MovNotice[]> =>
+    remoteApi(requireRemoteCredentials()).listMovNotices(guildId),
+  )
+  ipcMain.handle(IPC.createRemoteMovNotice, async (_e, guildId: string, input: MovNoticeInput): Promise<MovNotice> =>
+    remoteApi(requireRemoteCredentials()).createMovNotice(guildId, { ...input, author: auth.getAuthState().user?.username ?? null }),
+  )
+  ipcMain.handle(IPC.cancelRemoteMovNotice, async (_e, guildId: string, id: string): Promise<MovNotice[]> =>
+    remoteApi(requireRemoteCredentials()).cancelMovNotice(guildId, id),
+  )
+
+  // ---- Verificação por foto ----
+  ipcMain.handle(IPC.getVerificationSettings, async (_e, guildId: string): Promise<VerificationSettings> => verificationStore.getVerificationSettings(guildId))
+  ipcMain.handle(IPC.setVerificationSettings, async (_e, guildId: string, settings: VerificationSettings): Promise<VerificationSettings> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    return applyVerificationSettings(guild, settings)
+  })
+  ipcMain.handle(IPC.listVerifications, async (_e, guildId: string): Promise<VerificationEntry[]> => verificationStore.listVerifications(guildId))
+  ipcMain.handle(IPC.getRemoteVerificationSettings, async (_e, guildId: string): Promise<VerificationSettings> =>
+    remoteApi(requireRemoteCredentials()).getVerificationSettings(guildId),
+  )
+  ipcMain.handle(IPC.setRemoteVerificationSettings, async (_e, guildId: string, settings: VerificationSettings): Promise<VerificationSettings> =>
+    remoteApi(requireRemoteCredentials()).setVerificationSettings(guildId, settings),
+  )
+  ipcMain.handle(IPC.listRemoteVerifications, async (_e, guildId: string): Promise<VerificationEntry[]> =>
+    remoteApi(requireRemoteCredentials()).listVerifications(guildId),
   )
 
   // ---- Justificativas (fixas e diárias) ----

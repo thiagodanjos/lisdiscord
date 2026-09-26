@@ -48,6 +48,9 @@ export const paths = {
   embedTemplatesFile: path.join(root, 'embed-templates.json'),
   cleanLogFile: path.join(root, 'clean-log.json'),
   remindersFile: path.join(root, 'reminders.json'),
+  movNoticesFile: path.join(root, 'mov-notices.json'),
+  verificationSettingsFile: path.join(root, 'verification-settings.json'),
+  verificationsFile: path.join(root, 'verifications.json'),
   databaseFile: path.join(root, 'lisdiscord.sqlite'),
 }
 

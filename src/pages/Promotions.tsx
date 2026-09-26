@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Clock3, Medal, Radio, Search, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Medal, Palette, Radio, Search, XCircle } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatDuration } from '../lib/format'
-import { Avatar, Badge, Card, EmptyState, PageHeader } from '../components/ui'
+import { Avatar, Badge, Button, Card, EmptyState, PageHeader } from '../components/ui'
+import { TemplateEditorModal } from '../components/TemplateEditorModal'
+import { DEFAULT_VERIFY_LINES, formatVerifyRoles } from '../../shared/featureTemplates'
+import { VERIFY_PLACEHOLDERS } from '../../shared/types'
 import type { GuildSummary, MemberProfile, MemberSearchResult, RemoteBotConfig, RoleGoal } from '../../shared/types'
 
 const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
@@ -18,6 +21,7 @@ export default function Promotions() {
   const [profile, setProfile] = useState<MemberProfile | null>(null)
   const [loadingProfile, setLoadingProfile] = useState(false)
   const [selectedRoleId, setSelectedRoleId] = useState('')
+  const [editingVerify, setEditingVerify] = useState(false)
 
   const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
 
@@ -71,17 +75,33 @@ export default function Promotions() {
   const meetsHours = selectedGoal && profile ? profile.totalSeconds >= selectedGoal.hoursGoal * 3600 : null
   const passes = meetsPoints !== null && meetsHours !== null ? meetsPoints && meetsHours : null
 
+  // Pré-visualização do /verificar: o membro escolhido, ou um exemplo com todos os cargos com meta.
+  const previewProfile: MemberProfile = profile ?? {
+    id: '0',
+    tag: 'membro',
+    avatarUrl: null,
+    roles: goals.map((g) => ({ id: g.roleId, name: g.roleName, color: '#99aab5' })),
+    points: 25,
+    totalSeconds: 6 * 3600,
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Upamentos"
         subtitle="Escolhe um membro e um dos cargos dele para veres se já cumpre a meta de pontos e horas"
         action={
-          isRemote ? (
-            <Badge tone="success">
-              <Radio size={11} className="mr-1 inline" /> A usar o bot remoto
-            </Badge>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            {isRemote && (
+              <Badge tone="success">
+                <Radio size={11} className="mr-1 inline" /> A usar o bot remoto
+              </Badge>
+            )}
+            <Button variant="dark" onClick={() => setEditingVerify(true)} disabled={!guildId}>
+              <Palette size={14} />
+              Personalizar /verificar
+            </Button>
+          </div>
         }
       />
 
@@ -212,6 +232,28 @@ export default function Promotions() {
           )}
         </Card>
       )}
+      <TemplateEditorModal
+        open={editingVerify}
+        onClose={() => setEditingVerify(false)}
+        kind="verificar"
+        guildId={guildId}
+        isRemote={isRemote}
+        title="Personalizar /verificar"
+        hint="Embed que o /verificar @membro mostra no Discord. {cargos} é a lista automática — só com os cargos do membro que têm meta configurada (cargos sem meta não aparecem)."
+        tokens={VERIFY_PLACEHOLDERS}
+        verifyLineDefaults={DEFAULT_VERIFY_LINES}
+        previewVerifyRoles={(lines) => formatVerifyRoles(previewProfile, goals, lines, 'preview').text}
+        previewPlaceholders={{
+          membro: `@${previewProfile.tag}`,
+          nome: previewProfile.tag,
+          avatar: previewProfile.avatarUrl ?? '',
+          pontos: String(previewProfile.points),
+          horas: formatDuration(previewProfile.totalSeconds),
+          cumpridos: String(formatVerifyRoles(previewProfile, goals, DEFAULT_VERIFY_LINES, 'preview').met),
+          total: String(formatVerifyRoles(previewProfile, goals, DEFAULT_VERIFY_LINES, 'preview').total),
+          servidor: guilds.find((g) => g.id === guildId)?.name ?? 'este servidor',
+        }}
+      />
     </div>
   )
 }

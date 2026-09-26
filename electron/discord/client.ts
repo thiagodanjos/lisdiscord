@@ -1,4 +1,4 @@
-import { Client, Events, GatewayIntentBits, PermissionsBitField } from 'discord.js'
+import { Client, Events, GatewayIntentBits, Partials, PermissionsBitField } from 'discord.js'
 import type { BotStatus, GuildSummary } from '../../shared/types'
 import { enabledGameIds } from '../store/gameSettings'
 import { handleGiveawayButtons } from './giveawayCommand'
@@ -6,6 +6,8 @@ import { buildGlobalCommandDefinitions, handleGameInteraction, registerCommandsF
 import { handleJustificationButtons } from './justifications'
 import { applyBranding } from './branding'
 import { startReminderLoop } from './utilityCommands'
+import { handleAvisoMovButtons, startMovNoticeLoop } from './movNotices'
+import { handleVerificationMessage, handleVerificationMessageDelete, handleVerificationReaction } from './verification'
 
 /**
  * Envolve o Client do discord.js num singleton simples: liga, desliga e dá
@@ -13,7 +15,8 @@ import { startReminderLoop } from './utilityCommands'
  * moderação, sorteios, jogos).
  *
  * Intents pedidos: `Guilds` (obrigatório para o cache de servidores/canais/
- * cargos funcionar) e `GuildMessages` sempre; `MessageContent` (transcripts)
+ * cargos funcionar), `GuildMessages` e `GuildMessageReactions` (verificação
+ * por foto) sempre; `MessageContent` (transcripts)
  * e `GuildMembers` (lista completa de membros do servidor — usada no
  * ranking de pontos de Mov. Call, para mostrar toda a gente e não só quem
  * já tem pontos) são privilegiadas e tentadas com fallback gracioso.
@@ -22,6 +25,7 @@ class DiscordManager {
   private client: Client | null = null
   private stopBranding: (() => void) | null = null
   private stopReminders: (() => void) | null = null
+  private stopNotices: (() => void) | null = null
   private messageContentEnabled = false
   private guildMembersEnabled = false
 
@@ -81,7 +85,22 @@ class DiscordManager {
           if (isAlreadyAcknowledgedError(err)) return
           console.error('Erro a processar botão de justificativa:', err)
         })
+        await handleAvisoMovButtons(interaction).catch((err) => {
+          if (isAlreadyAcknowledgedError(err)) return
+          console.error('Erro a processar botão de aviso:', err)
+        })
       }
+    })
+
+    // Verificação por foto: foto no canal → embed com ✅/❌; reação de um gestor → aprova/recusa.
+    client.on(Events.MessageCreate, (message) => {
+      handleVerificationMessage(message).catch((err) => console.error('Erro na verificação por foto:', err))
+    })
+    client.on(Events.MessageReactionAdd, (reaction, user) => {
+      handleVerificationReaction(reaction, user, client).catch((err) => console.error('Erro a processar reação de verificação:', err))
+    })
+    client.on(Events.MessageDelete, (message) => {
+      handleVerificationMessageDelete(message).catch(() => undefined)
     })
 
     client.on(Events.GuildCreate, async (guild) => {
@@ -91,6 +110,7 @@ class DiscordManager {
     this.client = client
     if (client.isReady()) this.stopBranding = applyBranding(client)
     this.stopReminders = startReminderLoop(client)
+    this.stopNotices = startMovNoticeLoop(client)
     await this.registerGlobalCommands().catch((err) => {
       console.error('Falha a registar comandos globais (secção "Commands" do perfil não vai aparecer):', err)
     })
@@ -99,10 +119,12 @@ class DiscordManager {
   }
 
   private async tryLogin(token: string, withMessageContent: boolean, withGuildMembers: boolean): Promise<Client> {
-    const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+    const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMessageReactions]
     if (withMessageContent) intents.push(GatewayIntentBits.MessageContent)
     if (withGuildMembers) intents.push(GatewayIntentBits.GuildMembers)
-    const client = new Client({ intents })
+    // Partials: as reações de verificação têm de funcionar em mensagens que já não estão em cache
+    // (ex.: o bot reiniciou entre a foto ser enviada e o gestor reagir).
+    const client = new Client({ intents, partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User] })
     try {
       await client.login(token)
       // `login()` resolve assim que a ligação ao gateway é estabelecida — não
@@ -124,6 +146,8 @@ class DiscordManager {
     this.stopBranding = null
     this.stopReminders?.()
     this.stopReminders = null
+    this.stopNotices?.()
+    this.stopNotices = null
     await this.client.destroy().catch(() => undefined)
     this.client = null
   }

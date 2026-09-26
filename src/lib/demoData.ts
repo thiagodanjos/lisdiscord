@@ -1,3 +1,4 @@
+import { FEATURE_TEMPLATE_DEFAULTS } from '../../shared/featureTemplates'
 import type { LisDiscordBridge } from '../../shared/ipc'
 import type {
   BackupData,
@@ -28,6 +29,9 @@ import type {
   ScheduleConfig,
   Transcript,
   TranscriptSummary,
+  MovNotice,
+  VerificationEntry,
+  VerificationSettings,
 } from '../../shared/types'
 import { DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
 
@@ -372,6 +376,7 @@ const DEFAULT_DEMO_TEMPLATES: Record<EmbedTemplateKind, EmbedDraft> = {
     color: '#ED4245',
     footer: 'Pedido por {nome} — um administrador precisa de rever e remover manualmente',
   }),
+  ...FEATURE_TEMPLATE_DEFAULTS,
 }
 
 let embedTemplatesData: Record<string, Partial<Record<EmbedTemplateKind, EmbedDraft>>> = {}
@@ -450,6 +455,92 @@ function summarize(backup: BackupData): BackupSummary {
 function summarizeTranscript(t: Transcript, id: string): TranscriptSummary {
   return { id, channelId: t.channelId, channelName: t.channelName, guildName: t.guildName, exportedAt: t.exportedAt, messageCount: t.messages.length }
 }
+
+
+let movNoticesData: MovNotice[] = [
+  {
+    id: 'av1',
+    guildId: 'g1',
+    channelId: 'c4',
+    channelName: 'geral',
+    message: 'Mov Call hoje às 21h! Todos na call de eventos 🎉',
+    mentionRoleId: 'r2',
+    mentionRoleName: 'Membro Ativo',
+    repeat: 'none',
+    dueAt: hoursFromNow(3),
+    createdAt: daysAgo(0),
+    createdById: 'u10',
+    createdByTag: 'ana.dev#0001',
+    createdByAvatar: null,
+    source: 'discord',
+    status: 'pending',
+  },
+  {
+    id: 'av2',
+    guildId: 'g1',
+    channelId: 'c4',
+    channelName: 'geral',
+    message: 'Lembrem-se de justificar as ausências da semana!',
+    mentionRoleId: null,
+    mentionRoleName: null,
+    repeat: 'weekly',
+    dueAt: hoursFromNow(50),
+    createdAt: daysAgo(3),
+    createdById: 'app',
+    createdByTag: 'demo (app)',
+    createdByAvatar: null,
+    source: 'app',
+    status: 'pending',
+    sentCount: 2,
+  },
+  {
+    id: 'av3',
+    guildId: 'g1',
+    channelId: 'c4',
+    channelName: 'geral',
+    message: 'Sorteio de sábado confirmado!',
+    mentionRoleId: null,
+    mentionRoleName: null,
+    repeat: 'none',
+    dueAt: daysAgo(1),
+    createdAt: daysAgo(2),
+    createdById: 'u11',
+    createdByTag: 'ricardo_c#4521',
+    createdByAvatar: null,
+    source: 'discord',
+    status: 'sent',
+    sentAt: daysAgo(1),
+    sentCount: 1,
+  },
+]
+
+let verificationSettingsData: Record<string, VerificationSettings> = {
+  g1: {
+    channelId: 'c4',
+    channelName: 'geral',
+    pingRoleId: 'r3',
+    pingRoleName: 'Veterano',
+    pingText: '{cargo}',
+    approverRoleIds: ['r3'],
+    addRoleIds: ['r1'],
+    removeRoleIds: [],
+    logChannelId: null,
+    logChannelName: null,
+    deleteNonImage: true,
+  },
+}
+
+const verificationsData: VerificationEntry[] = [
+  { id: 'vf1', guildId: 'g1', channelId: 'c4', userId: 'u13', userTag: 'joao99#0420', userAvatar: null, embedMessageId: 'm1', pingMessageId: 'm2', imageCount: 1, createdAt: daysAgo(0), status: 'pending' },
+  {
+    id: 'vf2', guildId: 'g1', channelId: 'c4', userId: 'u12', userTag: 'sofia_gamer#7788', userAvatar: null, embedMessageId: 'm3', pingMessageId: 'm4', imageCount: 1,
+    createdAt: daysAgo(1), status: 'approved', decidedAt: daysAgo(1), moderatorId: 'u10', moderatorTag: 'ana.dev#0001', rolesAdded: ['Membro'], rolesRemoved: [],
+  },
+  {
+    id: 'vf3', guildId: 'g1', channelId: 'c4', userId: 'u11', userTag: 'ricardo_c#4521', userAvatar: null, embedMessageId: 'm5', pingMessageId: 'm6', imageCount: 2,
+    createdAt: daysAgo(2), status: 'rejected', decidedAt: daysAgo(2), moderatorId: 'u10', moderatorTag: 'ana.dev#0001', rolesAdded: [], rolesRemoved: [],
+  },
+]
 
 const delay = (ms = 350) => new Promise((r) => setTimeout(r, ms))
 
@@ -1088,5 +1179,92 @@ export const demoBridge: LisDiscordBridge = {
   },
   async resetRemoteEmbedTemplate(guildId, kind) {
     return demoBridge.resetEmbedTemplate(guildId, kind)
+  },
+
+  async listMovNotices(guildId) {
+    await delay()
+    return movNoticesData.filter((n) => n.guildId === guildId)
+  },
+  async createMovNotice(guildId, input) {
+    await delay()
+    const channel = makeChannels().find((c) => c.id === input.channelId)
+    const role = demoRoles.find((r) => r.id === input.mentionRoleId)
+    const notice: MovNotice = {
+      id: `av${Date.now()}`,
+      guildId,
+      channelId: input.channelId,
+      channelName: channel?.name ?? 'canal',
+      message: input.message,
+      mentionRoleId: input.mentionRoleId,
+      mentionRoleName: role?.name ?? null,
+      repeat: input.repeat,
+      dueAt: input.dueAt,
+      createdAt: new Date().toISOString(),
+      createdById: 'app',
+      createdByTag: 'demo (app)',
+      createdByAvatar: null,
+      source: 'app',
+      status: 'pending',
+    }
+    movNoticesData = [notice, ...movNoticesData]
+    return notice
+  },
+  async cancelMovNotice(guildId, id) {
+    await delay()
+    movNoticesData = movNoticesData.map((n) => (n.id === id && n.status === 'pending' ? { ...n, status: 'cancelled', sentAt: new Date().toISOString() } : n))
+    return movNoticesData.filter((n) => n.guildId === guildId)
+  },
+  async listRemoteMovNotices(guildId) {
+    return demoBridge.listMovNotices(guildId)
+  },
+  async createRemoteMovNotice(guildId, input) {
+    return demoBridge.createMovNotice(guildId, input)
+  },
+  async cancelRemoteMovNotice(guildId, id) {
+    return demoBridge.cancelMovNotice(guildId, id)
+  },
+
+  async getVerificationSettings(guildId) {
+    await delay()
+    return (
+      verificationSettingsData[guildId] ?? {
+        channelId: null,
+        channelName: null,
+        pingRoleId: null,
+        pingRoleName: null,
+        pingText: '{cargo}',
+        approverRoleIds: [],
+        addRoleIds: [],
+        removeRoleIds: [],
+        logChannelId: null,
+        logChannelName: null,
+        deleteNonImage: true,
+      }
+    )
+  },
+  async setVerificationSettings(guildId, settings) {
+    await delay()
+    const channels = makeChannels()
+    const saved: VerificationSettings = {
+      ...settings,
+      channelName: channels.find((c) => c.id === settings.channelId)?.name ?? null,
+      logChannelName: channels.find((c) => c.id === settings.logChannelId)?.name ?? null,
+      pingRoleName: demoRoles.find((r) => r.id === settings.pingRoleId)?.name ?? null,
+    }
+    verificationSettingsData = { ...verificationSettingsData, [guildId]: saved }
+    return saved
+  },
+  async listVerifications(guildId) {
+    await delay()
+    return verificationsData.filter((v) => v.guildId === guildId)
+  },
+  async getRemoteVerificationSettings(guildId) {
+    return demoBridge.getVerificationSettings(guildId)
+  },
+  async setRemoteVerificationSettings(guildId, settings) {
+    return demoBridge.setVerificationSettings(guildId, settings)
+  },
+  async listRemoteVerifications(guildId) {
+    return demoBridge.listVerifications(guildId)
   },
 }

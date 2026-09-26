@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import type { Guild } from 'discord.js'
-import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovPointsEntry, type SendMessageOptions } from '../shared/types'
+import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovPointsEntry, type SendMessageOptions, type VerificationSettings } from '../shared/types'
 import { discordManager } from '../electron/discord/client'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
 import { applyJustificationChannel, postJustificationMessage } from '../electron/discord/justifications'
@@ -27,6 +27,10 @@ import * as cleanLogStore from '../electron/store/cleanLog'
 import * as excludedMembersStore from '../electron/store/excludedMembers'
 import * as roleGoalsStore from '../electron/store/roleGoals'
 import * as embedTemplatesStore from '../electron/store/embedTemplates'
+import * as movNoticesStore from '../electron/store/movNotices'
+import * as verificationStore from '../electron/store/verification'
+import { createNotice } from '../electron/discord/movNotices'
+import { applyVerificationSettings } from '../electron/discord/verification'
 
 /** Mesma lógica que o IPC da app usa — atualiza logo a mensagem já publicada quando o template muda. */
 async function refreshEmbedTemplateTarget(guild: Guild, kind: EmbedTemplateKind): Promise<void> {
@@ -147,7 +151,9 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'members' && parts[4] === 'search') ||
     (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'roles') ||
     (req.method === 'GET' && parts.length === 6 && isGuildRoute && parts[3] === 'members' && parts[5] === 'profile') ||
-    (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'messages')
+    (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'messages') ||
+    (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'notices') ||
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'verification' && parts[4] === 'settings')
 
   if (needsConnection && !discordManager.isConnected()) {
     sendJson(res, 503, { error: 'O bot não está ligado à Discord neste momento.' })
@@ -396,6 +402,56 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
         if (guild) await refreshEmbedTemplateTarget(guild, kind as EmbedTemplateKind)
       }
       sendJson(res, 200, { draft, customized: false })
+      return
+    }
+
+    // GET /api/guilds/:guildId/notices
+    if (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'notices') {
+      sendJson(res, 200, movNoticesStore.listNotices(parts[2]))
+      return
+    }
+
+    // POST /api/guilds/:guildId/notices  { input: MovNoticeInput & { author?: string } }
+    if (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'notices') {
+      const body = (await readJsonBody(req)) as { input?: MovNoticeInput & { author?: string | null } }
+      if (!body.input) {
+        sendJson(res, 400, { error: 'Falta o campo "input".' })
+        return
+      }
+      const guild = await discordManager.getClient().guilds.fetch(parts[2])
+      const author = body.input.author ? `${body.input.author} (app)` : 'Aplicação LisDiscord'
+      sendJson(res, 200, await createNotice(guild, body.input, { id: 'app', tag: author, avatar: null }, 'app'))
+      return
+    }
+
+    // DELETE /api/guilds/:guildId/notices/:id
+    if (req.method === 'DELETE' && parts.length === 5 && isGuildRoute && parts[3] === 'notices') {
+      movNoticesStore.cancelNotice(parts[2], parts[4])
+      sendJson(res, 200, movNoticesStore.listNotices(parts[2]))
+      return
+    }
+
+    // GET /api/guilds/:guildId/verification
+    if (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'verification') {
+      sendJson(res, 200, verificationStore.listVerifications(parts[2]))
+      return
+    }
+
+    // GET /api/guilds/:guildId/verification/settings
+    if (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'verification' && parts[4] === 'settings') {
+      sendJson(res, 200, verificationStore.getVerificationSettings(parts[2]))
+      return
+    }
+
+    // POST /api/guilds/:guildId/verification/settings  { settings: VerificationSettings }
+    if (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'verification' && parts[4] === 'settings') {
+      const body = (await readJsonBody(req)) as { settings?: VerificationSettings }
+      if (!body.settings) {
+        sendJson(res, 400, { error: 'Falta o campo "settings".' })
+        return
+      }
+      const guild = await discordManager.getClient().guilds.fetch(parts[2])
+      sendJson(res, 200, await applyVerificationSettings(guild, body.settings))
       return
     }
 

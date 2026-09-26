@@ -138,6 +138,20 @@ const bridge: LisDiscordBridge = {
   getRemoteEmbedTemplate: (guildId, kind) => ipcRenderer.invoke(IPC.getRemoteEmbedTemplate, guildId, kind),
   setRemoteEmbedTemplate: (guildId, kind, draft) => ipcRenderer.invoke(IPC.setRemoteEmbedTemplate, guildId, kind, draft),
   resetRemoteEmbedTemplate: (guildId, kind) => ipcRenderer.invoke(IPC.resetRemoteEmbedTemplate, guildId, kind),
+
+  listMovNotices: (guildId) => ipcRenderer.invoke(IPC.listMovNotices, guildId),
+  createMovNotice: (guildId, input) => ipcRenderer.invoke(IPC.createMovNotice, guildId, input),
+  cancelMovNotice: (guildId, id) => ipcRenderer.invoke(IPC.cancelMovNotice, guildId, id),
+  listRemoteMovNotices: (guildId) => ipcRenderer.invoke(IPC.listRemoteMovNotices, guildId),
+  createRemoteMovNotice: (guildId, input) => ipcRenderer.invoke(IPC.createRemoteMovNotice, guildId, input),
+  cancelRemoteMovNotice: (guildId, id) => ipcRenderer.invoke(IPC.cancelRemoteMovNotice, guildId, id),
+
+  getVerificationSettings: (guildId) => ipcRenderer.invoke(IPC.getVerificationSettings, guildId),
+  setVerificationSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setVerificationSettings, guildId, settings),
+  listVerifications: (guildId) => ipcRenderer.invoke(IPC.listVerifications, guildId),
+  getRemoteVerificationSettings: (guildId) => ipcRenderer.invoke(IPC.getRemoteVerificationSettings, guildId),
+  setRemoteVerificationSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setRemoteVerificationSettings, guildId, settings),
+  listRemoteVerifications: (guildId) => ipcRenderer.invoke(IPC.listRemoteVerifications, guildId),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

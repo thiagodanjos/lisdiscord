@@ -256,6 +256,19 @@ export interface EmbedDraft {
   footerIconUrl?: string
   url?: string
   listFormat?: ListFormat
+  /** Linhas por cargo do /verificar ({cargos}) — ver `VerifyLineFormat`. */
+  verifyLines?: VerifyLineFormat
+}
+
+/**
+ * Como o /verificar escreve cada cargo (com meta) do membro dentro de `{cargos}`. Tokens: {cargo}
+ * (menção), {cargoNome}, {pontos}, {metaPontos}, {horas}, {metaHoras}, {faltamPontos}, {faltamHoras}.
+ */
+export interface VerifyLineFormat {
+  met: string
+  notMet: string
+  /** Texto que aparece em `{cargos}` quando o membro não tem nenhum cargo com meta. */
+  empty: string
 }
 
 /**
@@ -275,6 +288,10 @@ export type EmbedTemplateKind =
   | 'justificationLogFixed'
   | 'justificationLogDaily'
   | 'justificationRemoval'
+  | 'verificar'
+  | 'avisoMov'
+  | 'verificationRequest'
+  | 'verificationLog'
 
 export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'pontosBoard',
@@ -286,6 +303,10 @@ export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'justificationLogFixed',
   'justificationLogDaily',
   'justificationRemoval',
+  'verificar',
+  'avisoMov',
+  'verificationRequest',
+  'verificationLog',
 ]
 
 /** Tokens disponíveis nas mensagens que o bot manda quando alguém se justifica (ou pede remoção). */
@@ -520,3 +541,93 @@ export interface BotEmoji {
   animated: boolean
   url: string
 }
+
+// ==========================================================================
+// Avisos MOV (/avisomov) — mensagens agendadas para um canal
+// ==========================================================================
+
+export type MovNoticeRepeat = 'none' | 'daily' | 'weekly'
+export type MovNoticeStatus = 'pending' | 'sent' | 'failed' | 'cancelled'
+
+export interface MovNotice {
+  id: string
+  guildId: string
+  channelId: string
+  channelName: string
+  message: string
+  mentionRoleId: string | null
+  mentionRoleName: string | null
+  repeat: MovNoticeRepeat
+  dueAt: string
+  createdAt: string
+  createdById: string
+  createdByTag: string
+  createdByAvatar: string | null
+  source: 'discord' | 'app'
+  status: MovNoticeStatus
+  sentAt?: string
+  sentCount?: number
+  error?: string
+}
+
+export interface MovNoticeInput {
+  channelId: string
+  message: string
+  mentionRoleId: string | null
+  repeat: MovNoticeRepeat
+  dueAt: string
+}
+
+export const MOV_NOTICE_PLACEHOLDERS = ['{mensagem}', '{autor}', '{nomeAutor}', '{avatarAutor}', '{canal}', '{cargo}', '{servidor}'] as const
+
+// ==========================================================================
+// Verificação por foto
+// ==========================================================================
+
+export interface VerificationSettings {
+  /** Canal onde os membros mandam a foto do perfil com os cargos. */
+  channelId: string | null
+  channelName: string | null
+  /** Cargo marcado na mensagem simples (sem embed) depois do embed. */
+  pingRoleId: string | null
+  pingRoleName: string | null
+  /** Texto da marcação — {cargo} e {membro}. */
+  pingText: string
+  /** Cargos que podem aprovar/recusar (além de quem tem Administrador). */
+  approverRoleIds: string[]
+  /** Cargos dados ao membro quando é aprovado (opcional). */
+  addRoleIds: string[]
+  /** Cargos tirados ao membro quando é aprovado (opcional, ex.: @Novato). */
+  removeRoleIds: string[]
+  /** Canal de log com o resultado de cada verificação (opcional). */
+  logChannelId: string | null
+  logChannelName: string | null
+  /** Apagar mensagens sem imagem no canal de verificação (com aviso temporário). */
+  deleteNonImage: boolean
+}
+
+export type VerificationStatus = 'pending' | 'approved' | 'rejected'
+
+export interface VerificationEntry {
+  id: string
+  guildId: string
+  channelId: string
+  userId: string
+  userTag: string
+  userAvatar: string | null
+  embedMessageId: string
+  pingMessageId: string | null
+  imageCount: number
+  createdAt: string
+  status: VerificationStatus
+  decidedAt?: string
+  moderatorId?: string
+  moderatorTag?: string
+  rolesAdded?: string[]
+  rolesRemoved?: string[]
+}
+
+export const VERIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{criada}', '{entrou}', '{servidor}'] as const
+export const VERIFICATION_LOG_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{estado}', '{moderador}', '{cargosDados}', '{cargosTirados}', '{servidor}'] as const
+export const VERIFY_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{pontos}', '{horas}', '{cargos}', '{cumpridos}', '{total}', '{servidor}'] as const
+export const VERIFY_LINE_PLACEHOLDERS = ['{cargo}', '{cargoNome}', '{pontos}', '{metaPontos}', '{horas}', '{metaHoras}', '{faltamPontos}', '{faltamHoras}'] as const

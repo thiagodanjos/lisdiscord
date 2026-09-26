@@ -120,6 +120,17 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
     resetEmbedTemplate: <T>(guildId: string, kind: string) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/embed-templates/${kind}`, { method: 'DELETE' }),
 
+    listMovNotices: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/notices`),
+    createMovNotice: <T>(guildId: string, input: unknown) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/notices`, { method: 'POST', body: { input } }),
+    cancelMovNotice: <T>(guildId: string, id: string) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/notices/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+    getVerificationSettings: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification/settings`),
+    setVerificationSettings: <T>(guildId: string, settings: unknown) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification/settings`, { method: 'POST', body: { settings } }),
+    listVerifications: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification`),
+
     sendEmbed: <T>(guildId: string, channelId: string, draft: unknown, options?: unknown) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/messages`, { method: 'POST', body: { channelId, draft, options } }),
   }

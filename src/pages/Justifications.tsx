@@ -40,7 +40,7 @@ const EMPTY_SETTINGS: JustificationSettings = {
 
 const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
 
-const TEMPLATE_TITLES: Record<EmbedTemplateKind, string> = {
+const TEMPLATE_TITLES: Partial<Record<EmbedTemplateKind, string>> = {
   pontosBoard: 'Personalizar placar',
   inativos: 'Personalizar inativos',
   justificationFixed: 'Mensagem do canal de justificativas fixas',
@@ -433,7 +433,7 @@ export default function Justifications() {
       <Modal
         open={editingTemplate !== null}
         onClose={() => setEditingTemplate(null)}
-        title={editingTemplate ? TEMPLATE_TITLES[editingTemplate] : 'Personalizar mensagem'}
+        title={(editingTemplate && TEMPLATE_TITLES[editingTemplate]) || 'Personalizar mensagem'}
         width="xl"
       >
         <EmbedTemplateEditor

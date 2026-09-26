@@ -1,5 +1,6 @@
 import type { EmbedDraft, EmbedTemplateKind } from '../../shared/types'
 import { DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
+import { FEATURE_TEMPLATE_DEFAULTS } from '../../shared/featureTemplates'
 import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
@@ -77,6 +78,7 @@ export const DEFAULT_TEMPLATES: Record<EmbedTemplateKind, EmbedDraft> = {
     color: '#ED4245',
     footer: 'Pedido por {nome} — um administrador precisa de rever e remover manualmente',
   }),
+  ...FEATURE_TEMPLATE_DEFAULTS,
 }
 
 function justificationPost(title: string, color: string): EmbedDraft {

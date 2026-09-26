@@ -26,6 +26,8 @@ import Justifications from './pages/Justifications'
 import Emojis from './pages/Emojis'
 import Goals from './pages/Goals'
 import Promotions from './pages/Promotions'
+import MovNotices from './pages/MovNotices'
+import Verification from './pages/Verification'
 import SettingsPage from './pages/Settings'
 import type { AuthState, BotStatus } from '../shared/types'
 
@@ -125,6 +127,8 @@ export default function App() {
         <Route path="/emojis" element={<Emojis />} />
         <Route path="/upamentos" element={<Promotions />} />
         <Route path="/metas" element={<Goals />} />
+        <Route path="/avisos-mov" element={<MovNotices />} />
+        <Route path="/verificacao" element={<Verification />} />
         <Route path="/definicoes" element={<SettingsPage status={status} onStatusChange={setStatus} user={auth?.user ?? null} onLogout={logout} />} />
       </Routes>
     </AppShell>

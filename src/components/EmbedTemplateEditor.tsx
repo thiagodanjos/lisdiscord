@@ -5,7 +5,7 @@ import { EmbedPreview } from './EmbedPreview'
 import { EmojiTextInput } from './EmojiTextInput'
 import { RichTextField } from './RichTextField'
 import { LIST_LINE_PLACEHOLDERS } from '../../shared/leaderboardFormat'
-import type { BotEmoji, EmbedDraft, ListFormat } from '../../shared/types'
+import { VERIFY_LINE_PLACEHOLDERS, type BotEmoji, type EmbedDraft, type ListFormat, type VerifyLineFormat } from '../../shared/types'
 
 const inputClass = 'w-full rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text placeholder:text-faint focus:border-accent focus:outline-none'
 
@@ -42,6 +42,12 @@ function TokenChips({ tokens }: { tokens: readonly string[] }) {
   )
 }
 
+const VERIFY_ROWS: { key: keyof VerifyLineFormat; label: string }[] = [
+  { key: 'met', label: 'Cargo com a meta cumprida' },
+  { key: 'notMet', label: 'Cargo com a meta por cumprir' },
+  { key: 'empty', label: 'Sem nenhum cargo com meta' },
+]
+
 const LIST_ROWS: { key: keyof ListFormat; label: string }[] = [
   { key: 'first', label: '1º lugar' },
   { key: 'second', label: '2º lugar' },
@@ -64,6 +70,9 @@ export function EmbedTemplateEditor({
   placeholderTokens,
   listFormatDefaults,
   previewList,
+  verifyLineDefaults,
+  previewVerifyRoles,
+  imageNote,
   saveLabel = 'Guardar',
   saveIcon: SaveIcon = Save,
   saveDisabled,
@@ -88,6 +97,12 @@ export function EmbedTemplateEditor({
   listFormatDefaults?: ListFormat
   /** Monta a {lista} da pré-visualização com o formato de linhas atual. */
   previewList?: (format: ListFormat) => string
+  /** Quando definido, mostra o editor das linhas de cargo do /verificar ({cargos}). */
+  verifyLineDefaults?: VerifyLineFormat
+  /** Monta o {cargos} da pré-visualização com as linhas atuais. */
+  previewVerifyRoles?: (lines: VerifyLineFormat) => string
+  /** Nota por baixo da imagem grande (ex.: quando a imagem é sempre preenchida pelo bot). */
+  imageNote?: string
   saveLabel?: string
   saveIcon?: typeof Save
   saveDisabled?: boolean
@@ -107,7 +122,15 @@ export function EmbedTemplateEditor({
     onChange({ ...draft, listFormat: { ...listFormat, [key]: value } })
   }
 
-  const placeholders = listFormat && previewList ? { ...previewPlaceholders, lista: previewList(listFormat) } : previewPlaceholders
+  const verifyLines = verifyLineDefaults ? (draft.verifyLines ?? verifyLineDefaults) : undefined
+
+  function updateVerifyLine(key: keyof VerifyLineFormat, value: string) {
+    if (!verifyLines) return
+    onChange({ ...draft, verifyLines: { ...verifyLines, [key]: value } })
+  }
+
+  const withList = listFormat && previewList ? { ...previewPlaceholders, lista: previewList(listFormat) } : previewPlaceholders
+  const placeholders = verifyLines && previewVerifyRoles ? { ...withList, cargos: previewVerifyRoles(verifyLines) } : withList
 
   const previewDraft: EmbedDraft = {
     ...draft,
@@ -169,6 +192,30 @@ export function EmbedTemplateEditor({
           </div>
         )}
 
+        {verifyLines && (
+          <div className="flex flex-col gap-2.5 rounded-xl border border-accent/30 bg-accent-soft/30 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold tracking-wide text-accent uppercase">Linhas dos cargos — {'{cargos}'}</p>
+              {draft.verifyLines && verifyLineDefaults && (
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...draft, verifyLines: verifyLineDefaults })}
+                  className="text-[11px] font-semibold text-faint hover:text-text"
+                >
+                  Repor linhas
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-faint">Só entram os cargos do membro que têm meta em <b>Metas</b> — cada um vira uma linha:</p>
+            <TokenChips tokens={VERIFY_LINE_PLACEHOLDERS} />
+            {VERIFY_ROWS.map((row) => (
+              <Field key={row.key} label={row.label}>
+                <EmojiTextInput value={verifyLines[row.key]} onChange={(v) => updateVerifyLine(row.key, v)} emojis={emojis} maxLength={300} />
+              </Field>
+            ))}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <Field label="Cor">
             <div className="flex items-center gap-2">
@@ -192,7 +239,11 @@ export function EmbedTemplateEditor({
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Imagem (URL)">
-            <input value={draft.imageUrl} onChange={(e) => onChange({ ...draft, imageUrl: e.target.value })} className={inputClass} placeholder="https://…" />
+            {imageNote ? (
+              <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-faint">{imageNote}</p>
+            ) : (
+              <input value={draft.imageUrl} onChange={(e) => onChange({ ...draft, imageUrl: e.target.value })} className={inputClass} placeholder="https://…" />
+            )}
           </Field>
           <Field label="Miniatura (URL)">
             <input value={draft.thumbnailUrl} onChange={(e) => onChange({ ...draft, thumbnailUrl: e.target.value })} className={inputClass} placeholder="https://…" />

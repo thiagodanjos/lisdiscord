@@ -1,6 +1,6 @@
 import {
   type ChatInputCommandInteraction,
-  EmbedBuilder,
+  type EmbedBuilder,
   type RESTPostAPIChatInputApplicationCommandsJSONBody,
   SlashCommandBuilder,
 } from 'discord.js'
@@ -8,6 +8,9 @@ import type { MemberProfile, RoleGoal } from '../../shared/types'
 import * as roleGoalsStore from '../store/roleGoals'
 import { formatDuration } from '../../shared/leaderboardFormat'
 import { getMemberProfile } from './memberProfile'
+import { getTemplate } from '../store/embedTemplates'
+import { buildEmbedFromDraft, embedHasContent } from './embedTemplate'
+import { DEFAULT_VERIFY_LINES, formatVerifyRoles } from '../../shared/featureTemplates'
 
 export function verificarCommandDef(): RESTPostAPIChatInputApplicationCommandsJSONBody {
   return new SlashCommandBuilder()
@@ -36,28 +39,24 @@ export async function handleVerifyCommand(interaction: ChatInputCommandInteracti
   }
 
   const goals = roleGoalsStore.listGoals(guild.id)
-  await interaction.editReply({ embeds: [buildVerifyEmbed(profile, goals)] })
+  await interaction.editReply({ embeds: [buildVerifyEmbed(profile, goals, guild.id, guild.name)], allowedMentions: { parse: [] } })
   return true
 }
 
-function buildVerifyEmbed(profile: MemberProfile, goals: RoleGoal[]): EmbedBuilder {
-  const lines = profile.roles.map((role) => {
-    const goal = goals.find((g) => g.roleId === role.id)
-    if (!goal) return `⚪ **${role.name}** — sem meta configurada`
-
-    const meetsPoints = profile.points >= goal.pointsGoal
-    const meetsHours = profile.totalSeconds >= goal.hoursGoal * 3600
-    const icon = meetsPoints && meetsHours ? '✅' : '❌'
-    return `${icon} **${role.name}** — ${profile.points}/${goal.pointsGoal} pontos · ${formatDuration(profile.totalSeconds)}/${goal.hoursGoal}h`
+/** Monta o embed do /verificar a partir do template do servidor — só lista cargos com meta configurada. */
+export function buildVerifyEmbed(profile: MemberProfile, goals: RoleGoal[], guildId: string, guildName: string): EmbedBuilder {
+  const template = getTemplate(guildId, 'verificar')
+  const roles = formatVerifyRoles(profile, goals, template.verifyLines ?? DEFAULT_VERIFY_LINES, 'discord')
+  const embed = buildEmbedFromDraft(template, {
+    membro: `<@${profile.id}>`,
+    nome: profile.tag,
+    avatar: profile.avatarUrl ?? '',
+    pontos: String(profile.points),
+    horas: formatDuration(profile.totalSeconds),
+    cargos: roles.text,
+    cumpridos: String(roles.met),
+    total: String(roles.total),
+    servidor: guildName,
   })
-
-  return new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle('🔍 Verificação de cargo')
-    .setDescription(
-      `<@${profile.id}> tem **${profile.points} pontos** e **${formatDuration(profile.totalSeconds)}** de Mov. Call.\n\n` +
-        (lines.length > 0 ? lines.join('\n') : '_Este membro não tem nenhum cargo._'),
-    )
-    .setFooter({ text: 'Configura as metas de cada cargo na app, em "Metas".' })
-    .setTimestamp(new Date())
+  return embedHasContent(embed) ? embed : embed.setDescription(roles.text)
 }

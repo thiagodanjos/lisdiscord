@@ -6,6 +6,7 @@ import { cleanCommandDef, handleCleanCommand } from '../cleanCommand'
 import { handleHelpCommand, helpCommandDef } from '../helpCommand'
 import { addEmoteServerCommandDef, addStickerCommandDef, handleServerAssetsCommand } from '../serverAssetsCommands'
 import { handleUtilityCommand, utilityCommandDefs } from '../utilityCommands'
+import { avisoMovCommandDef, handleAvisoMovCommand } from '../movNotices'
 import { handleGiveawayCommand, sorteioCommandDef } from '../giveawayCommand'
 import { handleMovCallCommand, movCallCommandDefs } from '../movcall'
 import { handleVerifyCommand, verificarCommandDef } from '../verifyCommand'
@@ -96,6 +97,7 @@ export function buildGlobalCommandDefinitions(): CommandDef[] {
     addEmoteServerCommandDef(),
     addStickerCommandDef(),
     ...utilityCommandDefs(),
+    avisoMovCommandDef(),
   ]
 }
 
@@ -123,6 +125,7 @@ export async function handleGameInteraction(interaction: Interaction): Promise<v
   if (await handleCleanCommand(interaction)) return
   if (await handleServerAssetsCommand(interaction)) return
   if (await handleUtilityCommand(interaction)) return
+  if (await handleAvisoMovCommand(interaction)) return
 
   switch (interaction.commandName) {
     case 'trivia':

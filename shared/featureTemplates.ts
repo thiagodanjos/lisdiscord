@@ -1,0 +1,109 @@
+import type { EmbedDraft, RoleGoal, VerifyLineFormat } from './types'
+import { formatDuration } from './leaderboardFormat'
+
+// Valores de fábrica dos embeds do /verificar, /avisomov e da verificação por foto — partilhados
+// entre o bot (que os publica) e a app (modo demonstração e pré-visualização), para o editor
+// mostrar exatamente o que o bot vai mandar.
+
+function draft(partial: Partial<EmbedDraft>): EmbedDraft {
+  return {
+    title: '',
+    description: '',
+    color: '#5865F2',
+    imageUrl: '',
+    thumbnailUrl: '',
+    footer: '',
+    authorName: '',
+    fields: [],
+    timestamp: true,
+    ...partial,
+  }
+}
+
+export const DEFAULT_VERIFY_LINES: VerifyLineFormat = {
+  met: '✅ {cargo} — {pontos}/{metaPontos} pontos · {horas}/{metaHoras}h',
+  notMet: '❌ {cargo} — {pontos}/{metaPontos} pontos · {horas}/{metaHoras}h',
+  empty: '_Este membro não tem nenhum cargo com meta configurada._',
+}
+
+export const FEATURE_TEMPLATE_DEFAULTS = {
+  verificar: draft({
+    title: '🔍 Verificação de cargo',
+    description: '{membro} tem **{pontos} pontos** e **{horas}** de Mov. Call.\n\n{cargos}',
+    color: '#5865F2',
+    thumbnailUrl: '{avatar}',
+    footer: 'Configura as metas de cada cargo na app, em "Metas".',
+    verifyLines: DEFAULT_VERIFY_LINES,
+  }),
+  avisoMov: draft({
+    title: '📢 Aviso MOV',
+    description: '{mensagem}',
+    color: '#F43F7E',
+    footer: 'Aviso de {nomeAutor}',
+    footerIconUrl: '{avatarAutor}',
+  }),
+  verificationRequest: draft({
+    title: '📋 Nova verificação',
+    description: '{membro} enviou a comprovação dos cargos.\n\nUm gestor reage com ✅ para **aprovar** ou ❌ para **recusar**.',
+    color: '#ED4245',
+    thumbnailUrl: '{avatar}',
+    fields: [
+      { name: 'Membro', value: '{membro}', inline: true },
+      { name: 'ID', value: '{id}', inline: true },
+      { name: 'Conta criada', value: '{criada}', inline: true },
+    ],
+    footer: '{servidor} · Verificação Mov Call',
+  }),
+  verificationLog: draft({
+    title: 'Verificação {estado}',
+    description: '{membro} foi **{estado}** por {moderador}.',
+    color: '#22E584',
+    thumbnailUrl: '{avatar}',
+    fields: [
+      { name: 'Cargos dados', value: '{cargosDados}', inline: true },
+      { name: 'Cargos tirados', value: '{cargosTirados}', inline: true },
+    ],
+    footer: 'ID: {id}',
+  }),
+} satisfies Record<string, EmbedDraft>
+
+export interface VerifyProfileInput {
+  points: number
+  totalSeconds: number
+  roles: { id: string; name: string }[]
+}
+
+/**
+ * Monta o `{cargos}` do /verificar: só entram os cargos do membro que têm meta configurada —
+ * cargos sem meta ficam de fora. `mention` escreve `<@&id>` (bot) ou `@nome` (pré-visualização).
+ */
+export function formatVerifyRoles(
+  profile: VerifyProfileInput,
+  goals: RoleGoal[],
+  lines: VerifyLineFormat,
+  mention: 'discord' | 'preview',
+): { text: string; met: number; total: number } {
+  const withGoal = profile.roles
+    .map((role) => ({ role, goal: goals.find((g) => g.roleId === role.id) }))
+    .filter((r): r is { role: { id: string; name: string }; goal: RoleGoal } => Boolean(r.goal))
+
+  let met = 0
+  const out = withGoal.map(({ role, goal }) => {
+    const ok = profile.points >= goal.pointsGoal && profile.totalSeconds >= goal.hoursGoal * 3600
+    if (ok) met++
+    const values: Record<string, string> = {
+      cargo: mention === 'discord' ? `<@&${role.id}>` : `@${role.name}`,
+      cargoNome: role.name,
+      pontos: String(profile.points),
+      metaPontos: String(goal.pointsGoal),
+      horas: formatDuration(profile.totalSeconds),
+      metaHoras: String(goal.hoursGoal),
+      faltamPontos: String(Math.max(0, goal.pointsGoal - profile.points)),
+      faltamHoras: formatDuration(Math.max(0, goal.hoursGoal * 3600 - profile.totalSeconds)),
+    }
+    const template = (ok ? lines.met : lines.notMet) || DEFAULT_VERIFY_LINES[ok ? 'met' : 'notMet']
+    return Object.entries(values).reduce((acc, [k, v]) => acc.split(`{${k}}`).join(v), template)
+  })
+
+  return { text: out.length > 0 ? out.join('\n') : lines.empty || DEFAULT_VERIFY_LINES.empty, met, total: withGoal.length }
+}

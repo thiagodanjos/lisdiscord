@@ -38,7 +38,8 @@ export const HELP_CATEGORIES: Category[] = [
       `\`/pontosmovadmin adicionar|remover|painel\` — ajusta pontos ou define o canal do placar. ${G}`,
       '`/inativos` — quem não tem pontos ou tem menos de 5h de Mov. Call.',
       `\`/resetmovcall\` — apaga todos os pontos e horas, com confirmação. ${G}`,
-      '`/verificar @membro` — cargos, pontos, horas e se já cumpre a meta para upar.',
+      '`/verificar @membro` — pontos, horas e os cargos com meta, com ✅/❌ se já cumpre para upar.',
+      '_📸 Verificação por foto: no canal de verificação, manda o print do teu perfil com os cargos — o bot cria o pedido e marca a gestão._',
     ],
   },
   {
@@ -82,13 +83,14 @@ export const HELP_CATEGORIES: Category[] = [
   },
   {
     id: 'mensagens',
-    label: 'Mensagens & sorteios',
+    label: 'Mensagens, avisos & sorteios',
     emoji: '📨',
-    description: 'Embeds personalizados e sorteios',
+    description: 'Embeds personalizados, avisos agendados e sorteios',
     color: 0xa855f7,
     lines: () => [
       `\`/embed\` — construtor de embed/webhook com menu, pré-visualização ao vivo, exportar/importar JSON e botão de enviar. ${G}`,
       `\`/sorteio\` — sorteio por reação 🎉 com assistente (canal, prémio, duração, vencedores) e botão para rerolar. ${G}`,
+      `\`/avisomov canal: tempo: [mensagem:] [marcar:] [repetir:]\` — agenda um aviso (ex.: \`2h\`, \`1h30m\`, \`1d\`) com o embed personalizado na app, podendo marcar um cargo e repetir todos os dias/semanas. ${G}`,
     ],
   },
   {

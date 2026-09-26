@@ -23,6 +23,8 @@ import type {
   LoginHistoryEntry,
   MemberProfile,
   MemberSearchResult,
+  MovNotice,
+  MovNoticeInput,
   ModerationLogEntry,
   MovPointsBoardConfig,
   MovPointsEntry,
@@ -39,6 +41,8 @@ import type {
   TimeoutDuration,
   Transcript,
   TranscriptSummary,
+  VerificationEntry,
+  VerificationSettings,
 } from './types'
 
 /** Nomes dos canais IPC — usados em ambos os lados para nunca ficarem dessincronizados. */
@@ -162,6 +166,20 @@ export const IPC = {
   getRemoteEmbedTemplate: 'remoteBot:embedTemplates:get',
   setRemoteEmbedTemplate: 'remoteBot:embedTemplates:set',
   resetRemoteEmbedTemplate: 'remoteBot:embedTemplates:reset',
+
+  listMovNotices: 'movNotices:list',
+  createMovNotice: 'movNotices:create',
+  cancelMovNotice: 'movNotices:cancel',
+  listRemoteMovNotices: 'remoteBot:movNotices:list',
+  createRemoteMovNotice: 'remoteBot:movNotices:create',
+  cancelRemoteMovNotice: 'remoteBot:movNotices:cancel',
+
+  getVerificationSettings: 'verification:settings:get',
+  setVerificationSettings: 'verification:settings:set',
+  listVerifications: 'verification:list',
+  getRemoteVerificationSettings: 'remoteBot:verification:settings:get',
+  setRemoteVerificationSettings: 'remoteBot:verification:settings:set',
+  listRemoteVerifications: 'remoteBot:verification:list',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -290,4 +308,18 @@ export interface LisDiscordBridge {
   getRemoteEmbedTemplate(guildId: string, kind: EmbedTemplateKind): Promise<EmbedTemplateResponse>
   setRemoteEmbedTemplate(guildId: string, kind: EmbedTemplateKind, draft: EmbedDraft): Promise<EmbedTemplateResponse>
   resetRemoteEmbedTemplate(guildId: string, kind: EmbedTemplateKind): Promise<EmbedTemplateResponse>
+
+  listMovNotices(guildId: string): Promise<MovNotice[]>
+  createMovNotice(guildId: string, input: MovNoticeInput): Promise<MovNotice>
+  cancelMovNotice(guildId: string, id: string): Promise<MovNotice[]>
+  listRemoteMovNotices(guildId: string): Promise<MovNotice[]>
+  createRemoteMovNotice(guildId: string, input: MovNoticeInput): Promise<MovNotice>
+  cancelRemoteMovNotice(guildId: string, id: string): Promise<MovNotice[]>
+
+  getVerificationSettings(guildId: string): Promise<VerificationSettings>
+  setVerificationSettings(guildId: string, settings: VerificationSettings): Promise<VerificationSettings>
+  listVerifications(guildId: string): Promise<VerificationEntry[]>
+  getRemoteVerificationSettings(guildId: string): Promise<VerificationSettings>
+  setRemoteVerificationSettings(guildId: string, settings: VerificationSettings): Promise<VerificationSettings>
+  listRemoteVerifications(guildId: string): Promise<VerificationEntry[]>
 }
