@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Radio, Trash2, Upload } from 'lucide-react'
 import { bridge } from '../lib/bridge'
-import { Badge, Button, Card, ConfirmDialog, EmptyState, SectionHeading } from '../components/ui'
+import { Badge, Button, Card, ConfirmDialog, EmptyState, PageHeader, SectionHeading } from '../components/ui'
 import type { BotEmoji, RemoteBotConfig } from '../../shared/types'
 
 const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
@@ -107,7 +107,7 @@ export default function Emojis() {
 
   return (
     <div className="flex flex-col gap-8">
-      <SectionHeading
+      <PageHeader
         title="Emojis"
         subtitle="Biblioteca de emojis do bot — ficam disponíveis em qualquer embed ou mensagem, em qualquer servidor, usando o código que a Discord gera para cada um"
         action={

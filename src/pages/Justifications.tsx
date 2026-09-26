@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Calendar, CalendarClock, Cable, MessageSquareWarning, Palette, Pin, Radio } from 'lucide-react'
 import { bridge } from '../lib/bridge'
-import { Badge, Button, Card, Modal, SectionHeading } from '../components/ui'
+import { Badge, Button, Card, Modal, PageHeader, SectionHeading } from '../components/ui'
 import { EmbedTemplateEditor } from '../components/EmbedTemplateEditor'
 import {
   JUSTIFICATION_PLACEHOLDERS,
@@ -284,7 +284,7 @@ export default function Justifications() {
 
   return (
     <div className="flex flex-col gap-8">
-      <SectionHeading
+      <PageHeader
         title="Justificativas"
         subtitle='Configura os canais onde o bot publica os pedidos de justificativa fixa e diária, e para onde envia os alarmes de log'
       />
@@ -357,7 +357,7 @@ export default function Justifications() {
         <select
           value={guildId}
           onChange={(e) => setGuildId(e.target.value)}
-          className="mt-1.5 w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+          className="mt-1.5 block w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
         >
           {guilds.map((g) => (
             <option key={g.id} value={g.id}>

@@ -4,7 +4,7 @@ import { Clock3, Minus, Plus, Radio, ScrollText, Search, Timer, Users } from 'lu
 import { bridge } from '../lib/bridge'
 import { formatDuration } from '../lib/format'
 import { cn } from '../lib/utils'
-import { Avatar, Badge, Button, Card, EmptyState, Modal, SectionHeading, StatCard } from '../components/ui'
+import { Avatar, Badge, Button, Card, EmptyState, Modal, PageHeader, SectionHeading, StatCard } from '../components/ui'
 import type { GuildSummary, MovPointsEntry, RemoteBotConfig } from '../../shared/types'
 
 const POLL_INTERVAL_MS = 8_000
@@ -81,7 +81,7 @@ export default function MovHours() {
 
   return (
     <div className="flex flex-col gap-8">
-      <SectionHeading
+      <PageHeader
         title="Horas de MOV. Call"
         subtitle="Adiciona ou remove horas de cada membro — também dá pelo Discord, com /movhoras adicionar e /movhoras remover"
         action={
@@ -104,7 +104,7 @@ export default function MovHours() {
         <select
           value={guildId}
           onChange={(e) => setGuildId(e.target.value)}
-          className="mt-1.5 w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+          className="mt-1.5 block w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
         >
           {guilds.map((g) => (
             <option key={g.id} value={g.id}>

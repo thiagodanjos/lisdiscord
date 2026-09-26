@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Clock3, Medal, Plus, Radio, Target, Trash2 } from 'lucide-react'
 import { bridge } from '../lib/bridge'
-import { Badge, Button, Card, ConfirmDialog, EmptyState, Modal, SectionHeading } from '../components/ui'
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Modal, PageHeader } from '../components/ui'
 import type { GuildSummary, RemoteBotConfig, RoleGoal, RolePickerEntry } from '../../shared/types'
 
 const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
@@ -91,7 +91,7 @@ export default function Goals() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeading
+      <PageHeader
         title="Metas"
         subtitle="Define quantos pontos e horas de Mov. Call cada cargo exige — usado pelos Upamentos e pelo /verificar"
         action={
@@ -114,7 +114,7 @@ export default function Goals() {
         <select
           value={guildId}
           onChange={(e) => setGuildId(e.target.value)}
-          className="mt-1.5 w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+          className="mt-1.5 block w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
         >
           {guilds.map((g) => (
             <option key={g.id} value={g.id}>

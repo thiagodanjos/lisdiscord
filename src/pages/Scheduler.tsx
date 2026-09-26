@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Clock3, Plus, Trash2 } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { FREQUENCY_LABEL, formatRelativeDate } from '../lib/format'
-import { Badge, Button, Card, ConfirmDialog, EmptyState, Modal, SectionHeading, Toggle } from '../components/ui'
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Modal, PageHeader, Toggle } from '../components/ui'
 import type { GuildSummary, ScheduleConfig, ScheduleFrequency } from '../../shared/types'
 
 const FREQUENCIES: ScheduleFrequency[] = ['hourly6', 'hourly12', 'daily', 'daily3', 'weekly']
@@ -52,7 +52,7 @@ export default function Scheduler() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeading
+      <PageHeader
         title="Agendamentos"
         subtitle="Backups automáticos, criados sozinhos enquanto a app estiver aberta"
         action={

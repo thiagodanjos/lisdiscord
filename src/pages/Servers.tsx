@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Ban, Camera, Server, ShieldAlert } from 'lucide-react'
 import { bridge } from '../lib/bridge'
-import { Badge, Button, Card, Modal, SectionHeading, Toggle } from '../components/ui'
+import { Badge, Button, Card, Modal, PageHeader, Toggle } from '../components/ui'
 import type { GuildSummary } from '../../shared/types'
 
 export default function Servers() {
@@ -35,7 +35,7 @@ export default function Servers() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeading title="Servidores" subtitle="Servidores onde o bot está presente" />
+      <PageHeader title="Servidores" subtitle="Servidores onde o bot está presente" />
 
       {!loading && guilds.length === 0 && (
         <Card className="p-6 text-sm text-muted">O bot ainda não está em nenhum servidor. Convida-o primeiro.</Card>

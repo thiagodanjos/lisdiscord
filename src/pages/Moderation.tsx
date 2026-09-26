@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Ban, Clock, LogOut, Lock, ScrollText, Search, ShieldOff, Unlock } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatRelativeDate } from '../lib/format'
-import { Avatar, Badge, Button, Card, Modal, SectionHeading } from '../components/ui'
+import { Avatar, Badge, Button, Card, Modal, PageHeader, SectionHeading } from '../components/ui'
 import type { ChannelPickerEntry, GuildSummary, MemberSearchResult, ModerationLogEntry, TimeoutDuration } from '../../shared/types'
 
 const TIMEOUT_OPTIONS: { label: string; value: TimeoutDuration }[] = [
@@ -106,14 +106,14 @@ export default function Moderation() {
 
   return (
     <div className="flex flex-col gap-8">
-      <SectionHeading title="Moderação" subtitle="Ações diretas no servidor: banir, expulsar, mutar e bloquear canais" />
+      <PageHeader title="Moderação" subtitle="Ações diretas no servidor: banir, expulsar, mutar e bloquear canais" />
 
       <div>
         <label className="text-xs font-semibold tracking-wide text-faint uppercase">Servidor</label>
         <select
           value={guildId}
           onChange={(e) => setGuildId(e.target.value)}
-          className="mt-1.5 w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+          className="mt-1.5 block w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
         >
           {guilds.map((g) => (
             <option key={g.id} value={g.id}>

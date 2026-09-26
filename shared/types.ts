@@ -99,6 +99,32 @@ export interface GuildSummary {
   botIsAdmin: boolean
 }
 
+// ==========================================================================
+// Conta local (login guardado em SQLite)
+// ==========================================================================
+
+export interface AuthUser {
+  id: number
+  username: string
+  createdAt: string
+  lastLoginAt: string | null
+}
+
+export interface AuthState {
+  /** Já existe pelo menos uma conta criada neste computador. */
+  hasAccount: boolean
+  /** Conta com a sessão aberta (null = ainda não entrou). */
+  user: AuthUser | null
+  /** A conta aberta tem um token de bot guardado — dá para ligar sem voltar a colá-lo. */
+  hasBotToken: boolean
+}
+
+export interface LoginHistoryEntry {
+  username: string
+  success: boolean
+  date: string
+}
+
 export interface BotStatus {
   connected: boolean
   botTag: string | null
@@ -381,6 +407,23 @@ export interface MovPointsBoardConfig {
 export interface ExcludedMember {
   userId: string
   tag: string
+}
+
+/** Uma execução do /limparcdo — quem apagou, onde, quantas pediu e quantas foram mesmo apagadas. */
+export interface CleanLogEntry {
+  id: string
+  date: string
+  guildId: string
+  channelId: string
+  channelName: string
+  actorId: string
+  actorTag: string
+  requested: number
+  deleted: number
+  /** Mensagens com mais de 14 dias — a Discord não as deixa apagar em massa. */
+  skippedOld: number
+  targetUserId: string | null
+  targetTag: string | null
 }
 
 export type MovPointsLogAction = 'add_points' | 'remove_points' | 'add_hours' | 'remove_hours' | 'reset'

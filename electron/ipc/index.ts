@@ -2,12 +2,14 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import type { Guild } from 'discord.js'
 import type {
   AppSettings,
+  AuthState,
   BackupOptions,
   BackupSummary,
   BotEmoji,
   BotStatus,
   ChannelKind,
   ChannelPickerEntry,
+  CleanLogEntry,
   DiffEntry,
   EmbedDraft,
   EmbedTemplateKind,
@@ -20,6 +22,7 @@ import type {
   GuildSummary,
   JustificationChannelKind,
   JustificationSettings,
+  LoginHistoryEntry,
   MemberProfile,
   MemberSearchResult,
   ModerationLogEntry,
@@ -59,6 +62,7 @@ import * as gameSettingsStore from '../store/gameSettings'
 import * as moderationLogStore from '../store/moderationLog'
 import * as movPointsStore from '../store/movPoints'
 import * as movPointsLogStore from '../store/movPointsLog'
+import * as cleanLogStore from '../store/cleanLog'
 import * as justificationSettingsStore from '../store/justificationSettings'
 import { applyJustificationChannel, postJustificationMessage } from '../discord/justifications'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../discord/botEmojis'
@@ -67,7 +71,8 @@ import * as roleGoalsStore from '../store/roleGoals'
 import * as excludedMembersStore from '../store/excludedMembers'
 import * as remoteBotStore from '../store/remoteBot'
 import * as embedTemplatesStore from '../store/embedTemplates'
-import { getAppSettings, loadToken, openDataDir, saveToken } from '../store/settings'
+import { getAppSettings, openDataDir } from '../store/settings'
+import * as auth from '../auth/auth'
 
 /** Identifica no log de pontos ações feitas pela app desktop (em vez de comandos do Discord). */
 const DESKTOP_APP_ACTOR = 'Aplicação desktop'
@@ -82,9 +87,43 @@ const CHANNEL_KIND_MAP: Record<number, ChannelKind | undefined> = {
 }
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
+  // ---- Conta local (SQLite) ----
+  ipcMain.handle(IPC.getAuthState, async (): Promise<AuthState> => auth.getAuthState())
+  ipcMain.handle(IPC.register, async (_e, username: string, password: string, remember: boolean): Promise<AuthState> =>
+    auth.register(username, password, remember),
+  )
+  ipcMain.handle(IPC.login, async (_e, username: string, password: string, remember: boolean): Promise<AuthState> =>
+    auth.login(username, password, remember),
+  )
+  ipcMain.handle(IPC.logout, async (): Promise<void> => {
+    auth.logout()
+    await discordManager.disconnect()
+  })
+  ipcMain.handle(IPC.changePassword, async (_e, current: string, next: string): Promise<void> => auth.changePassword(current, next))
+  ipcMain.handle(IPC.listLoginHistory, async (): Promise<LoginHistoryEntry[]> => auth.listLoginHistory())
+  ipcMain.handle(IPC.forgetBotToken, async (): Promise<void> => {
+    auth.forgetBotToken()
+    await discordManager.disconnect()
+  })
+
+  // Liga com o token guardado na conta. Se já houver uma ligação a decorrer (ex.: a UI pediu duas
+  // vezes), espera por essa em vez de abrir outra — era esta corrida que fazia a app pedir o
+  // token de novo a cada arranque: a janela perguntava o estado antes de a ligação terminar.
+  let connecting: Promise<BotStatus> | null = null
+  ipcMain.handle(IPC.autoConnectBot, async (): Promise<BotStatus> => {
+    if (!auth.isLoggedIn()) throw new Error('Inicia sessão primeiro.')
+    if (discordManager.isConnected()) return discordManager.getStatus()
+    const token = auth.loadBotToken()
+    if (!token) throw new Error('Esta conta ainda não tem um token de bot guardado.')
+    connecting ??= discordManager.connect(token).finally(() => {
+      connecting = null
+    })
+    return connecting
+  })
+
   ipcMain.handle(IPC.connectBot, async (_e, token: string): Promise<BotStatus> => {
     const status = await discordManager.connect(token)
-    saveToken(token)
+    auth.saveBotToken(token, status.botTag)
     return status
   })
 
@@ -172,7 +211,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
 
   ipcMain.handle(IPC.deleteSchedule, async (_e, id: string): Promise<void> => schedulesStore.deleteSchedule(id))
 
-  ipcMain.handle(IPC.getSettings, async (): Promise<AppSettings> => getAppSettings())
+  ipcMain.handle(IPC.getSettings, async (): Promise<AppSettings> => ({ ...getAppSettings(), hasToken: auth.getAuthState().hasBotToken }))
   ipcMain.handle(IPC.openDataDir, async (): Promise<void> => openDataDir())
 
   // ---- Mensagens ----
@@ -355,6 +394,11 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   })
 
   ipcMain.handle(IPC.listMovPointsLog, async (_e, guildId: string): Promise<MovPointsLogEntry[]> => movPointsLogStore.listMovPointsLog(guildId))
+
+  ipcMain.handle(IPC.listCleanLog, async (_e, guildId: string): Promise<CleanLogEntry[]> => cleanLogStore.listCleanLog(guildId))
+  ipcMain.handle(IPC.listRemoteCleanLog, async (_e, guildId: string): Promise<CleanLogEntry[]> =>
+    remoteApi(requireRemoteCredentials()).listCleanLog(guildId),
+  )
 
   ipcMain.handle(IPC.listExcludedMembers, async (_e, guildId: string): Promise<ExcludedMember[]> => excludedMembersStore.listExcluded(guildId))
 
@@ -575,15 +619,11 @@ async function refreshEmbedTemplateTarget(guild: Guild, kind: EmbedTemplateKind)
   }
 }
 
-/** Corre à parte do registo dos handlers: religa agendamentos e, se houver token guardado, liga o bot sozinho. */
+/**
+ * Corre à parte do registo dos handlers: religa os agendamentos. O bot já não liga aqui sozinho —
+ * liga depois de a conta entrar (autoConnectBot), com o token guardado nessa conta.
+ */
 export async function bootstrap(): Promise<void> {
-  const token = loadToken()
-  if (token) {
-    await discordManager.connect(token).catch((err) => {
-      console.error('Falha ao religar o bot automaticamente:', err)
-    })
-  }
-
   startScheduledBackups()
   startGiveawayScheduler()
 }

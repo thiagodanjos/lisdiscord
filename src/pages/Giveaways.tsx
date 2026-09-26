@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Gift, Play, Plus, Trash2 } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatRelativeDate } from '../lib/format'
-import { Badge, Button, Card, ConfirmDialog, EmptyState, Modal, SectionHeading } from '../components/ui'
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Modal, PageHeader } from '../components/ui'
 import type { ChannelPickerEntry, Giveaway, GuildSummary } from '../../shared/types'
 
 const DURATION_OPTIONS = [
@@ -77,7 +77,7 @@ export default function Giveaways() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeading
+      <PageHeader
         title="Sorteios"
         subtitle="Publica um sorteio com reação 🎉 e escolhe vencedores automaticamente"
         action={

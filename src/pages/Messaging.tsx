@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Download, Radio, Send, Upload } from 'lucide-react'
 import { bridge } from '../lib/bridge'
-import { Badge, Button, Card, Modal, SectionHeading, Toggle } from '../components/ui'
+import { Badge, Button, Card, Modal, PageHeader, Toggle } from '../components/ui'
 import { EmbedTemplateEditor } from '../components/EmbedTemplateEditor'
 import { RichTextField } from '../components/RichTextField'
 import { emptyEmbedDraft, messageDraftFromJson, messageDraftToJson, type MessageDraft } from '../../shared/messageJson'
@@ -120,7 +120,7 @@ export default function Messaging() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeading
+      <PageHeader
         title="Mensagens"
         subtitle="Envia uma mensagem com embed (ou como webhook, com nome e foto próprios) — também dá pelo Discord, com /embed"
         action={

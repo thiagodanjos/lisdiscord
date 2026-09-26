@@ -1,15 +1,32 @@
-import { ExternalLink, KeyRound, PlayCircle } from 'lucide-react'
-import { useState } from 'react'
+import { ExternalLink, KeyRound, LogOut, Radio } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { bridge } from '../lib/bridge'
-import { useUiStore } from '../store/ui'
 import { Button, Logo } from '../components/ui'
-import type { BotStatus } from '../../shared/types'
+import { AuthBackdrop } from './Auth'
+import { cleanIpcError } from '../lib/errors'
+import type { BotStatus, RemoteBotConfig } from '../../shared/types'
 
-export default function Connect({ onConnected }: { onConnected: (status: BotStatus) => void }) {
+export default function Connect({
+  username,
+  initialError,
+  onConnected,
+  onSkip,
+  onLogout,
+}: {
+  username: string | null
+  initialError?: string
+  onConnected: (status: BotStatus) => void
+  onSkip: () => void
+  onLogout: () => void
+}) {
   const [token, setToken] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const setDemoMode = useUiStore((s) => s.setDemoMode)
+  const [error, setError] = useState<string | null>(initialError ?? null)
+  const [remote, setRemote] = useState<RemoteBotConfig | null>(null)
+
+  useEffect(() => {
+    bridge.getRemoteBotConfig().then(setRemote).catch(() => setRemote(null))
+  }, [])
 
   async function connect(e: React.FormEvent) {
     e.preventDefault()
@@ -17,42 +34,58 @@ export default function Connect({ onConnected }: { onConnected: (status: BotStat
     setLoading(true)
     setError(null)
     try {
-      const status = await bridge.connectBot(token.trim())
-      onConnected(status)
+      onConnected(await bridge.connectBot(token.trim()))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível ligar.')
+      setError(cleanIpcError(err))
     } finally {
       setLoading(false)
     }
   }
 
+  const hasRemote = Boolean(remote?.url && remote.hasApiKey)
+
   return (
-    <div className="flex h-screen items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-card">
-        <Logo size="lg" />
-        <p className="mt-3 text-sm text-muted">
-          Liga um bot que já administres nos teus servidores para começares a fazer backups. Nada é enviado para
-          fora do teu computador.
+    <AuthBackdrop>
+      <div className="glass neon-ring rounded-2xl border border-border p-8">
+        <div className="flex items-center justify-between">
+          <Logo />
+          <button onClick={onLogout} className="flex items-center gap-1.5 text-xs font-semibold text-faint transition-colors hover:text-danger">
+            <LogOut size={13} />
+            Sair
+          </button>
+        </div>
+
+        <h1 className="mt-7 text-2xl font-black tracking-tight uppercase">Ligar o bot</h1>
+        <p className="mt-1 text-sm text-muted">
+          {username ? (
+            <>
+              Olá, <span className="font-semibold text-text">{username}</span>. Cola o token do teu bot uma vez — fica guardado nesta conta, encriptado,
+              e das próximas vezes a app liga sozinha.
+            </>
+          ) : (
+            'Cola o token do teu bot para ligar.'
+          )}
         </p>
 
         <form onSubmit={connect} className="mt-6 flex flex-col gap-3">
-          <label className="text-xs font-semibold tracking-wide text-faint uppercase">Token do bot</label>
+          <label className="text-[10px] font-bold tracking-[0.14em] text-faint uppercase">Token do bot</label>
           <div className="relative">
-            <KeyRound size={16} className="absolute top-1/2 left-3 -translate-y-1/2 text-faint" />
+            <KeyRound size={15} className="absolute top-1/2 left-3 -translate-y-1/2 text-faint" />
             <input
               type="password"
               value={token}
               onChange={(e) => setToken(e.target.value)}
               placeholder="Cola aqui o token do teu bot"
               autoComplete="off"
-              className="w-full rounded-lg border border-border bg-raised py-2.5 pr-3 pl-9 text-sm text-text placeholder:text-faint focus:border-accent focus:outline-none"
+              autoFocus
+              className="w-full rounded-lg border border-border bg-black/30 py-2.5 pr-3 pl-9 font-mono text-sm text-text placeholder:font-sans placeholder:text-faint focus:border-accent focus:outline-none"
             />
           </div>
 
-          {error && <p className="text-xs text-danger">{error}</p>}
+          {error && <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
 
-          <Button type="submit" loading={loading} disabled={!token.trim()}>
-            Ligar
+          <Button type="submit" loading={loading} disabled={!token.trim()} className="py-2.5 tracking-wide uppercase">
+            Ligar e guardar
           </Button>
         </form>
 
@@ -66,17 +99,16 @@ export default function Connect({ onConnected }: { onConnected: (status: BotStat
           <ExternalLink size={12} />
         </a>
 
-        <div className="mt-6 border-t border-border pt-5">
-          <button
-            onClick={() => setDemoMode(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-raised px-4 py-2.5 text-sm font-semibold text-text hover:border-border-strong"
-          >
-            <PlayCircle size={16} />
-            Só explorar em modo demonstração
-          </button>
-          <p className="mt-2 text-center text-[11px] text-faint">Sem bot, sem token — dados fictícios só para conheceres a app.</p>
-        </div>
+        {hasRemote && (
+          <div className="mt-6 border-t border-border pt-5">
+            <Button variant="cyan" onClick={onSkip} className="w-full">
+              <Radio size={14} />
+              Continuar só com o bot remoto
+            </Button>
+            <p className="mt-2 text-center text-[11px] text-faint">Tens um bot remoto configurado ({remote?.url}) — as páginas que o usam funcionam sem ligar o bot aqui.</p>
+          </div>
+        )}
       </div>
-    </div>
+    </AuthBackdrop>
   )
 }

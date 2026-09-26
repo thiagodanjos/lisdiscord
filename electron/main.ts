@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { registerIpcHandlers, bootstrap } from './ipc/index'
 import { ensureDataDirs } from './store/paths'
+import { openDatabase } from './db/database'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -67,6 +68,7 @@ app.on('activate', () => {
 
 app.whenReady().then(async () => {
   ensureDataDirs()
+  await openDatabase()
   registerIpcHandlers(() => win)
   createWindow()
   await bootstrap()

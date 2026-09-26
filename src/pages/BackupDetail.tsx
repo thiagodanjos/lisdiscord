@@ -3,7 +3,7 @@ import { Navigate, useParams } from 'react-router-dom'
 import { Code2, Hash, Megaphone, RotateCcw, Smile, Users, Volume2 } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatDateTime } from '../lib/format'
-import { Badge, Button, Card, SectionHeading } from '../components/ui'
+import { Badge, Button, Card, PageHeader } from '../components/ui'
 import { RestoreModal } from '../components/RestoreModal'
 import type { BackupData, ChannelBackup } from '../../shared/types'
 
@@ -38,7 +38,7 @@ export default function BackupDetail() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeading
+      <PageHeader
         title={backup.guildName}
         subtitle={`Backup de ${formatDateTime(backup.createdAt)}`}
         action={

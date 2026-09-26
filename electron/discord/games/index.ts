@@ -3,6 +3,7 @@ import type { GameId, GameInfo } from '../../../shared/types'
 import { enabledGameIds } from '../../store/gameSettings'
 import { addEmojiBotCommandDef, copyEmojiCommandDef, handleAddEmojiBotCommand, handleCopyEmojiCommand } from '../emojiCommand'
 import { embedBuilderCommandDef, handleEmbedBuilderCommand } from '../embedBuilderCommand'
+import { cleanCommandDef, handleCleanCommand } from '../cleanCommand'
 import { handleGiveawayCommand, sorteioCommandDef } from '../giveawayCommand'
 import { handleMovCallCommand, movCallCommandDefs } from '../movcall'
 import { handleVerifyCommand, verificarCommandDef } from '../verifyCommand'
@@ -129,6 +130,13 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
       '`/embed` — cria um embed (ou webhook com nome e foto próprios) passo a passo: menu para canal, texto, título, descrição, cor, imagens, autor, rodapé e campos, com pré-visualização ao vivo, exportar/importar em JSON e botão de enviar. *(gestores)*',
     )
 
+  const cleanEmbed = new EmbedBuilder()
+    .setColor(0x22e584)
+    .setTitle('🧹 Limpeza')
+    .setDescription(
+      '`/limparcdo quantidade: [membro:] [canal:]` — apaga até 1000 mensagens de um canal (opcionalmente só as de um membro). Mensagens com mais de 14 dias não podem ser apagadas em massa. Cada limpeza fica registada em **Logs de limpeza**, na app. *(só administração)*',
+    )
+
   const gamesList = GAMES.filter((g) => enabled.includes(g.id))
   const gamesEmbed = new EmbedBuilder()
     .setColor(0x3ba55c)
@@ -140,7 +148,7 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
         : '_Nenhum jogo está ativado neste servidor. Ativa em "Jogos", na app desktop._',
     )
 
-  return [movEmbed, giveawayEmbed, emojiEmbed, messagesEmbed, gamesEmbed]
+  return [movEmbed, giveawayEmbed, emojiEmbed, messagesEmbed, cleanEmbed, gamesEmbed]
 }
 
 /**
@@ -152,7 +160,7 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
  * não há duplicados nem risco de os comandos ficarem indisponíveis enquanto o global propaga.
  */
 export function buildGlobalCommandDefinitions(): CommandDef[] {
-  return [...movCallCommandDefs(), sorteioCommandDef(), verificarCommandDef(), helpCommandDef(), addEmojiBotCommandDef(), copyEmojiCommandDef(), embedBuilderCommandDef()]
+  return [...movCallCommandDefs(), sorteioCommandDef(), verificarCommandDef(), helpCommandDef(), addEmojiBotCommandDef(), copyEmojiCommandDef(), embedBuilderCommandDef(), cleanCommandDef()]
 }
 
 /** Comandos por servidor: os fixos (para ficarem disponíveis já) + os jogos que o servidor ativou. */
@@ -176,6 +184,7 @@ export async function handleGameInteraction(interaction: Interaction): Promise<v
   if (await handleAddEmojiBotCommand(interaction)) return
   if (await handleCopyEmojiCommand(interaction)) return
   if (await handleEmbedBuilderCommand(interaction)) return
+  if (await handleCleanCommand(interaction)) return
 
   switch (interaction.commandName) {
     case 'trivia':

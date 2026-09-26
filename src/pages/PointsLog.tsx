@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Minus, Plus, Radio, RotateCcw, ScrollText, Timer } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatDuration, formatRelativeDate } from '../lib/format'
-import { Avatar, Badge, Card, SectionHeading } from '../components/ui'
+import { Avatar, Badge, Card, PageHeader, SectionHeading } from '../components/ui'
 import { HOURS_LOG_ACTIONS, type GuildSummary, type MovPointsLogAction, type MovPointsLogEntry, type RemoteBotConfig } from '../../shared/types'
 
 const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
@@ -63,7 +63,7 @@ export default function PointsLog({ mode = 'points' }: { mode?: LogMode }) {
 
   return (
     <div className="flex flex-col gap-8">
-      <SectionHeading
+      <PageHeader
         title={copy.title}
         subtitle={copy.subtitle}
         action={
@@ -80,7 +80,7 @@ export default function PointsLog({ mode = 'points' }: { mode?: LogMode }) {
         <select
           value={guildId}
           onChange={(e) => setGuildId(e.target.value)}
-          className="mt-1.5 w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+          className="mt-1.5 block w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
         >
           {guilds.map((g) => (
             <option key={g.id} value={g.id}>

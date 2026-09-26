@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Clock3, Eye, EyeOff, Medal, Minus, Palette, Plus, Radio, RotateCcw, Search } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatDuration } from '../lib/format'
-import { Avatar, Badge, Button, Card, ConfirmDialog, EmptyState, Modal, SectionHeading } from '../components/ui'
+import { Avatar, Badge, Button, Card, ConfirmDialog, EmptyState, Modal, PageHeader, SectionHeading } from '../components/ui'
 import { EmbedTemplateEditor } from '../components/EmbedTemplateEditor'
 import { buildLeaderboardList, DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
 import type {
@@ -224,7 +224,7 @@ export default function MovPoints() {
 
   return (
     <div className="flex flex-col gap-8">
-      <SectionHeading
+      <PageHeader
         title="Pontos de MOV. Call"
         subtitle="Pontuação por participação em Mov. Calls, com um painel público sempre atualizado"
         action={
@@ -241,7 +241,7 @@ export default function MovPoints() {
         <select
           value={guildId}
           onChange={(e) => setGuildId(e.target.value)}
-          className="mt-1.5 w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+          className="mt-1.5 block w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
         >
           {guilds.map((g) => (
             <option key={g.id} value={g.id}>

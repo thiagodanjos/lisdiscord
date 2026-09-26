@@ -27,6 +27,10 @@ O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidore
 
 ## Funcionalidades
 
+**App**
+- **Conta local com login (SQLite)** — na primeira vez crias uma conta (utilizador + palavra-passe); o token do bot fica guardado nessa conta, encriptado pelo sistema operativo, e com **Manter sessão iniciada** a app entra e liga o bot sozinha ao abrir — nunca mais é preciso colar o token. As contas ficam numa base de dados SQLite (`lisdiscord.sqlite`) na pasta de dados da app; o repositório só tem o modelo (`electron/db/schema.sql`), nunca dados de ninguém. Em **Definições**: alterar a palavra-passe, ver as últimas entradas, esquecer o token e terminar sessão. Com um bot remoto configurado, dá para entrar sem ligar o bot localmente
+- **Visual** — tema escuro néon com cartões de vidro, brilhos e animações; menu lateral organizado por categorias (Geral, Comunicação, Mov. Call · Pontos, Mov. Call · Horas, Equipa, Moderação & Limpeza, Backups, Sistema) que abrem e fecham; barra de topo com o caminho da página e o estado do bot em tempo real; **Visão Geral** com separadores (Geral, Mov. Call, Backups), cartões de estatísticas, top 5 e atividade recente
+
 **Backups**
 - Backup completo — cargos, canais e categorias (com permissões), emojis, definições do servidor e, opcionalmente, a lista de banidos
 - Restauro seletivo — escolhe o que restaurar, para o mesmo servidor ou para outro onde o bot também seja admin, com um modo de segurança (limpar canais existentes é opcional e pede confirmação explícita)
@@ -37,6 +41,7 @@ O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidore
 **Servidor**
 - **Mensagens** — compositor de embeds com pré-visualização ao vivo (título, descrição, cor, imagem, campos, rodapé) para publicar mensagens bem formatadas num canal — com texto fora do embed, ícones de autor/rodapé, link no título e a opção de enviar **como webhook** (nome e foto personalizados); **Exportar JSON**/**Importar JSON** usam o formato da própria Discord (compatível com o Discohook e com o `/embed`). Tudo isto também existe pelo Discord, com **`/embed`**: um painel com pré-visualização ao vivo, um menu *Selecione uma opção para personalizar* (canal, conteúdo, título, descrição, cor, thumbnail, imagem, autor e ícone, rodapé e ícone, nome e ícone da webhook, campos, data/hora, exportar e importar configuração) e botões para enviar ou sair. A descrição e os campos têm uma barra de formatação (negrito, itálico, sublinhado, rasurado, link) que envolve o texto selecionado com o Markdown da Discord, tal como a própria Discord faz — e a pré-visualização já mostra tudo formatado (negrito a bold, links clicáveis, emojis do bot como imagem), não o texto cru com asteriscos. O mesmo editor é reutilizado nos templates de embed (placar de pontos, justificativas)
 - **Moderação** — pesquisar membros, banir, expulsar e mutar (timeout), bloquear/desbloquear canais, com registo de todas as ações
+- **Limpeza** — `/limparcdo quantidade: [membro:] [canal:]` apaga até 1000 mensagens de um canal (opcionalmente só as de um membro), só para quem tem **Administrador**; acima de 100 pede confirmação, nunca apaga mensagens fixadas e avisa das que têm mais de 14 dias (a Discord não deixa apagá-las em massa). Cada limpeza fica registada na página **Logs de limpeza** da app (quem, onde, quantas, filtro, quando), também com bot remoto
 - **Sorteios** — publica um sorteio com reação 🎉, escolhe vencedores automaticamente quando termina (ou manualmente, a qualquer momento); além da app, `/sorteio` faz o mesmo diretamente no Discord, com um assistente por botões: escolhe o canal, depois escreve o título/prémio, a duração exata (ex: `1h30m`, `2d`, `45m`) e o número de vencedores. Depois de terminar, a mensagem de resultado tem sempre um botão **Rerolar vencedor(es)** — só quem pode gerir o servidor consegue usá-lo — que escolhe novo(s) vencedor(es) entre quem reagiu, excluindo quem já tinha ganho
 - **Jogos** — ativa mini-jogos como comandos que os membros do servidor podem usar, todos por botões (sem escrever comandos extra no chat): clássicos rápidos (`/dado`, `/moeda`, `/ppt`, `/oitobola`), `/trivia` com 24 perguntas em 6 categorias, `/forca` (adivinha a palavra letra a letra, escolhendo cada letra numa janela própria), `/blackjack` (21 contra a casa, com aposta), `/jogodavelha` (galo por turnos entre dois membros), `/duelo` (combate por turnos com ataque, defesa e ataque especial, também com aposta), `/roleta` e `/caca-niqueis` (casino, com jackpot), `/corrida` (aposta em qual bicho vence uma corrida animada), `/numero` (adivinha um número secreto, quanto menos tentativas mais moedas) e `/desembaralhar` (desembaralha as letras e escreve a palavra certa antes dos outros)
 - **Economia** — os jogos com recompensa alimentam um saldo de moedas por servidor; os membros consultam com `/saldo`, reclamam uma recompensa diária com `/diario` (com bónus por sequência) e veem o `/ranking` de quem tem mais moedas
@@ -70,7 +75,7 @@ O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidore
 
 O token fica guardado encriptado localmente (via `safeStorage` do Electron) — nunca é enviado para lado nenhum a não ser para a própria API da Discord.
 
-Os comandos `/movcall`, `/movhoras`, `/pontosmovadmin`, `/resetmovcall`, `/inativos`, `/sorteio` e `/embed` só aparecem, por omissão, para membros com a permissão **Gerir servidor** — ajustável em **Definições do servidor → Integrações** no Discord. `/pontosmov`, `/verificar` e `/help` ficam disponíveis para toda a gente.
+Os comandos `/movcall`, `/movhoras`, `/pontosmovadmin`, `/resetmovcall`, `/inativos`, `/sorteio` e `/embed` (e `/limparcdo`, só **Administrador**) só aparecem, por omissão, para membros com a permissão **Gerir servidor** — ajustável em **Definições do servidor → Integrações** no Discord. `/pontosmov`, `/verificar` e `/help` ficam disponíveis para toda a gente.
 
 ## Capturas de ecrã
 
@@ -127,7 +132,11 @@ electron/
 │   ├── justifications.ts            # mensagem + botões Justificar/Remover Justificativa nos canais configurados
 │   ├── botEmojis.ts                  # biblioteca de emojis da aplicação do bot (client.application.emojis)
 │   ├── emojiCommand.ts                # /addemojibot e /copiaremoji — gerem a biblioteca pela Discord
+│   ├── cleanCommand.ts                # /limparcdo — apagar mensagens em massa (só administração), com log
 │   └── embedTemplate.ts                # constrói um embed a partir de um EmbedDraft (com marcadores {token})
+├── db/                   # base de dados SQLite local (sql.js — sem módulos nativos)
+│   └── schema.sql          # MODELO das tabelas (contas, token encriptado, sessões) — sem dados
+├── auth/                 # contas locais: registo, login, sessões, token do bot por conta
 ├── store/               # persistência local (JSON em disco, escrita atómica, token encriptado)
 │   └── fileStore.ts       # leitura/escrita segura de JSON partilhada por todos os ficheiros de dados
 └── ipc/                  # liga os pedidos da interface às funções acima
@@ -157,7 +166,7 @@ Na raiz, `Dockerfile` e `docker-compose.yml` empacotam o `server/` para correr n
 
 ## Dados locais
 
-Na app desktop, tudo fica na pasta de dados da app (acessível em Definições → Abrir pasta): backups em JSON, transcripts em JSON, agendamentos, sorteios, registo de moderação e o token do bot (encriptado). No bot autónomo (`server/`), os mesmos dados ficam em `LISDISCORD_DATA_DIR` (por omissão `./data`, ou a Docker volume `lisdiscord-data` ao correr com Docker Compose) e o token vem só da variável de ambiente `DISCORD_TOKEN`, nunca gravado em disco. Nada sai do teu computador ou servidor exceto os pedidos normais à API da Discord.
+Na app desktop, tudo fica na pasta de dados da app (acessível em Definições → Abrir pasta): a base de dados das contas (`lisdiscord.sqlite`, com o token do bot encriptado), backups em JSON, transcripts em JSON, agendamentos, sorteios e registos. Ficheiros `*.sqlite`/`*.db` estão no `.gitignore` — só o modelo `electron/db/schema.sql` vai para o repositório. No bot autónomo (`server/`), os mesmos dados ficam em `LISDISCORD_DATA_DIR` (por omissão `./data`, ou a Docker volume `lisdiscord-data` ao correr com Docker Compose) e o token vem só da variável de ambiente `DISCORD_TOKEN`, nunca gravado em disco. Nada sai do teu computador ou servidor exceto os pedidos normais à API da Discord.
 
 ## Autor
 

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Clock3, GitCompareArrows, Layers, Trash2 } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatBytes, formatRelativeDate } from '../lib/format'
-import { Badge, Button, Card, ConfirmDialog, EmptyState, SectionHeading } from '../components/ui'
+import { Badge, Button, Card, ConfirmDialog, EmptyState, PageHeader } from '../components/ui'
 import type { BackupSummary } from '../../shared/types'
 
 export default function Backups() {
@@ -41,7 +41,7 @@ export default function Backups() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeading
+      <PageHeader
         title="Backups"
         subtitle="Seleciona dois para comparar, ou abre um para veres o conteúdo e restaurares"
         action={

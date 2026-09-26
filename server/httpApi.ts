@@ -23,6 +23,7 @@ import * as moderation from '../electron/discord/moderation'
 import * as justificationSettingsStore from '../electron/store/justificationSettings'
 import * as movPointsStore from '../electron/store/movPoints'
 import * as movPointsLogStore from '../electron/store/movPointsLog'
+import * as cleanLogStore from '../electron/store/cleanLog'
 import * as excludedMembersStore from '../electron/store/excludedMembers'
 import * as roleGoalsStore from '../electron/store/roleGoals'
 import * as embedTemplatesStore from '../electron/store/embedTemplates'
@@ -303,6 +304,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     if (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'roles') {
       const guild = await discordManager.getClient().guilds.fetch(parts[2])
       sendJson(res, 200, await listGuildRoles(guild))
+      return
+    }
+
+    // GET /api/guilds/:guildId/cleanlog
+    if (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'cleanlog') {
+      sendJson(res, 200, cleanLogStore.listCleanLog(parts[2]))
       return
     }
 

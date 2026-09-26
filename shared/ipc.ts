@@ -1,11 +1,13 @@
 import type {
   AppSettings,
+  AuthState,
   BackupData,
   BackupOptions,
   BackupSummary,
   BotEmoji,
   BotStatus,
   ChannelPickerEntry,
+  CleanLogEntry,
   DiffEntry,
   EmbedDraft,
   EmbedTemplateKind,
@@ -18,6 +20,7 @@ import type {
   GuildSummary,
   JustificationChannelKind,
   JustificationSettings,
+  LoginHistoryEntry,
   MemberProfile,
   MemberSearchResult,
   ModerationLogEntry,
@@ -40,6 +43,15 @@ import type {
 
 /** Nomes dos canais IPC — usados em ambos os lados para nunca ficarem dessincronizados. */
 export const IPC = {
+  getAuthState: 'auth:state',
+  register: 'auth:register',
+  login: 'auth:login',
+  logout: 'auth:logout',
+  changePassword: 'auth:changePassword',
+  listLoginHistory: 'auth:history',
+  forgetBotToken: 'auth:forgetBotToken',
+  autoConnectBot: 'bot:autoConnect',
+
   connectBot: 'bot:connect',
   disconnectBot: 'bot:disconnect',
   getStatus: 'bot:status',
@@ -93,6 +105,8 @@ export const IPC = {
   setMovPointsBoard: 'movpoints:board:set',
   resetMovPoints: 'movpoints:reset',
   listMovPointsLog: 'movpoints:log:list',
+  listCleanLog: 'clean:log:list',
+  listRemoteCleanLog: 'remoteBot:clean:log:list',
 
   listRoles: 'guilds:roles',
   getMemberProfile: 'members:profile',
@@ -152,6 +166,16 @@ export const IPC = {
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
 export interface LisDiscordBridge {
+  getAuthState(): Promise<AuthState>
+  register(username: string, password: string, remember: boolean): Promise<AuthState>
+  login(username: string, password: string, remember: boolean): Promise<AuthState>
+  logout(): Promise<void>
+  changePassword(current: string, next: string): Promise<void>
+  listLoginHistory(): Promise<LoginHistoryEntry[]>
+  forgetBotToken(): Promise<void>
+  /** Liga o bot com o token guardado na conta (ou espera pela ligação que já estiver a decorrer). */
+  autoConnectBot(): Promise<BotStatus>
+
   connectBot(token: string): Promise<BotStatus>
   disconnectBot(): Promise<void>
   getStatus(): Promise<BotStatus>
@@ -209,6 +233,8 @@ export interface LisDiscordBridge {
   setMovPointsBoard(guildId: string, channelId: string | null): Promise<MovPointsBoardConfig>
   resetMovPoints(guildId: string): Promise<MovPointsEntry[]>
   listMovPointsLog(guildId: string): Promise<MovPointsLogEntry[]>
+  listCleanLog(guildId: string): Promise<CleanLogEntry[]>
+  listRemoteCleanLog(guildId: string): Promise<CleanLogEntry[]>
 
   listRoles(guildId: string): Promise<RolePickerEntry[]>
   getMemberProfile(guildId: string, userId: string): Promise<MemberProfile>

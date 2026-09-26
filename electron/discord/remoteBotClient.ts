@@ -89,6 +89,7 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
     setMovPointsBoard: <T>(guildId: string, channelId: string | null) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/board`, { method: 'POST', body: { channelId } }),
     resetMovPoints: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/reset`, { method: 'POST' }),
+    listCleanLog: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/cleanlog`),
     listMovPointsLog: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/log`),
     listExcludedMembers: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/excluded`),
     setMemberExcluded: <T>(guildId: string, userId: string, tag: string, excluded: boolean) =>

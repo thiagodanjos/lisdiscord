@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Minus, Pencil, Plus } from 'lucide-react'
 import { bridge } from '../lib/bridge'
-import { Card, EmptyState, SectionHeading } from '../components/ui'
+import { Card, EmptyState, PageHeader } from '../components/ui'
 import type { DiffEntry } from '../../shared/types'
 
 const CATEGORY_LABEL: Record<DiffEntry['category'], string> = { role: 'Cargo', channel: 'Canal', emoji: 'Emoji' }
@@ -20,7 +20,7 @@ export default function Diff() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeading title="Comparar backups" subtitle="O que mudou entre os dois backups selecionados" />
+      <PageHeader title="Comparar backups" subtitle="O que mudou entre os dois backups selecionados" />
 
       {entries === null && <p className="text-sm text-muted">A comparar…</p>}
 

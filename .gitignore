@@ -20,6 +20,12 @@ release
 !.env.example
 data/
 
+# Base de dados local (contas e token) — só o modelo (electron/db/schema.sql) vai para o Git
+*.sqlite
+*.sqlite3
+*.sqlite.tmp
+*.db
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

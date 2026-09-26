@@ -451,7 +451,36 @@ const delay = (ms = 350) => new Promise((r) => setTimeout(r, ms))
 const transcriptIds = new Map<Transcript, string>(transcriptsData.map((t, i) => [t, `t${i + 1}`]))
 const restoreListeners = new Set<(event: RestoreProgressEvent) => void>()
 
+const DEMO_USER = { id: 1, username: 'demo', createdAt: new Date().toISOString(), lastLoginAt: new Date().toISOString() }
+
 export const demoBridge: LisDiscordBridge = {
+  async getAuthState() {
+    return { hasAccount: true, user: DEMO_USER, hasBotToken: true }
+  },
+  async register() {
+    await delay()
+    return { hasAccount: true, user: DEMO_USER, hasBotToken: true }
+  },
+  async login() {
+    await delay()
+    return { hasAccount: true, user: DEMO_USER, hasBotToken: true }
+  },
+  async logout() {
+    await delay()
+  },
+  async changePassword() {
+    await delay()
+  },
+  async listLoginHistory() {
+    return [{ username: 'demo', success: true, date: new Date().toISOString() }]
+  },
+  async forgetBotToken() {
+    await delay()
+  },
+  async autoConnectBot() {
+    await delay(600)
+    return demoBridge.getStatus()
+  },
   async connectBot() {
     await delay()
     return { connected: true, botTag: 'LisDiscord Bot#0421', botAvatarUrl: null, guildCount: guilds.length, messageContentEnabled: true, guildMembersEnabled: true }
@@ -798,6 +827,18 @@ export const demoBridge: LisDiscordBridge = {
   async listMovPointsLog(guildId) {
     await delay()
     return [...(movPointsLogData[guildId] ?? [])].sort((a, b) => (a.date < b.date ? 1 : -1))
+  },
+  async listCleanLog(guildId) {
+    await delay()
+    const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString()
+    return [
+      { id: 'c1', date: minutesAgo(12), guildId, channelId: 'c-geral', channelName: 'geral', actorId: 'u1', actorTag: 'ana.dev', requested: 50, deleted: 50, skippedOld: 0, targetUserId: null, targetTag: null },
+      { id: 'c2', date: minutesAgo(190), guildId, channelId: 'c-geral', channelName: 'geral', actorId: 'u1', actorTag: 'ana.dev', requested: 200, deleted: 148, skippedOld: 52, targetUserId: null, targetTag: null },
+      { id: 'c3', date: minutesAgo(1500), guildId, channelId: 'c-memes', channelName: 'memes', actorId: 'u2', actorTag: 'joao99', requested: 30, deleted: 18, skippedOld: 0, targetUserId: 'u5', targetTag: 'trouble_maker' },
+    ]
+  },
+  async listRemoteCleanLog(guildId) {
+    return demoBridge.listCleanLog(guildId)
   },
 
   async listExcludedMembers(guildId) {

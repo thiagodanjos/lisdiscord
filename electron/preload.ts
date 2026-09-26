@@ -4,6 +4,15 @@ import type { LisDiscordBridge } from '../shared/ipc'
 import type { RestoreProgressEvent } from '../shared/types'
 
 const bridge: LisDiscordBridge = {
+  getAuthState: () => ipcRenderer.invoke(IPC.getAuthState),
+  register: (username, password, remember) => ipcRenderer.invoke(IPC.register, username, password, remember),
+  login: (username, password, remember) => ipcRenderer.invoke(IPC.login, username, password, remember),
+  logout: () => ipcRenderer.invoke(IPC.logout),
+  changePassword: (current, next) => ipcRenderer.invoke(IPC.changePassword, current, next),
+  listLoginHistory: () => ipcRenderer.invoke(IPC.listLoginHistory),
+  forgetBotToken: () => ipcRenderer.invoke(IPC.forgetBotToken),
+  autoConnectBot: () => ipcRenderer.invoke(IPC.autoConnectBot),
+
   connectBot: (token) => ipcRenderer.invoke(IPC.connectBot, token),
   disconnectBot: () => ipcRenderer.invoke(IPC.disconnectBot),
   getStatus: () => ipcRenderer.invoke(IPC.getStatus),
@@ -70,6 +79,8 @@ const bridge: LisDiscordBridge = {
   setMovPointsBoard: (guildId, channelId) => ipcRenderer.invoke(IPC.setMovPointsBoard, guildId, channelId),
   resetMovPoints: (guildId) => ipcRenderer.invoke(IPC.resetMovPoints, guildId),
   listMovPointsLog: (guildId) => ipcRenderer.invoke(IPC.listMovPointsLog, guildId),
+  listCleanLog: (guildId) => ipcRenderer.invoke(IPC.listCleanLog, guildId),
+  listRemoteCleanLog: (guildId) => ipcRenderer.invoke(IPC.listRemoteCleanLog, guildId),
 
   getJustificationSettings: (guildId) => ipcRenderer.invoke(IPC.getJustificationSettings, guildId),
   setJustificationChannel: (guildId, kind, channelId) => ipcRenderer.invoke(IPC.setJustificationChannel, guildId, kind, channelId),

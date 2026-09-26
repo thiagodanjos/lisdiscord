@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { CheckCircle2, Clock3, Medal, Radio, Search, XCircle } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatDuration } from '../lib/format'
-import { Avatar, Badge, Card, EmptyState, SectionHeading } from '../components/ui'
+import { Avatar, Badge, Card, EmptyState, PageHeader } from '../components/ui'
 import type { GuildSummary, MemberProfile, MemberSearchResult, RemoteBotConfig, RoleGoal } from '../../shared/types'
 
 const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
@@ -73,7 +73,7 @@ export default function Promotions() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeading
+      <PageHeader
         title="Upamentos"
         subtitle="Escolhe um membro e um dos cargos dele para veres se já cumpre a meta de pontos e horas"
         action={
@@ -90,7 +90,7 @@ export default function Promotions() {
         <select
           value={guildId}
           onChange={(e) => setGuildId(e.target.value)}
-          className="mt-1.5 w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+          className="mt-1.5 block w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
         >
           {guilds.map((g) => (
             <option key={g.id} value={g.id}>
@@ -169,7 +169,7 @@ export default function Promotions() {
               <select
                 value={selectedRoleId}
                 onChange={(e) => setSelectedRoleId(e.target.value)}
-                className="mt-1.5 w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+                className="mt-1.5 block w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
               >
                 {profile.roles.map((r) => (
                   <option key={r.id} value={r.id}>

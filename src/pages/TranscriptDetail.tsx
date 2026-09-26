@@ -4,7 +4,7 @@ import { Paperclip } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatDateTime } from '../lib/format'
 import { initials } from '../lib/utils'
-import { Card, SectionHeading } from '../components/ui'
+import { Card, PageHeader } from '../components/ui'
 import type { Transcript } from '../../shared/types'
 
 export default function TranscriptDetail() {
@@ -24,7 +24,7 @@ export default function TranscriptDetail() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
-      <SectionHeading title={`#${transcript.channelName}`} subtitle={`${transcript.guildName} · exportado em ${formatDateTime(transcript.exportedAt)}`} />
+      <PageHeader title={`#${transcript.channelName}`} subtitle={`${transcript.guildName} · exportado em ${formatDateTime(transcript.exportedAt)}`} />
 
       <Card className="flex flex-col gap-4 bg-raised">
         {transcript.messages.map((m) => (

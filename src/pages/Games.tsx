@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Brain, Cherry, Coins, Dice5, Disc3, Flag, Gamepad2, Grid3x3, Hand, Hash, HelpCircle, Shuffle, Skull, Spade, Swords, Wallet } from 'lucide-react'
 import { bridge } from '../lib/bridge'
-import { Card, SectionHeading, Toggle } from '../components/ui'
+import { Card, PageHeader, Toggle } from '../components/ui'
 import type { GameId, GameInfo, GameSettings, GuildSummary } from '../../shared/types'
 
 const GAME_ICONS: Record<GameId, typeof Gamepad2> = {
@@ -51,14 +51,14 @@ export default function Games() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeading title="Jogos" subtitle="Mini-jogos que os membros do servidor podem usar como comandos" />
+      <PageHeader title="Jogos" subtitle="Mini-jogos que os membros do servidor podem usar como comandos" />
 
       <div>
         <label className="text-xs font-semibold tracking-wide text-faint uppercase">Servidor</label>
         <select
           value={guildId}
           onChange={(e) => setGuildId(e.target.value)}
-          className="mt-1.5 w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+          className="mt-1.5 block w-full max-w-xs rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
         >
           {guilds.map((g) => (
             <option key={g.id} value={g.id}>
