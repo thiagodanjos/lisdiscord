@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import type { Guild } from 'discord.js'
-import type { ChannelPickerEntry, EmbedDraft, EmbedTemplateKind, JustificationChannelKind, MovPointsEntry } from '../shared/types'
+import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovPointsEntry, type SendMessageOptions } from '../shared/types'
 import { discordManager } from '../electron/discord/client'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
 import { applyJustificationChannel, postJustificationMessage } from '../electron/discord/justifications'
@@ -26,8 +26,6 @@ import * as movPointsLogStore from '../electron/store/movPointsLog'
 import * as excludedMembersStore from '../electron/store/excludedMembers'
 import * as roleGoalsStore from '../electron/store/roleGoals'
 import * as embedTemplatesStore from '../electron/store/embedTemplates'
-
-const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = ['pontosBoard', 'inativos', 'justificationFixed', 'justificationDaily']
 
 /** Mesma lógica que o IPC da app usa — atualiza logo a mensagem já publicada quando o template muda. */
 async function refreshEmbedTemplateTarget(guild: Guild, kind: EmbedTemplateKind): Promise<void> {
@@ -143,7 +141,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'channels') ||
     (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'justifications') ||
     isEmojiRoute ||
-    (req.method === 'POST' && parts.length === 6 && isGuildRoute && parts[3] === 'movpoints' && ['add', 'remove', 'hours'].includes(parts[5])) ||
+    (req.method === 'POST' && parts.length === 6 && isGuildRoute && parts[3] === 'movpoints' && ['add', 'remove', 'hours', 'hours-remove'].includes(parts[5])) ||
     (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'movpoints' && parts[4] === 'board') ||
     (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'members' && parts[4] === 'search') ||
     (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'roles') ||
@@ -270,8 +268,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
       return
     }
 
-    // POST /api/guilds/:guildId/movpoints/:userId/add|remove|hours  { amount } | { seconds }
-    if (req.method === 'POST' && parts.length === 6 && isGuildRoute && parts[3] === 'movpoints' && ['add', 'remove', 'hours'].includes(parts[5])) {
+    // POST /api/guilds/:guildId/movpoints/:userId/add|remove|hours|hours-remove  { amount } | { seconds }
+    if (req.method === 'POST' && parts.length === 6 && isGuildRoute && parts[3] === 'movpoints' && ['add', 'remove', 'hours', 'hours-remove'].includes(parts[5])) {
       const guildId = parts[2]
       const userId = parts[4]
       const action = parts[5]
@@ -280,7 +278,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
       const body = (await readJsonBody(req)) as { amount?: number; seconds?: number }
       if (action === 'add') movPointsStore.addPoints(guildId, userId, member.user.tag, Number(body.amount) || 0, REMOTE_API_ACTOR)
       else if (action === 'remove') movPointsStore.removePoints(guildId, userId, member.user.tag, Number(body.amount) || 0, REMOTE_API_ACTOR)
-      else movPointsStore.addHours(guildId, userId, member.user.tag, Number(body.seconds) || 0, REMOTE_API_ACTOR)
+      else if (action === 'hours') movPointsStore.addHours(guildId, userId, member.user.tag, Number(body.seconds) || 0, REMOTE_API_ACTOR)
+      else movPointsStore.removeHours(guildId, userId, member.user.tag, Number(body.seconds) || 0, REMOTE_API_ACTOR)
       await refreshBoard(guild).catch(() => undefined)
       sendJson(res, 200, await fullLeaderboard(guildId))
       return
@@ -326,17 +325,16 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
       return
     }
 
-    // POST /api/guilds/:guildId/messages  { channelId: string, draft: EmbedDraft }
+    // POST /api/guilds/:guildId/messages  { channelId: string, draft: EmbedDraft, options?: SendMessageOptions }
     if (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'messages') {
       const guildId = parts[2]
-      const body = (await readJsonBody(req)) as { channelId?: string; draft?: EmbedDraft }
+      const body = (await readJsonBody(req)) as { channelId?: string; draft?: EmbedDraft; options?: SendMessageOptions }
       if (!body.channelId || !body.draft) {
         sendJson(res, 400, { error: 'Faltam os campos "channelId" e "draft".' })
         return
       }
       const guild = await discordManager.getClient().guilds.fetch(guildId)
-      await sendEmbedMessage(guild, body.channelId, body.draft)
-      sendJson(res, 200, { ok: true })
+      sendJson(res, 200, await sendEmbedMessage(guild, body.channelId, body.draft, body.options ?? {}))
       return
     }
 

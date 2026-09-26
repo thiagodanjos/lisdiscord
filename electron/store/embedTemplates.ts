@@ -1,4 +1,5 @@
 import type { EmbedDraft, EmbedTemplateKind } from '../../shared/types'
+import { DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
 import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
@@ -30,12 +31,14 @@ export const DEFAULT_TEMPLATES: Record<EmbedTemplateKind, EmbedDraft> = {
     description: '{lista}',
     color: '#F0B232',
     footer: '{servidor} · atualizado em {atualizado}',
+    listFormat: DEFAULT_BOARD_LIST_FORMAT,
   }),
   inativos: emptyDraft({
     title: '⚠️ MEMBROS INATIVOS',
     description: '{lista}',
     color: '#ED4245',
     footer: '{servidor} · sem pontos ou menos de 5h de Mov. Call · não inclui bots',
+    listFormat: DEFAULT_INACTIVE_LIST_FORMAT,
   }),
   justificationFixed: emptyDraft({
     title: '👑 Usem este canal para fazer as justificativas fixas',
@@ -64,6 +67,42 @@ export const DEFAULT_TEMPLATES: Record<EmbedTemplateKind, EmbedDraft> = {
     footer: 'A tua justificativa fica registada com o teu nome — usa com responsabilidade.',
     timestamp: false,
   }),
+  justificationPostFixed: justificationPost('📌 Justificativa Fixa', '#F0B232'),
+  justificationPostDaily: justificationPost('📅 Justificativa Diária', '#5865F2'),
+  justificationLogFixed: justificationLog('🔔 Nova justificativa Fixa', '#F0B232'),
+  justificationLogDaily: justificationLog('🔔 Nova justificativa Diária', '#5865F2'),
+  justificationRemoval: emptyDraft({
+    title: '⚠️ Pedido de remoção de justificativa',
+    description: '{membro} pediu para remover uma justificativa **{tipo}**.\n\n**Motivo:**\n{motivo}',
+    color: '#ED4245',
+    footer: 'Pedido por {nome} — um administrador precisa de rever e remover manualmente',
+  }),
+}
+
+function justificationPost(title: string, color: string): EmbedDraft {
+  return emptyDraft({
+    title,
+    color,
+    footer: 'Justificado por {nome}',
+    fields: [
+      { name: 'Membro', value: '{membro}', inline: true },
+      { name: 'Período', value: '{periodo}', inline: true },
+      { name: 'Motivo', value: '{motivo}', inline: false },
+    ],
+  })
+}
+
+function justificationLog(title: string, color: string): EmbedDraft {
+  return emptyDraft({
+    title,
+    color,
+    description: '{membro} justificou-se em {canal}.\n[Ver a justificativa]({link})',
+    footer: 'Justificado por {nome}',
+    fields: [
+      { name: 'Período', value: '{periodo}', inline: true },
+      { name: 'Motivo', value: '{motivo}', inline: false },
+    ],
+  })
 }
 
 function readAll(): Store {

@@ -3,15 +3,16 @@ import { AlertTriangle, Calendar, CalendarClock, Cable, MessageSquareWarning, Pa
 import { bridge } from '../lib/bridge'
 import { Badge, Button, Card, Modal, SectionHeading } from '../components/ui'
 import { EmbedTemplateEditor } from '../components/EmbedTemplateEditor'
-import type {
-  BotEmoji,
-  ChannelPickerEntry,
-  EmbedDraft,
-  EmbedTemplateKind,
-  GuildSummary,
-  JustificationChannelKind,
-  JustificationSettings,
-  RemoteBotConfig,
+import {
+  JUSTIFICATION_PLACEHOLDERS,
+  type BotEmoji,
+  type ChannelPickerEntry,
+  type EmbedDraft,
+  type EmbedTemplateKind,
+  type GuildSummary,
+  type JustificationChannelKind,
+  type JustificationSettings,
+  type RemoteBotConfig,
 } from '../../shared/types'
 
 const EMPTY_EMBED_DRAFT: EmbedDraft = {
@@ -39,6 +40,18 @@ const EMPTY_SETTINGS: JustificationSettings = {
 
 const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
 
+const TEMPLATE_TITLES: Record<EmbedTemplateKind, string> = {
+  pontosBoard: 'Personalizar placar',
+  inativos: 'Personalizar inativos',
+  justificationFixed: 'Mensagem do canal de justificativas fixas',
+  justificationDaily: 'Mensagem do canal de justificativas diárias',
+  justificationPostFixed: 'Justificativa fixa publicada pelo membro',
+  justificationPostDaily: 'Justificativa diária publicada pelo membro',
+  justificationLogFixed: 'Alerta de log — justificativa fixa',
+  justificationLogDaily: 'Alerta de log — justificativa diária',
+  justificationRemoval: 'Pedido de remoção de justificativa (log)',
+}
+
 const FIELDS: {
   kind: JustificationChannelKind
   title: string
@@ -46,7 +59,7 @@ const FIELDS: {
   icon: typeof Pin
   idKey: keyof JustificationSettings
   nameKey: keyof JustificationSettings
-  templateKind?: EmbedTemplateKind
+  templates: { kind: EmbedTemplateKind; label: string }[]
 }[] = [
   {
     kind: 'fixedPost',
@@ -55,7 +68,10 @@ const FIELDS: {
     icon: Calendar,
     idKey: 'fixedPostChannelId',
     nameKey: 'fixedPostChannelName',
-    templateKind: 'justificationFixed',
+    templates: [
+      { kind: 'justificationFixed', label: 'Mensagem do canal' },
+      { kind: 'justificationPostFixed', label: 'Justificativa publicada' },
+    ],
   },
   {
     kind: 'dailyPost',
@@ -64,7 +80,10 @@ const FIELDS: {
     icon: CalendarClock,
     idKey: 'dailyPostChannelId',
     nameKey: 'dailyPostChannelName',
-    templateKind: 'justificationDaily',
+    templates: [
+      { kind: 'justificationDaily', label: 'Mensagem do canal' },
+      { kind: 'justificationPostDaily', label: 'Justificativa publicada' },
+    ],
   },
   {
     kind: 'fixedLog',
@@ -73,6 +92,10 @@ const FIELDS: {
     icon: MessageSquareWarning,
     idKey: 'fixedLogChannelId',
     nameKey: 'fixedLogChannelName',
+    templates: [
+      { kind: 'justificationLogFixed', label: 'Alerta de log' },
+      { kind: 'justificationRemoval', label: 'Pedido de remoção' },
+    ],
   },
   {
     kind: 'dailyLog',
@@ -81,6 +104,10 @@ const FIELDS: {
     icon: AlertTriangle,
     idKey: 'dailyLogChannelId',
     nameKey: 'dailyLogChannelName',
+    templates: [
+      { kind: 'justificationLogDaily', label: 'Alerta de log' },
+      { kind: 'justificationRemoval', label: 'Pedido de remoção' },
+    ],
   },
 ]
 
@@ -378,12 +405,12 @@ export default function Justifications() {
                 <Button onClick={() => save(field.kind)} loading={saving === field.kind} disabled={drafts[field.kind] === (currentId ?? '')}>
                   Guardar
                 </Button>
-                {field.templateKind && (
-                  <Button variant="dark" onClick={() => openTemplateEditor(field.templateKind!)}>
+                {field.templates.map((t) => (
+                  <Button key={t.kind} variant="dark" onClick={() => openTemplateEditor(t.kind)}>
                     <Palette size={14} />
-                    Personalizar mensagem
+                    {t.label}
                   </Button>
-                )}
+                ))}
               </div>
               {errors[field.kind] && <p className="text-xs text-danger">❌ {errors[field.kind]}</p>}
             </Card>
@@ -403,7 +430,12 @@ export default function Justifications() {
         </p>
       </Card>
 
-      <Modal open={editingTemplate !== null} onClose={() => setEditingTemplate(null)} title="Personalizar mensagem" width="lg">
+      <Modal
+        open={editingTemplate !== null}
+        onClose={() => setEditingTemplate(null)}
+        title={editingTemplate ? TEMPLATE_TITLES[editingTemplate] : 'Personalizar mensagem'}
+        width="xl"
+      >
         <EmbedTemplateEditor
           draft={templateDraft}
           onChange={setTemplateDraft}
@@ -415,6 +447,23 @@ export default function Justifications() {
           resetting={templateResetting}
           customized={templateCustomized}
           errorMessage={templateError}
+          placeholderHint={
+            editingTemplate === 'justificationFixed' || editingTemplate === 'justificationDaily'
+              ? 'Mensagem fixa do canal, com os botões Justificar / Remover Justificativa por baixo.'
+              : 'Os tokens abaixo são trocados pelos dados de quem se justificou — usa-os em qualquer texto (e {avatar} como URL de miniatura ou ícone).'
+          }
+          placeholderTokens={editingTemplate === 'justificationFixed' || editingTemplate === 'justificationDaily' ? ['{servidor}'] : JUSTIFICATION_PLACEHOLDERS}
+          previewPlaceholders={{
+            membro: '@Membro',
+            nome: 'membro',
+            avatar: '',
+            tipo: editingTemplate?.includes('Daily') ? 'Diária' : 'Fixa',
+            periodo: editingTemplate?.includes('Daily') ? '14:00 até 18:00' : 'Segunda à sexta - 14:00 até 18:00',
+            motivo: 'Trabalho nesse horário.',
+            canal: '#justificativas',
+            link: 'https://discord.com',
+            servidor: guilds.find((g) => g.id === guildId)?.name ?? 'este servidor',
+          }}
         />
       </Modal>
     </div>

@@ -83,6 +83,8 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/${encodeURIComponent(userId)}/remove`, { method: 'POST', body: { amount } }),
     addMovHours: <T>(guildId: string, userId: string, seconds: number) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/${encodeURIComponent(userId)}/hours`, { method: 'POST', body: { seconds } }),
+    removeMovHours: <T>(guildId: string, userId: string, seconds: number) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/${encodeURIComponent(userId)}/hours-remove`, { method: 'POST', body: { seconds } }),
     getMovPointsBoard: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/board`),
     setMovPointsBoard: <T>(guildId: string, channelId: string | null) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movpoints/board`, { method: 'POST', body: { channelId } }),
@@ -117,7 +119,7 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
     resetEmbedTemplate: <T>(guildId: string, kind: string) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/embed-templates/${kind}`, { method: 'DELETE' }),
 
-    sendEmbed: (guildId: string, channelId: string, draft: unknown) =>
-      remoteFetch<void>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/messages`, { method: 'POST', body: { channelId, draft } }),
+    sendEmbed: <T>(guildId: string, channelId: string, draft: unknown, options?: unknown) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/messages`, { method: 'POST', body: { channelId, draft, options } }),
   }
 }

@@ -29,6 +29,7 @@ import type {
   Transcript,
   TranscriptSummary,
 } from '../../shared/types'
+import { DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
 
 const DEMO_GAMES = [
   { id: 'dado' as const, name: 'Dado', command: '/dado', description: 'Lança um dado (padrão 6 lados, configurável).' },
@@ -292,8 +293,20 @@ function emptyEmbedDraft(partial: Partial<EmbedDraft>): EmbedDraft {
 }
 
 const DEFAULT_DEMO_TEMPLATES: Record<EmbedTemplateKind, EmbedDraft> = {
-  pontosBoard: emptyEmbedDraft({ title: '🏅 PONTOS DE MOV. CALL', description: '{lista}', color: '#F0B232', footer: '{servidor} · atualizado em {atualizado}' }),
-  inativos: emptyEmbedDraft({ title: '⚠️ MEMBROS INATIVOS', description: '{lista}', color: '#ED4245', footer: '{servidor} · sem pontos ou menos de 5h de Mov. Call' }),
+  pontosBoard: emptyEmbedDraft({
+    title: '🏅 PONTOS DE MOV. CALL',
+    description: '{lista}',
+    color: '#F0B232',
+    footer: '{servidor} · atualizado em {atualizado}',
+    listFormat: DEFAULT_BOARD_LIST_FORMAT,
+  }),
+  inativos: emptyEmbedDraft({
+    title: '⚠️ MEMBROS INATIVOS',
+    description: '{lista}',
+    color: '#ED4245',
+    footer: '{servidor} · sem pontos ou menos de 5h de Mov. Call',
+    listFormat: DEFAULT_INACTIVE_LIST_FORMAT,
+  }),
   justificationFixed: emptyEmbedDraft({
     title: '👑 Usem este canal para fazer as justificativas fixas',
     description: 'Quando vais ter um compromisso toda a semana, sempre no mesmo horário.',
@@ -307,6 +320,52 @@ const DEFAULT_DEMO_TEMPLATES: Record<EmbedTemplateKind, EmbedDraft> = {
     color: '#5865F2',
     footer: 'A tua justificativa fica registada com o teu nome.',
     timestamp: false,
+  }),
+  justificationPostFixed: emptyEmbedDraft({
+    title: '📌 Justificativa Fixa',
+    color: '#F0B232',
+    footer: 'Justificado por {nome}',
+    fields: [
+      { name: 'Membro', value: '{membro}', inline: true },
+      { name: 'Período', value: '{periodo}', inline: true },
+      { name: 'Motivo', value: '{motivo}', inline: false },
+    ],
+  }),
+  justificationPostDaily: emptyEmbedDraft({
+    title: '📅 Justificativa Diária',
+    color: '#5865F2',
+    footer: 'Justificado por {nome}',
+    fields: [
+      { name: 'Membro', value: '{membro}', inline: true },
+      { name: 'Período', value: '{periodo}', inline: true },
+      { name: 'Motivo', value: '{motivo}', inline: false },
+    ],
+  }),
+  justificationLogFixed: emptyEmbedDraft({
+    title: '🔔 Nova justificativa Fixa',
+    description: '{membro} justificou-se em {canal}.\n[Ver a justificativa]({link})',
+    color: '#F0B232',
+    footer: 'Justificado por {nome}',
+    fields: [
+      { name: 'Período', value: '{periodo}', inline: true },
+      { name: 'Motivo', value: '{motivo}', inline: false },
+    ],
+  }),
+  justificationLogDaily: emptyEmbedDraft({
+    title: '🔔 Nova justificativa Diária',
+    description: '{membro} justificou-se em {canal}.\n[Ver a justificativa]({link})',
+    color: '#5865F2',
+    footer: 'Justificado por {nome}',
+    fields: [
+      { name: 'Período', value: '{periodo}', inline: true },
+      { name: 'Motivo', value: '{motivo}', inline: false },
+    ],
+  }),
+  justificationRemoval: emptyEmbedDraft({
+    title: '⚠️ Pedido de remoção de justificativa',
+    description: '{membro} pediu para remover uma justificativa **{tipo}**.\n\n**Motivo:**\n{motivo}',
+    color: '#ED4245',
+    footer: 'Pedido por {nome} — um administrador precisa de rever e remover manualmente',
   }),
 }
 
@@ -530,9 +589,11 @@ export const demoBridge: LisDiscordBridge = {
 
   async sendEmbed() {
     await delay(500)
+    return { url: 'https://discord.com/channels/demo', viaWebhook: false }
   },
   async sendRemoteEmbed() {
     await delay(500)
+    return { url: 'https://discord.com/channels/demo', viaWebhook: false }
   },
 
   async searchMembers(_guildId, query) {
@@ -697,6 +758,25 @@ export const demoBridge: LisDiscordBridge = {
     })
     return fullDemoLeaderboard(guildId)
   },
+  async removeMovHours(guildId, userId, seconds) {
+    await delay(300)
+    const entries = movPointsData[guildId] ?? []
+    const member = membersData.find((m) => m.id === userId)
+    const existing = entries.find((e) => e.userId === userId)
+    if (existing) existing.totalSeconds = Math.max(0, existing.totalSeconds - seconds)
+    else entries.push({ userId, tag: member?.tag ?? userId, points: 0, totalSeconds: 0 })
+    movPointsData = { ...movPointsData, [guildId]: entries }
+    logDemoMovPoints({
+      guildId,
+      action: 'remove_hours',
+      targetUserId: userId,
+      targetTag: member?.tag ?? userId,
+      amount: seconds,
+      newTotal: entries.find((e) => e.userId === userId)?.totalSeconds ?? 0,
+      actorTag: 'Aplicação desktop',
+    })
+    return fullDemoLeaderboard(guildId)
+  },
   async getMovPointsBoard(guildId) {
     await delay()
     return movPointsBoardData[guildId] ?? { channelId: null, channelName: null }
@@ -746,6 +826,9 @@ export const demoBridge: LisDiscordBridge = {
   },
   async addRemoteMovHours(guildId, userId, seconds) {
     return demoBridge.addMovHours(guildId, userId, seconds)
+  },
+  async removeRemoteMovHours(guildId, userId, seconds) {
+    return demoBridge.removeMovHours(guildId, userId, seconds)
   },
   async getRemoteMovPointsBoard(guildId) {
     return demoBridge.getMovPointsBoard(guildId)

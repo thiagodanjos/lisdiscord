@@ -6,7 +6,7 @@ import {
 } from 'discord.js'
 import type { MemberProfile, RoleGoal } from '../../shared/types'
 import * as roleGoalsStore from '../store/roleGoals'
-import { formatDuration } from './movcall'
+import { formatDuration } from '../../shared/leaderboardFormat'
 import { getMemberProfile } from './memberProfile'
 
 export function verificarCommandDef(): RESTPostAPIChatInputApplicationCommandsJSONBody {

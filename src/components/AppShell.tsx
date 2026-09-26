@@ -4,6 +4,7 @@ import {
   Gamepad2,
   Gauge,
   Gift,
+  History,
   LayoutGrid,
   Medal,
   MessageSquarePlus,
@@ -14,6 +15,7 @@ import {
   ShieldAlert,
   Smile,
   Target,
+  Timer,
   TrendingUp,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -39,6 +41,8 @@ const NAV_SERVER = [
   { to: '/jogos', label: 'Jogos', icon: Gamepad2 },
   { to: '/pontos-mov', label: 'Pontos MOV', icon: Medal },
   { to: '/logs-pontos', label: 'Logs de pontos', icon: ScrollText },
+  { to: '/horas-mov', label: 'Horas MOV', icon: Timer },
+  { to: '/logs-horas', label: 'Logs de horas', icon: History },
   { to: '/justificativas', label: 'Justificativas', icon: MessageSquareWarning },
   { to: '/emojis', label: 'Emojis', icon: Smile },
   { to: '/upamentos', label: 'Upamentos', icon: TrendingUp },

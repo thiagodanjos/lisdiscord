@@ -14,11 +14,12 @@ import {
   PermissionFlagsBits,
   type RESTPostAPIChatInputApplicationCommandsJSONBody,
   SlashCommandBuilder,
+  type SlashCommandSubcommandBuilder,
   TextInputBuilder,
   TextInputStyle,
-  UserSelectMenuBuilder,
 } from 'discord.js'
-import type { MovCallType, MovPointsEntry } from '../../shared/types'
+import type { MovCallType } from '../../shared/types'
+import { buildLeaderboardList, DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT, formatDuration } from '../../shared/leaderboardFormat'
 import * as movPoints from '../store/movPoints'
 import * as embedTemplates from '../store/embedTemplates'
 import { buildEmbedFromDraft } from './embedTemplate'
@@ -27,6 +28,8 @@ import { buildFullLeaderboard } from './leaderboard'
 const POINTS_BY_TYPE: Record<MovCallType, number> = { normal: 10, tematica: 15 }
 const INACTIVE_HOURS_THRESHOLD_SECONDS = 5 * 3600
 const MAX_BOARD_LINES = 60
+// Deixa margem para o resto do texto do template à volta de {lista} dentro dos 4096 da descrição.
+const MAX_LIST_CHARS = 3600
 const SETUP_TIMEOUT_MS = 10 * 60_000
 const MODAL_TIMEOUT_MS = 120_000
 const RESULT_DISPLAY_MS = 6_000
@@ -41,10 +44,20 @@ export function movCallCommandDef(): RESTPostAPIChatInputApplicationCommandsJSON
 }
 
 export function movHorasCommandDef(): RESTPostAPIChatInputApplicationCommandsJSONBody {
+  const withTimeOptions = (sc: SlashCommandSubcommandBuilder, verb: string): SlashCommandSubcommandBuilder =>
+    sc
+      .addUserOption((o) => o.setName('membro').setDescription(`A quem ${verb} horas`).setRequired(true))
+      .addIntegerOption((o) => o.setName('horas').setDescription('Horas').setRequired(false).setMinValue(0).setMaxValue(10_000))
+      .addIntegerOption((o) => o.setName('minutos').setDescription('Minutos').setRequired(false).setMinValue(0).setMaxValue(59))
+      .addIntegerOption((o) => o.setName('segundos').setDescription('Segundos').setRequired(false).setMinValue(0).setMaxValue(59))
+      .addStringOption((o) => o.setName('motivo').setDescription('Nota que fica registada no log de horas (opcional)').setRequired(false).setMaxLength(200))
+
   return new SlashCommandBuilder()
     .setName('movhoras')
-    .setDescription('Atribui horas de Mov. Call a um membro')
+    .setDescription('Adiciona ou remove horas de Mov. Call de um membro')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand((sc) => withTimeOptions(sc.setName('adicionar').setDescription('Adiciona horas de Mov. Call a um membro'), 'adicionar'))
+    .addSubcommand((sc) => withTimeOptions(sc.setName('remover').setDescription('Remove horas de Mov. Call de um membro'), 'remover'))
     .toJSON()
 }
 
@@ -373,163 +386,57 @@ async function processParticipants(
 }
 
 // ==========================================================================
-// /movhoras — assistente por seletor de membro + modal
+// /movhoras adicionar | remover
 // ==========================================================================
 
 async function runMovHoras(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
-  let targetId: string | null = null
-  let targetTag: string | null = null
-  let errorText = ''
+  const sub = interaction.options.getSubcommand()
+  const user = interaction.options.getUser('membro', true)
+  const h = interaction.options.getInteger('horas') ?? 0
+  const m = interaction.options.getInteger('minutos') ?? 0
+  const s = interaction.options.getInteger('segundos') ?? 0
+  const note = interaction.options.getString('motivo')?.trim() || undefined
+  const totalSeconds = h * 3600 + m * 60 + s
 
-  function selectEmbed(): EmbedBuilder {
-    return new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle('⏱️ Atribuir horas de Mov. Call')
-      .setDescription('Escolhe o membro a quem vais atribuir horas:')
-      .setFooter({ text: 'Só tu consegues usar isto.' })
+  if (totalSeconds <= 0) {
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xed4245)
+          .setTitle('❌ Tempo em falta')
+          .setDescription('Indica pelo menos um valor em **horas**, **minutos** ou **segundos** (ex.: `/movhoras adicionar membro:@alguém horas:1 minutos:30`).'),
+      ],
+      ephemeral: true,
+    })
+    return
   }
 
-  function selectRows(): [ActionRowBuilder<UserSelectMenuBuilder>, ActionRowBuilder<ButtonBuilder>] {
-    return [
-      new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(
-        new UserSelectMenuBuilder().setCustomId('movhoras:pick').setPlaceholder('Escolhe um membro').setMinValues(1).setMaxValues(1),
-      ),
-      new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId('movhoras:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
-      ),
-    ]
+  if (user.bot) {
+    await interaction.reply({ content: '❌ Bots não acumulam horas de Mov. Call.', ephemeral: true })
+    return
   }
 
-  function timeEmbed(): EmbedBuilder {
-    return new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle('⏱️ Atribuir horas de Mov. Call')
-      .setDescription(`Membro selecionado: **${targetTag}**\n\nClica em **Escrever tempo** para indicar quantas horas, minutos e segundos atribuir.`)
-  }
+  try {
+    const adding = sub === 'adicionar'
+    const newTotal = adding
+      ? movPoints.addHours(guild.id, user.id, user.tag, totalSeconds, interaction.user.tag, note)
+      : movPoints.removeHours(guild.id, user.id, user.tag, totalSeconds, interaction.user.tag, note)
+    await refreshBoard(guild).catch((err) => console.error('[movhoras] Falha ao atualizar o painel:', err))
 
-  function timeRow(): ActionRowBuilder<ButtonBuilder> {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('movhoras:write').setLabel('Escrever tempo').setStyle(ButtonStyle.Primary).setEmoji('📝'),
-      new ButtonBuilder().setCustomId('movhoras:back').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
-      new ButtonBuilder().setCustomId('movhoras:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
-    )
-  }
-
-  function errorEmbed(): EmbedBuilder {
-    return new EmbedBuilder().setColor(0xed4245).setTitle('❌ Valores inválidos').setDescription(errorText)
-  }
-
-  function errorRow(): ActionRowBuilder<ButtonBuilder> {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('movhoras:back').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
-      new ButtonBuilder().setCustomId('movhoras:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
-    )
-  }
-
-  const reply = await interaction.reply({ embeds: [selectEmbed()], components: selectRows(), ephemeral: true, withResponse: true })
-  const message = reply.resource?.message
-  if (!message) return
-
-  async function deleteAfter(ms: number): Promise<void> {
-    await new Promise((r) => setTimeout(r, ms))
-    await interaction.deleteReply().catch(() => undefined)
-  }
-
-  await loop(message)
-
-  async function loop(msg: Message): Promise<void> {
-    try {
-      const click = await msg.awaitMessageComponent({ time: SETUP_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
-
-      if (click.customId === 'movhoras:cancel') {
-        await click.update({ embeds: [new EmbedBuilder().setColor(0x99aab5).setTitle('Cancelado')], components: [] })
-        await deleteAfter(CANCEL_DISPLAY_MS)
-        return
-      }
-
-      if (click.isUserSelectMenu() && click.customId === 'movhoras:pick') {
-        const user = click.users.first()
-        if (!user) {
-          await loop(msg)
-          return
-        }
-        targetId = user.id
-        targetTag = user.tag
-        await click.update({ embeds: [timeEmbed()], components: [timeRow()] })
-        await loop(msg)
-        return
-      }
-
-      if (click.customId === 'movhoras:back') {
-        targetId = null
-        targetTag = null
-        await click.update({ embeds: [selectEmbed()], components: selectRows() })
-        await loop(msg)
-        return
-      }
-
-      if (click.customId === 'movhoras:write') {
-        const modal = new ModalBuilder()
-          .setCustomId('movhoras:modal')
-          .setTitle('Tempo de Mov. Call')
-          .addComponents(
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder().setCustomId('horas').setLabel('Horas').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('0'),
-            ),
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder().setCustomId('minutos').setLabel('Minutos').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('0'),
-            ),
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder().setCustomId('segundos').setLabel('Segundos').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('0'),
-            ),
-          )
-        await click.showModal(modal)
-
-        let submitted: ModalSubmitInteraction
-        try {
-          submitted = await click.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
-        } catch {
-          await interaction.editReply({ embeds: [timeEmbed()], components: [timeRow()] })
-          await loop(msg)
-          return
-        }
-
-        try {
-          const h = parseNonNegativeInt(submitted.fields.getTextInputValue('horas'))
-          const m = parseNonNegativeInt(submitted.fields.getTextInputValue('minutos'))
-          const s = parseNonNegativeInt(submitted.fields.getTextInputValue('segundos'))
-
-          if (h === null || m === null || s === null || (h === 0 && m === 0 && s === 0)) {
-            errorText = 'Escreve números válidos (0 ou mais) em pelo menos um dos campos de horas, minutos ou segundos.'
-            await updateFromModal(submitted, interaction, { embeds: [errorEmbed()], components: [errorRow()] })
-            await loop(msg)
-            return
-          }
-
-          const totalSeconds = h * 3600 + m * 60 + s
-          const newTotal = movPoints.addHours(guild.id, targetId as string, targetTag as string, totalSeconds, interaction.user.tag)
-          await refreshBoard(guild)
-
-          const embed = new EmbedBuilder()
-            .setColor(0x3ba55c)
-            .setTitle('⏱️ Horas atribuídas')
-            .setDescription(`**+${formatDuration(totalSeconds)}** de Mov. Call para <@${targetId}>.\nTotal acumulado: **${formatDuration(newTotal)}**.`)
-          await updateFromModal(submitted, interaction, { embeds: [embed], components: [] })
-          await deleteAfter(RESULT_DISPLAY_MS)
-        } catch (err) {
-          console.error('[movhoras] Erro ao atribuir horas:', err)
-          errorText = `Ocorreu um erro ao atribuir as horas e nada foi guardado. Tenta novamente.\n\`\`\`${err instanceof Error ? err.message : String(err)}\`\`\``
-          await interaction.editReply({ embeds: [errorEmbed()], components: [errorRow()] }).catch(() => undefined)
-          await loop(msg)
-        }
-        return
-      }
-
-      await loop(msg)
-    } catch {
-      await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('⏱️ Tempo esgotado')], components: [] }).catch(() => undefined)
-      await interaction.deleteReply().catch(() => undefined)
-    }
+    const embed = new EmbedBuilder()
+      .setColor(adding ? 0x3ba55c : 0xed4245)
+      .setTitle(adding ? '⏱️ Horas adicionadas' : '⏱️ Horas removidas')
+      .setDescription(
+        `**${adding ? '+' : '-'}${formatDuration(totalSeconds)}** de Mov. Call ${adding ? 'para' : 'de'} <@${user.id}>.\n` +
+          `Total acumulado: **${formatDuration(newTotal)}**.` +
+          (note ? `\n\n📝 ${note}` : ''),
+      )
+      .setFooter({ text: `Por ${interaction.user.tag}` })
+      .setTimestamp(new Date())
+    await interaction.reply({ embeds: [embed] })
+  } catch (err) {
+    console.error('[movhoras] Erro:', err)
+    await replyWithError(interaction, 'Não consegui alterar as horas — nada foi guardado.', err)
   }
 }
 
@@ -708,13 +615,14 @@ async function runInativos(interaction: ChatInputCommandInteraction, guild: Guil
 async function buildInactiveEmbed(guild: Guild): Promise<EmbedBuilder> {
   const leaderboard = await buildFullLeaderboard(guild)
   const inactive = leaderboard.filter((entry) => entry.points === 0 || entry.totalSeconds < INACTIVE_HOURS_THRESHOLD_SECONDS)
-  const { shown, remaining } = capLines(inactive, MAX_BOARD_LINES)
-
-  const lines = shown.map((entry) => `⚠️ <@${entry.userId}> — ${entry.points} pontos · ${formatDuration(entry.totalSeconds)}`)
-  if (remaining > 0) lines.push(`_+ ${remaining} membro(s) inativo(s) não mostrado(s)._`)
-  const lista = lines.length > 0 ? lines.join('\n') : '_Ninguém está abaixo do limite — toda a gente tem pontos e pelo menos 5 horas de Mov. Call._'
-
   const draft = embedTemplates.getTemplate(guild.id, 'inativos')
+  const lista = buildLeaderboardList(inactive, draft.listFormat ?? DEFAULT_INACTIVE_LIST_FORMAT, {
+    mentionStyle: 'discord',
+    maxLines: MAX_BOARD_LINES,
+    maxChars: MAX_LIST_CHARS,
+    emptyText: '_Ninguém está abaixo do limite — toda a gente tem pontos e pelo menos 5 horas de Mov. Call._',
+    moreText: (n) => `_+ ${n} membro(s) inativo(s) não mostrado(s)._`,
+  })
   return buildEmbedFromDraft(draft, { lista, servidor: guild.name })
 }
 
@@ -746,29 +654,20 @@ export async function refreshBoard(guild: Guild): Promise<void> {
 
 async function buildBoardEmbed(guild: Guild): Promise<EmbedBuilder> {
   const leaderboard = await buildFullLeaderboard(guild)
-  const medals = ['🥇', '🥈', '🥉']
-  const { shown, remaining } = capLines(leaderboard, MAX_BOARD_LINES)
-
-  const lines = shown.map((entry, i) => {
-    const hoursText = entry.totalSeconds > 0 ? ` · ${formatDuration(entry.totalSeconds)}` : ''
-    return `${medals[i] ?? `${i + 1}.`} <@${entry.userId}> — ${entry.points} pontos${hoursText}`
-  })
-  if (remaining > 0) lines.push(`_+ ${remaining} membro(s) não mostrado(s)._`)
-  const lista = lines.length > 0 ? lines.join('\n') : '_Este servidor ainda não tem membros para mostrar._'
-
   const draft = embedTemplates.getTemplate(guild.id, 'pontosBoard')
+  const lista = buildLeaderboardList(leaderboard, draft.listFormat ?? DEFAULT_BOARD_LIST_FORMAT, {
+    mentionStyle: 'discord',
+    maxLines: MAX_BOARD_LINES,
+    maxChars: MAX_LIST_CHARS,
+    emptyText: '_Este servidor ainda não tem membros para mostrar._',
+    moreText: (n) => `_+ ${n} membro(s) não mostrado(s)._`,
+  })
   return buildEmbedFromDraft(draft, { lista, servidor: guild.name, atualizado: formatBrasiliaDate(new Date()) })
 }
 
 // ==========================================================================
 // Auxiliares
 // ==========================================================================
-
-/** Corta a lista num máximo de linhas, para nunca ultrapassar o limite de tamanho de um embed do Discord. */
-function capLines(entries: MovPointsEntry[], max: number): { shown: MovPointsEntry[]; remaining: number } {
-  if (entries.length <= max) return { shown: entries, remaining: 0 }
-  return { shown: entries.slice(0, max), remaining: entries.length - max }
-}
 
 function extractUserId(raw: string): string | null {
   const mentionMatch = raw.match(/^<@!?(\d{15,21})>$/)
@@ -785,24 +684,6 @@ function parseParticipantsList(text: string): string[] {
     .map(extractUserId)
     .filter((id): id is string => id !== null)
   return [...new Set(ids)]
-}
-
-function parseNonNegativeInt(raw: string): number | null {
-  const trimmed = raw.trim()
-  if (trimmed === '') return 0
-  if (!/^\d+$/.test(trimmed)) return null
-  return Number(trimmed)
-}
-
-export function formatDuration(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600)
-  const m = Math.floor((totalSeconds % 3600) / 60)
-  const s = totalSeconds % 60
-  const parts: string[] = []
-  if (h > 0) parts.push(`${h}h`)
-  if (m > 0) parts.push(`${m}m`)
-  if (s > 0 || parts.length === 0) parts.push(`${s}s`)
-  return parts.join(' ')
 }
 
 /** Responde (ou edita a resposta pendente) com um erro visível, em vez de deixar a interação cair silenciosamente. */

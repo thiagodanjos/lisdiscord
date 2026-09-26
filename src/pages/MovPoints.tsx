@@ -1,20 +1,25 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Clock3, Eye, EyeOff, Medal, Minus, Palette, Plus, Radio, RotateCcw, Search } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { formatDuration } from '../lib/format'
 import { Avatar, Badge, Button, Card, ConfirmDialog, EmptyState, Modal, SectionHeading } from '../components/ui'
 import { EmbedTemplateEditor } from '../components/EmbedTemplateEditor'
+import { buildLeaderboardList, DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
 import type {
   BotEmoji,
   ChannelPickerEntry,
   EmbedDraft,
   ExcludedMember,
   GuildSummary,
+  ListFormat,
   MemberSearchResult,
   MovPointsBoardConfig,
   MovPointsEntry,
   RemoteBotConfig,
 } from '../../shared/types'
+
+type BoardTemplateKind = 'pontosBoard' | 'inativos'
 
 const POLL_INTERVAL_MS = 8_000
 const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
@@ -44,18 +49,14 @@ export default function MovPoints() {
   const [results, setResults] = useState<MemberSearchResult[]>([])
   const [target, setTarget] = useState<MemberSearchResult | null>(null)
   const [amount, setAmount] = useState(10)
-  const [hours, setHours] = useState(0)
-  const [minutes, setMinutes] = useState(0)
-  const [seconds, setSeconds] = useState(0)
   const [busy, setBusy] = useState(false)
-  const [busyHours, setBusyHours] = useState(false)
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [excludedMembers, setExcludedMembers] = useState<ExcludedMember[]>([])
   const [togglingExclusion, setTogglingExclusion] = useState<string | null>(null)
 
   const [emojis, setEmojis] = useState<BotEmoji[]>([])
-  const [editingTemplate, setEditingTemplate] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<BoardTemplateKind | null>(null)
   const [templateDraft, setTemplateDraft] = useState<EmbedDraft>(EMPTY_EMBED_DRAFT)
   const [templateCustomized, setTemplateCustomized] = useState(false)
   const [templateSaving, setTemplateSaving] = useState(false)
@@ -138,21 +139,26 @@ export default function MovPoints() {
     }
   }
 
-  async function openTemplateEditor() {
-    setEditingTemplate(true)
+  async function openTemplateEditor(kind: BoardTemplateKind) {
+    setEditingTemplate(kind)
     setTemplateError('')
     const getTemplate = isRemote ? bridge.getRemoteEmbedTemplate : bridge.getEmbedTemplate
-    const { draft, customized } = await getTemplate(guildId, 'pontosBoard')
-    setTemplateDraft(draft)
-    setTemplateCustomized(customized)
+    try {
+      const { draft, customized } = await getTemplate(guildId, kind)
+      setTemplateDraft(draft)
+      setTemplateCustomized(customized)
+    } catch (err) {
+      setTemplateError(err instanceof Error ? err.message : 'Não consegui carregar o template.')
+    }
   }
 
   async function saveTemplate() {
+    if (!editingTemplate) return
     setTemplateSaving(true)
     setTemplateError('')
     try {
       const setTemplate = isRemote ? bridge.setRemoteEmbedTemplate : bridge.setEmbedTemplate
-      const { customized } = await setTemplate(guildId, 'pontosBoard', templateDraft)
+      const { customized } = await setTemplate(guildId, editingTemplate, templateDraft)
       setTemplateCustomized(customized)
     } catch (err) {
       setTemplateError(err instanceof Error ? err.message : 'Ocorreu um erro inesperado.')
@@ -162,10 +168,11 @@ export default function MovPoints() {
   }
 
   async function resetTemplate() {
+    if (!editingTemplate) return
     setTemplateResetting(true)
     try {
       const reset = isRemote ? bridge.resetRemoteEmbedTemplate : bridge.resetEmbedTemplate
-      const { draft, customized } = await reset(guildId, 'pontosBoard')
+      const { draft, customized } = await reset(guildId, editingTemplate)
       setTemplateDraft(draft)
       setTemplateCustomized(customized)
     } finally {
@@ -186,26 +193,6 @@ export default function MovPoints() {
       setResults([])
     } finally {
       setBusy(false)
-    }
-  }
-
-  async function applyHours() {
-    if (!target) return
-    const totalSeconds = hours * 3600 + minutes * 60 + seconds
-    if (totalSeconds <= 0) return
-    setBusyHours(true)
-    try {
-      const addHours = isRemote ? bridge.addRemoteMovHours : bridge.addMovHours
-      const updated = await addHours(guildId, target.id, totalSeconds)
-      setLeaderboard(updated)
-      setTarget(null)
-      setQuery('')
-      setResults([])
-      setHours(0)
-      setMinutes(0)
-      setSeconds(0)
-    } finally {
-      setBusyHours(false)
     }
   }
 
@@ -295,9 +282,13 @@ export default function MovPoints() {
           <Button onClick={saveBoard} loading={savingBoard} disabled={boardChannelId === (board?.channelId ?? '')}>
             Guardar
           </Button>
-          <Button variant="dark" onClick={openTemplateEditor}>
+          <Button variant="dark" onClick={() => openTemplateEditor('pontosBoard')}>
             <Palette size={14} />
             Personalizar placar
+          </Button>
+          <Button variant="dark" onClick={() => openTemplateEditor('inativos')}>
+            <Palette size={14} />
+            Personalizar /inativos
           </Button>
         </div>
       </section>
@@ -364,56 +355,9 @@ export default function MovPoints() {
                 </div>
               </div>
 
-              <div className="border-t border-border pt-4">
-                <label className="text-xs font-semibold tracking-wide text-faint uppercase">Horas de Mov. Call</label>
-                <div className="mt-1.5 grid grid-cols-3 gap-2">
-                  <div>
-                    <input
-                      type="number"
-                      min={0}
-                      value={hours}
-                      onChange={(e) => setHours(Math.max(0, Number(e.target.value)))}
-                      placeholder="h"
-                      className="w-full rounded-lg border border-border bg-raised px-2 py-2 text-center text-sm text-text focus:border-accent focus:outline-none"
-                    />
-                    <p className="mt-0.5 text-center text-[10px] text-faint">horas</p>
-                  </div>
-                  <div>
-                    <input
-                      type="number"
-                      min={0}
-                      max={59}
-                      value={minutes}
-                      onChange={(e) => setMinutes(Math.max(0, Number(e.target.value)))}
-                      placeholder="m"
-                      className="w-full rounded-lg border border-border bg-raised px-2 py-2 text-center text-sm text-text focus:border-accent focus:outline-none"
-                    />
-                    <p className="mt-0.5 text-center text-[10px] text-faint">min</p>
-                  </div>
-                  <div>
-                    <input
-                      type="number"
-                      min={0}
-                      max={59}
-                      value={seconds}
-                      onChange={(e) => setSeconds(Math.max(0, Number(e.target.value)))}
-                      placeholder="s"
-                      className="w-full rounded-lg border border-border bg-raised px-2 py-2 text-center text-sm text-text focus:border-accent focus:outline-none"
-                    />
-                    <p className="mt-0.5 text-center text-[10px] text-faint">seg</p>
-                  </div>
-                </div>
-                <Button
-                  variant="dark"
-                  onClick={applyHours}
-                  loading={busyHours}
-                  disabled={hours === 0 && minutes === 0 && seconds === 0}
-                  className="mt-2 w-full"
-                >
-                  <Clock3 size={14} />
-                  Atribuir horas
-                </Button>
-              </div>
+              <p className="border-t border-border pt-3 text-xs text-faint">
+                As horas agora têm a sua própria página — <Link to="/horas-mov" className="font-semibold text-accent hover:underline">Horas MOV</Link>.
+              </p>
             </Card>
           )}
         </div>
@@ -502,33 +446,51 @@ export default function MovPoints() {
         confirmLabel={resetting ? 'A apagar…' : 'Sim, apagar tudo'}
       />
 
-      <Modal open={editingTemplate} onClose={() => setEditingTemplate(false)} title="Personalizar placar de pontos" width="lg">
-        <EmbedTemplateEditor
-          draft={templateDraft}
-          onChange={setTemplateDraft}
-          emojis={emojis}
-          botName="LisDiscord Bot"
-          onSave={saveTemplate}
-          onReset={resetTemplate}
-          saving={templateSaving}
-          resetting={templateResetting}
-          customized={templateCustomized}
-          errorMessage={templateError}
-          placeholderHint='Usa {lista} na descrição (ou num campo) para indicar onde entra a lista de membros — {servidor} e {atualizado} também podem ser usados em qualquer texto.'
-          previewPlaceholders={{
-            lista: previewLista(leaderboard),
-            servidor: guilds.find((g) => g.id === guildId)?.name ?? 'este servidor',
-            atualizado: 'agora mesmo',
-          }}
-        />
+      <Modal
+        open={editingTemplate !== null}
+        onClose={() => setEditingTemplate(null)}
+        title={editingTemplate === 'inativos' ? 'Personalizar mensagem do /inativos' : 'Personalizar placar de pontos'}
+        width="xl"
+      >
+        {editingTemplate && (
+          <EmbedTemplateEditor
+            draft={templateDraft}
+            onChange={setTemplateDraft}
+            emojis={emojis}
+            botName="LisDiscord Bot"
+            onSave={saveTemplate}
+            onReset={resetTemplate}
+            saving={templateSaving}
+            resetting={templateResetting}
+            customized={templateCustomized}
+            errorMessage={templateError}
+            placeholderHint="Põe {lista} na descrição (ou num campo) onde queres a lista de membros — ela continua automática. {servidor} e {atualizado} funcionam em qualquer texto."
+            placeholderTokens={editingTemplate === 'inativos' ? ['{lista}', '{servidor}'] : ['{lista}', '{servidor}', '{atualizado}']}
+            listFormatDefaults={editingTemplate === 'inativos' ? DEFAULT_INACTIVE_LIST_FORMAT : DEFAULT_BOARD_LIST_FORMAT}
+            previewList={(format) => previewLista(editingTemplate === 'inativos' ? inactiveOf(leaderboard) : leaderboard, format)}
+            previewPlaceholders={{
+              servidor: guilds.find((g) => g.id === guildId)?.name ?? 'este servidor',
+              atualizado: 'agora mesmo',
+            }}
+          />
+        )}
       </Modal>
     </div>
   )
 }
 
-function previewLista(leaderboard: MovPointsEntry[]): string {
-  const medals = ['🥇', '🥈', '🥉']
-  const top = leaderboard.slice(0, 3)
-  if (top.length === 0) return '_Este servidor ainda não tem membros para mostrar._'
-  return top.map((entry, i) => `${medals[i] ?? `${i + 1}.`} @${entry.tag} — ${entry.points} pontos`).join('\n')
+const PREVIEW_ROWS = 8
+
+function previewLista(entries: MovPointsEntry[], format: ListFormat): string {
+  return buildLeaderboardList(entries, format, {
+    mentionStyle: 'preview',
+    maxLines: PREVIEW_ROWS,
+    maxChars: 3600,
+    emptyText: '_Ainda não há membros para mostrar._',
+    moreText: (n) => `_+ ${n} membro(s)…_`,
+  })
+}
+
+function inactiveOf(entries: MovPointsEntry[]): MovPointsEntry[] {
+  return entries.filter((e) => e.points === 0 || e.totalSeconds < 5 * 3600)
 }

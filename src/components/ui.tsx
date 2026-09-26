@@ -109,7 +109,7 @@ export function EmptyState({ title, description, action }: { title: string; desc
   )
 }
 
-export function Modal({ open, onClose, title, children, width = 'md' }: { open: boolean; onClose: () => void; title: string; children: ReactNode; width?: 'md' | 'lg' }) {
+export function Modal({ open, onClose, title, children, width = 'md' }: { open: boolean; onClose: () => void; title: string; children: ReactNode; width?: 'md' | 'lg' | 'xl' }) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -124,8 +124,8 @@ export function Modal({ open, onClose, title, children, width = 'md' }: { open: 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div
         className={cn(
-          'flex max-h-[85vh] w-full flex-col rounded-2xl border border-border bg-raised shadow-card',
-          width === 'lg' ? 'max-w-2xl' : 'max-w-md',
+          'flex max-h-[90vh] w-full flex-col rounded-2xl border border-border bg-raised shadow-card',
+          width === 'xl' ? 'max-w-6xl' : width === 'lg' ? 'max-w-2xl' : 'max-w-md',
         )}
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">

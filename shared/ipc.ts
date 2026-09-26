@@ -31,6 +31,8 @@ import type {
   RolePickerEntry,
   ScheduleConfig,
   ScheduleFrequency,
+  SendMessageOptions,
+  SendMessageResult,
   TimeoutDuration,
   Transcript,
   TranscriptSummary,
@@ -86,6 +88,7 @@ export const IPC = {
   addMovPoints: 'movpoints:add',
   removeMovPoints: 'movpoints:remove',
   addMovHours: 'movpoints:hours:add',
+  removeMovHours: 'movpoints:hours:remove',
   getMovPointsBoard: 'movpoints:board:get',
   setMovPointsBoard: 'movpoints:board:set',
   resetMovPoints: 'movpoints:reset',
@@ -123,6 +126,7 @@ export const IPC = {
   addRemoteMovPoints: 'remoteBot:movpoints:add',
   removeRemoteMovPoints: 'remoteBot:movpoints:remove',
   addRemoteMovHours: 'remoteBot:movpoints:hours:add',
+  removeRemoteMovHours: 'remoteBot:movpoints:hours:remove',
   getRemoteMovPointsBoard: 'remoteBot:movpoints:board:get',
   setRemoteMovPointsBoard: 'remoteBot:movpoints:board:set',
   resetRemoteMovPoints: 'remoteBot:movpoints:reset',
@@ -175,8 +179,8 @@ export interface LisDiscordBridge {
   getSettings(): Promise<AppSettings>
   openDataDir(): Promise<void>
 
-  sendEmbed(guildId: string, channelId: string, embed: EmbedDraft): Promise<void>
-  sendRemoteEmbed(guildId: string, channelId: string, embed: EmbedDraft): Promise<void>
+  sendEmbed(guildId: string, channelId: string, embed: EmbedDraft, options?: SendMessageOptions): Promise<SendMessageResult>
+  sendRemoteEmbed(guildId: string, channelId: string, embed: EmbedDraft, options?: SendMessageOptions): Promise<SendMessageResult>
 
   searchMembers(guildId: string, query: string): Promise<MemberSearchResult[]>
   banMember(guildId: string, userId: string, reason: string, deleteMessageSeconds: number): Promise<void>
@@ -200,6 +204,7 @@ export interface LisDiscordBridge {
   addMovPoints(guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]>
   removeMovPoints(guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]>
   addMovHours(guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]>
+  removeMovHours(guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]>
   getMovPointsBoard(guildId: string): Promise<MovPointsBoardConfig>
   setMovPointsBoard(guildId: string, channelId: string | null): Promise<MovPointsBoardConfig>
   resetMovPoints(guildId: string): Promise<MovPointsEntry[]>
@@ -237,6 +242,7 @@ export interface LisDiscordBridge {
   addRemoteMovPoints(guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]>
   removeRemoteMovPoints(guildId: string, userId: string, amount: number): Promise<MovPointsEntry[]>
   addRemoteMovHours(guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]>
+  removeRemoteMovHours(guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]>
   getRemoteMovPointsBoard(guildId: string): Promise<MovPointsBoardConfig>
   setRemoteMovPointsBoard(guildId: string, channelId: string | null): Promise<MovPointsBoardConfig>
   resetRemoteMovPoints(guildId: string): Promise<MovPointsEntry[]>

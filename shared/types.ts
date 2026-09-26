@@ -203,6 +203,18 @@ export interface EmbedField {
   inline: boolean
 }
 
+/**
+ * Como cada linha de uma lista automática (placar, inativos) é escrita — o 1º, 2º e 3º lugar têm
+ * linha própria (para medalhas, emojis diferentes…), o resto usa `line`. Tokens: {posicao},
+ * {membro} (menção), {nome}, {pontos}, {horas}.
+ */
+export interface ListFormat {
+  first: string
+  second: string
+  third: string
+  line: string
+}
+
 export interface EmbedDraft {
   title: string
   description: string
@@ -213,6 +225,11 @@ export interface EmbedDraft {
   authorName: string
   fields: EmbedField[]
   timestamp: boolean
+  // Opcionais para continuarem a funcionar os rascunhos/templates guardados antes de existirem.
+  authorIconUrl?: string
+  footerIconUrl?: string
+  url?: string
+  listFormat?: ListFormat
 }
 
 /**
@@ -222,7 +239,44 @@ export interface EmbedDraft {
  * campos) para indicar onde entra a lista dinâmica de membros — sem esse token, a lista não
  * aparece em lado nenhum, por isso o editor avisa disso.
  */
-export type EmbedTemplateKind = 'pontosBoard' | 'inativos' | 'justificationFixed' | 'justificationDaily'
+export type EmbedTemplateKind =
+  | 'pontosBoard'
+  | 'inativos'
+  | 'justificationFixed'
+  | 'justificationDaily'
+  | 'justificationPostFixed'
+  | 'justificationPostDaily'
+  | 'justificationLogFixed'
+  | 'justificationLogDaily'
+  | 'justificationRemoval'
+
+export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
+  'pontosBoard',
+  'inativos',
+  'justificationFixed',
+  'justificationDaily',
+  'justificationPostFixed',
+  'justificationPostDaily',
+  'justificationLogFixed',
+  'justificationLogDaily',
+  'justificationRemoval',
+]
+
+/** Tokens disponíveis nas mensagens que o bot manda quando alguém se justifica (ou pede remoção). */
+export const JUSTIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{tipo}', '{periodo}', '{motivo}', '{canal}', '{link}', '{servidor}'] as const
+
+export interface SendMessageOptions {
+  /** Texto normal da mensagem, por cima do embed. */
+  content?: string
+  /** Enviar por webhook, com este nome e ícone (em vez de como o próprio bot). */
+  webhook?: { name: string; avatarUrl: string } | null
+}
+
+export interface SendMessageResult {
+  url: string
+  viaWebhook: boolean
+  warning?: string
+}
 
 export interface EmbedTemplateResponse {
   draft: EmbedDraft
@@ -329,7 +383,9 @@ export interface ExcludedMember {
   tag: string
 }
 
-export type MovPointsLogAction = 'add_points' | 'remove_points' | 'add_hours' | 'reset'
+export type MovPointsLogAction = 'add_points' | 'remove_points' | 'add_hours' | 'remove_hours' | 'reset'
+
+export const HOURS_LOG_ACTIONS: MovPointsLogAction[] = ['add_hours', 'remove_hours']
 
 export interface MovPointsLogEntry {
   id: string

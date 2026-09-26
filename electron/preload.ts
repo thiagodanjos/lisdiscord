@@ -37,8 +37,8 @@ const bridge: LisDiscordBridge = {
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   openDataDir: () => ipcRenderer.invoke(IPC.openDataDir),
 
-  sendEmbed: (guildId, channelId, embed) => ipcRenderer.invoke(IPC.sendEmbed, guildId, channelId, embed),
-  sendRemoteEmbed: (guildId, channelId, embed) => ipcRenderer.invoke(IPC.sendRemoteEmbed, guildId, channelId, embed),
+  sendEmbed: (guildId, channelId, embed, options) => ipcRenderer.invoke(IPC.sendEmbed, guildId, channelId, embed, options),
+  sendRemoteEmbed: (guildId, channelId, embed, options) => ipcRenderer.invoke(IPC.sendRemoteEmbed, guildId, channelId, embed, options),
 
   searchMembers: (guildId, query) => ipcRenderer.invoke(IPC.searchMembers, guildId, query),
   banMember: (guildId, userId, reason, deleteMessageSeconds) =>
@@ -65,6 +65,7 @@ const bridge: LisDiscordBridge = {
   addMovPoints: (guildId, userId, amount) => ipcRenderer.invoke(IPC.addMovPoints, guildId, userId, amount),
   removeMovPoints: (guildId, userId, amount) => ipcRenderer.invoke(IPC.removeMovPoints, guildId, userId, amount),
   addMovHours: (guildId, userId, seconds) => ipcRenderer.invoke(IPC.addMovHours, guildId, userId, seconds),
+  removeMovHours: (guildId, userId, seconds) => ipcRenderer.invoke(IPC.removeMovHours, guildId, userId, seconds),
   getMovPointsBoard: (guildId) => ipcRenderer.invoke(IPC.getMovPointsBoard, guildId),
   setMovPointsBoard: (guildId, channelId) => ipcRenderer.invoke(IPC.setMovPointsBoard, guildId, channelId),
   resetMovPoints: (guildId) => ipcRenderer.invoke(IPC.resetMovPoints, guildId),
@@ -103,6 +104,7 @@ const bridge: LisDiscordBridge = {
   addRemoteMovPoints: (guildId, userId, amount) => ipcRenderer.invoke(IPC.addRemoteMovPoints, guildId, userId, amount),
   removeRemoteMovPoints: (guildId, userId, amount) => ipcRenderer.invoke(IPC.removeRemoteMovPoints, guildId, userId, amount),
   addRemoteMovHours: (guildId, userId, seconds) => ipcRenderer.invoke(IPC.addRemoteMovHours, guildId, userId, seconds),
+  removeRemoteMovHours: (guildId, userId, seconds) => ipcRenderer.invoke(IPC.removeRemoteMovHours, guildId, userId, seconds),
   getRemoteMovPointsBoard: (guildId) => ipcRenderer.invoke(IPC.getRemoteMovPointsBoard, guildId),
   setRemoteMovPointsBoard: (guildId, channelId) => ipcRenderer.invoke(IPC.setRemoteMovPointsBoard, guildId, channelId),
   resetRemoteMovPoints: (guildId) => ipcRenderer.invoke(IPC.resetRemoteMovPoints, guildId),

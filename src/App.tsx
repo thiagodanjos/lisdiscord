@@ -18,6 +18,7 @@ import Giveaways from './pages/Giveaways'
 import Games from './pages/Games'
 import MovPoints from './pages/MovPoints'
 import PointsLog from './pages/PointsLog'
+import MovHours from './pages/MovHours'
 import Justifications from './pages/Justifications'
 import Emojis from './pages/Emojis'
 import Goals from './pages/Goals'
@@ -59,7 +60,9 @@ export default function App() {
         <Route path="/sorteios" element={<Giveaways />} />
         <Route path="/jogos" element={<Games />} />
         <Route path="/pontos-mov" element={<MovPoints />} />
-        <Route path="/logs-pontos" element={<PointsLog />} />
+        <Route path="/logs-pontos" element={<PointsLog key="points" mode="points" />} />
+        <Route path="/horas-mov" element={<MovHours />} />
+        <Route path="/logs-horas" element={<PointsLog key="hours" mode="hours" />} />
         <Route path="/justificativas" element={<Justifications />} />
         <Route path="/emojis" element={<Emojis />} />
         <Route path="/upamentos" element={<Promotions />} />

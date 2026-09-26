@@ -32,6 +32,8 @@ import type {
   RolePickerEntry,
   ScheduleConfig,
   ScheduleFrequency,
+  SendMessageOptions,
+  SendMessageResult,
   TimeoutDuration,
   TranscriptSummary,
 } from '../../shared/types'
@@ -174,14 +176,22 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle(IPC.openDataDir, async (): Promise<void> => openDataDir())
 
   // ---- Mensagens ----
-  ipcMain.handle(IPC.sendEmbed, async (_e, guildId: string, channelId: string, embed: EmbedDraft): Promise<void> => {
-    const guild = await discordManager.getClient().guilds.fetch(guildId)
-    await sendEmbedMessage(guild, channelId, embed)
-  })
+  ipcMain.handle(
+    IPC.sendEmbed,
+    async (_e, guildId: string, channelId: string, embed: EmbedDraft, options?: SendMessageOptions): Promise<SendMessageResult> => {
+      const guild = await discordManager.getClient().guilds.fetch(guildId)
+      return sendEmbedMessage(guild, channelId, embed, options)
+    },
+  )
 
-  ipcMain.handle(IPC.sendRemoteEmbed, async (_e, guildId: string, channelId: string, embed: EmbedDraft): Promise<void> => {
-    await remoteApi(requireRemoteCredentials()).sendEmbed(guildId, channelId, embed)
-  })
+  ipcMain.handle(
+    IPC.sendRemoteEmbed,
+    async (_e, guildId: string, channelId: string, embed: EmbedDraft, options?: SendMessageOptions): Promise<SendMessageResult> => {
+      const result = await remoteApi(requireRemoteCredentials()).sendEmbed<SendMessageResult | { ok: true }>(guildId, channelId, embed, options)
+      // Um bot remoto ainda não atualizado responde só { ok: true } — continua a contar como enviado.
+      return 'url' in result ? result : { url: '', viaWebhook: false }
+    },
+  )
 
   // ---- Moderação ----
   ipcMain.handle(IPC.searchMembers, async (_e, guildId: string, query: string): Promise<MemberSearchResult[]> => {
@@ -313,6 +323,14 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     return buildFullLeaderboard(guild).catch(() => movPointsStore.getLeaderboard(guildId))
   })
 
+  ipcMain.handle(IPC.removeMovHours, async (_e, guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]> => {
+    const guild = await discordManager.getClient().guilds.fetch(guildId)
+    const member = await guild.members.fetch(userId)
+    movPointsStore.removeHours(guildId, userId, member.user.tag, seconds, DESKTOP_APP_ACTOR)
+    await refreshBoard(guild).catch(() => undefined)
+    return buildFullLeaderboard(guild).catch(() => movPointsStore.getLeaderboard(guildId))
+  })
+
   ipcMain.handle(IPC.getMovPointsBoard, async (_e, guildId: string): Promise<MovPointsBoardConfig> => movPointsStore.getBoardConfig(guildId))
 
   ipcMain.handle(IPC.setMovPointsBoard, async (_e, guildId: string, channelId: string | null): Promise<MovPointsBoardConfig> => {
@@ -425,6 +443,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   )
   ipcMain.handle(IPC.addRemoteMovHours, async (_e, guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]> =>
     remoteApi(requireRemoteCredentials()).addMovHours(guildId, userId, seconds),
+  )
+  ipcMain.handle(IPC.removeRemoteMovHours, async (_e, guildId: string, userId: string, seconds: number): Promise<MovPointsEntry[]> =>
+    remoteApi(requireRemoteCredentials()).removeMovHours(guildId, userId, seconds),
   )
   ipcMain.handle(IPC.getRemoteMovPointsBoard, async (_e, guildId: string): Promise<MovPointsBoardConfig> =>
     remoteApi(requireRemoteCredentials()).getMovPointsBoard(guildId),

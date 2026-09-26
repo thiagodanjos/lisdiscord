@@ -98,6 +98,26 @@ export function addHours(guildId: string, userId: string, tag: string, seconds: 
   return player.totalSeconds
 }
 
+/** Tira segundos de Mov. Call ao total da pessoa — nunca fica abaixo de 0. */
+export function removeHours(guildId: string, userId: string, tag: string, seconds: number, actorTag: string, note?: string): number {
+  const data = readAll()
+  const guild = ensureGuild(data, guildId)
+  const player = ensurePlayer(guild, userId, tag)
+  player.totalSeconds = Math.max(0, player.totalSeconds - Math.abs(seconds))
+  writeAll(data)
+  logMovPointsAction({
+    guildId,
+    action: 'remove_hours',
+    targetUserId: userId,
+    targetTag: tag,
+    amount: Math.abs(seconds),
+    newTotal: player.totalSeconds,
+    actorTag,
+    note,
+  })
+  return player.totalSeconds
+}
+
 /**
  * Ordenado sempre por pontos (mais alto primeiro); entre pessoas com os
  * mesmos pontos (incluindo quem tem 0), desempata por quem tem mais horas

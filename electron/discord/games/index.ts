@@ -2,6 +2,7 @@ import { type ChatInputCommandInteraction, EmbedBuilder, type Guild, type Intera
 import type { GameId, GameInfo } from '../../../shared/types'
 import { enabledGameIds } from '../../store/gameSettings'
 import { addEmojiBotCommandDef, copyEmojiCommandDef, handleAddEmojiBotCommand, handleCopyEmojiCommand } from '../emojiCommand'
+import { embedBuilderCommandDef, handleEmbedBuilderCommand } from '../embedBuilderCommand'
 import { handleGiveawayCommand, sorteioCommandDef } from '../giveawayCommand'
 import { handleMovCallCommand, movCallCommandDefs } from '../movcall'
 import { handleVerifyCommand, verificarCommandDef } from '../verifyCommand'
@@ -91,7 +92,8 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
     .setDescription(
       [
         '`/movcall` — regista uma Mov. Call de hoje por um assistente com botões: escolhe o tipo e escreve a lista de participantes por ID, numa janela própria. *(gestores)*',
-        '`/movhoras` — atribui horas de Mov. Call a um membro, escolhido por um seletor. *(gestores)*',
+        '`/movhoras adicionar membro: horas: minutos: segundos:` — adiciona horas de Mov. Call a um membro. *(gestores)*',
+        '`/movhoras remover membro: horas: minutos: segundos:` — remove horas de Mov. Call de um membro. *(gestores)*',
         '`/pontosmov ver [membro]` — mostra os pontos e horas de alguém (ou os teus).',
         '`/pontosmov ranking` — mostra o placar completo de pontos de Mov. Call.',
         '`/pontosmovadmin adicionar|remover` — ajusta pontos de alguém manualmente. *(gestores)*',
@@ -120,6 +122,13 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
       ].join('\n'),
     )
 
+  const messagesEmbed = new EmbedBuilder()
+    .setColor(0xa855f7)
+    .setTitle('📨 Mensagens / Embeds')
+    .setDescription(
+      '`/embed` — cria um embed (ou webhook com nome e foto próprios) passo a passo: menu para canal, texto, título, descrição, cor, imagens, autor, rodapé e campos, com pré-visualização ao vivo, exportar/importar em JSON e botão de enviar. *(gestores)*',
+    )
+
   const gamesList = GAMES.filter((g) => enabled.includes(g.id))
   const gamesEmbed = new EmbedBuilder()
     .setColor(0x3ba55c)
@@ -131,7 +140,7 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
         : '_Nenhum jogo está ativado neste servidor. Ativa em "Jogos", na app desktop._',
     )
 
-  return [movEmbed, giveawayEmbed, emojiEmbed, gamesEmbed]
+  return [movEmbed, giveawayEmbed, emojiEmbed, messagesEmbed, gamesEmbed]
 }
 
 /**
@@ -143,7 +152,7 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
  * não há duplicados nem risco de os comandos ficarem indisponíveis enquanto o global propaga.
  */
 export function buildGlobalCommandDefinitions(): CommandDef[] {
-  return [...movCallCommandDefs(), sorteioCommandDef(), verificarCommandDef(), helpCommandDef(), addEmojiBotCommandDef(), copyEmojiCommandDef()]
+  return [...movCallCommandDefs(), sorteioCommandDef(), verificarCommandDef(), helpCommandDef(), addEmojiBotCommandDef(), copyEmojiCommandDef(), embedBuilderCommandDef()]
 }
 
 /** Comandos por servidor: os fixos (para ficarem disponíveis já) + os jogos que o servidor ativou. */
@@ -166,6 +175,7 @@ export async function handleGameInteraction(interaction: Interaction): Promise<v
   if (await handleVerifyCommand(interaction)) return
   if (await handleAddEmojiBotCommand(interaction)) return
   if (await handleCopyEmojiCommand(interaction)) return
+  if (await handleEmbedBuilderCommand(interaction)) return
 
   switch (interaction.commandName) {
     case 'trivia':

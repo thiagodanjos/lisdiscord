@@ -403,26 +403,12 @@ async function runFileJustification(interaction: ButtonInteraction, guild: Guild
             throw new Error('Não encontrei o canal de log configurado — avisa um administrador.')
           }
 
-          const finalEmbed = new EmbedBuilder()
-            .setColor(type === 'fixed' ? 0xf0b232 : 0x5865f2)
-            .setTitle(type === 'fixed' ? '📌 Justificativa Fixa' : '📅 Justificativa Diária')
-            .addFields(
-              { name: 'Membro', value: `<@${interaction.user.id}>`, inline: true },
-              { name: 'Período', value: periodo, inline: true },
-              { name: 'Motivo', value: motivo },
-            )
-            .setFooter({ text: `Justificado por ${interaction.user.tag}` })
-            .setTimestamp(new Date())
+          const placeholders = justificationPlaceholders(interaction, guild, typeLabel, { periodo, motivo, canal: `<#${postChannel.id}>` })
+          const postKind = type === 'fixed' ? 'justificationPostFixed' : 'justificationPostDaily'
+          const posted = await postChannel.send({ embeds: [buildEmbedFromDraft(embedTemplates.getTemplate(guild.id, postKind), placeholders)] })
 
-          const posted = await postChannel.send({ embeds: [finalEmbed] })
-
-          const alertEmbed = new EmbedBuilder()
-            .setColor(type === 'fixed' ? 0xf0b232 : 0x5865f2)
-            .setTitle(`🔔 Nova justificativa ${typeLabel}`)
-            .setDescription(`<@${interaction.user.id}> justificou-se em <#${postChannel.id}>.\n[Ver a justificativa](${posted.url})`)
-            .addFields({ name: 'Período', value: periodo, inline: true }, { name: 'Motivo', value: motivo })
-            .setFooter({ text: `Justificado por ${interaction.user.tag}` })
-            .setTimestamp(new Date())
+          const logKind = type === 'fixed' ? 'justificationLogFixed' : 'justificationLogDaily'
+          const alertEmbed = buildEmbedFromDraft(embedTemplates.getTemplate(guild.id, logKind), { ...placeholders, link: posted.url })
           await logChannel.send({ embeds: [alertEmbed] })
 
           await interaction.editReply({
@@ -513,14 +499,10 @@ async function runRemoveJustification(interaction: ButtonInteraction, guild: Gui
       return
     }
 
-    const embed = new EmbedBuilder()
-      .setColor(0xed4245)
-      .setTitle('⚠️ Pedido de remoção de justificativa')
-      .setDescription(
-        `<@${interaction.user.id}> pediu para remover uma justificativa **${type === 'fixed' ? 'fixa' : 'diária'}**.\n\n**Motivo:**\n${motivo}`,
-      )
-      .setFooter({ text: `Pedido por ${interaction.user.tag} — um administrador precisa de rever e remover manualmente` })
-      .setTimestamp(new Date())
+    const embed = buildEmbedFromDraft(
+      embedTemplates.getTemplate(guild.id, 'justificationRemoval'),
+      justificationPlaceholders(interaction, guild, type === 'fixed' ? 'Fixa' : 'Diária', { motivo, periodo: '', canal: `<#${interaction.channelId}>` }),
+    )
     await channel.send({ embeds: [embed] })
 
     await submitted.reply({
@@ -538,6 +520,24 @@ async function runRemoveJustification(interaction: ButtonInteraction, guild: Gui
 // ==========================================================================
 // Auxiliares
 // ==========================================================================
+
+/** Valores dos tokens usados nos templates de justificativa publicada, alerta de log e pedido de remoção. */
+function justificationPlaceholders(
+  interaction: ButtonInteraction,
+  guild: Guild,
+  tipo: string,
+  extra: { periodo: string; motivo: string; canal: string },
+): Record<string, string> {
+  return {
+    membro: `<@${interaction.user.id}>`,
+    nome: interaction.user.tag,
+    avatar: interaction.user.displayAvatarURL({ size: 256 }),
+    tipo,
+    servidor: guild.name,
+    link: '',
+    ...extra,
+  }
+}
 
 /** Distingue um `awaitMessageComponent`/`awaitModalSubmit` que expirou de verdade (ninguém clicou/submeteu a tempo) de qualquer outro erro — só o primeiro é esperado e não precisa de ser registado. */
 function isCollectorTimeout(err: unknown): boolean {
