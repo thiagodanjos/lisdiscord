@@ -46,6 +46,11 @@ const DEMO_GAMES = [
   { id: 'corrida' as const, name: 'Corrida', command: '/corrida', description: 'Aposta em qual bicho vence a corrida animada (paga 3.5x).' },
   { id: 'numero' as const, name: 'Adivinha o Número', command: '/numero', description: 'Adivinha um número secreto entre 1 e 50 — quantas menos tentativas, mais moedas.' },
   { id: 'desembaralhar' as const, name: 'Desembaralhar', command: '/desembaralhar', description: 'Desembaralha as letras e escreve a palavra certa antes dos outros.' },
+  { id: 'termo' as const, name: 'Termo', command: '/termo', description: 'Adivinha a palavra de 5 letras em 6 tentativas, estilo Wordle — menos tentativas, mais moedas.' },
+  { id: 'minas' as const, name: 'Campo Minado', command: '/minas', description: 'Aposta e abre casas: cada 💎 aumenta o multiplicador, um 💣 perde tudo. Retira quando quiseres.' },
+  { id: 'crash' as const, name: 'Crash', command: '/crash', description: 'O foguete sobe e o multiplicador cresce — retira antes de ele rebentar (retirada automática opcional).' },
+  { id: 'memoria' as const, name: 'Jogo da Memória', command: '/memoria', description: 'Encontra os 8 pares de emojis com o menor número de jogadas e ganha moedas.' },
+  { id: 'ship' as const, name: 'Ship', command: '/ship', description: 'Calcula a compatibilidade entre duas pessoas, com nome de casal e tudo 💘.' },
   { id: 'economia' as const, name: 'Economia', command: '/saldo · /diario · /ranking', description: 'Vê o teu saldo, reclama moedas diárias e consulta o ranking do servidor.' },
 ]
 

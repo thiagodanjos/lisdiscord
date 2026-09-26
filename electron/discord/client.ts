@@ -1,9 +1,11 @@
-import { ActivityType, Client, Events, GatewayIntentBits, PermissionsBitField } from 'discord.js'
+import { Client, Events, GatewayIntentBits, PermissionsBitField } from 'discord.js'
 import type { BotStatus, GuildSummary } from '../../shared/types'
 import { enabledGameIds } from '../store/gameSettings'
 import { handleGiveawayButtons } from './giveawayCommand'
 import { buildGlobalCommandDefinitions, handleGameInteraction, registerCommandsForGuild } from './games'
 import { handleJustificationButtons } from './justifications'
+import { applyBranding } from './branding'
+import { startReminderLoop } from './utilityCommands'
 
 /**
  * Envolve o Client do discord.js num singleton simples: liga, desliga e dá
@@ -18,6 +20,8 @@ import { handleJustificationButtons } from './justifications'
  */
 class DiscordManager {
   private client: Client | null = null
+  private stopBranding: (() => void) | null = null
+  private stopReminders: (() => void) | null = null
   private messageContentEnabled = false
   private guildMembersEnabled = false
 
@@ -85,10 +89,8 @@ class DiscordManager {
     })
 
     this.client = client
-    client.user?.setPresence({
-      activities: [{ name: 'https://lisfilms.pt/', type: ActivityType.Watching }],
-      status: 'online',
-    })
+    if (client.isReady()) this.stopBranding = applyBranding(client)
+    this.stopReminders = startReminderLoop(client)
     await this.registerGlobalCommands().catch((err) => {
       console.error('Falha a registar comandos globais (secção "Commands" do perfil não vai aparecer):', err)
     })
@@ -118,6 +120,10 @@ class DiscordManager {
 
   async disconnect(): Promise<void> {
     if (!this.client) return
+    this.stopBranding?.()
+    this.stopBranding = null
+    this.stopReminders?.()
+    this.stopReminders = null
     await this.client.destroy().catch(() => undefined)
     this.client = null
   }

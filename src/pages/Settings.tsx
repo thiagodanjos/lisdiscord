@@ -5,6 +5,7 @@ import { formatRelativeDate } from '../lib/format'
 import { useUiStore } from '../store/ui'
 import { Badge, Button, Card, ConfirmDialog, PageHeader, Toggle } from '../components/ui'
 import { cleanIpcError } from '../lib/errors'
+import { CREDIT_HANDLE } from '../../shared/branding'
 import type { AppSettings, AuthUser, BotStatus, LoginHistoryEntry } from '../../shared/types'
 
 const DISCONNECTED: BotStatus = { connected: false, botTag: null, botAvatarUrl: null, guildCount: 0, messageContentEnabled: false, guildMembersEnabled: false }
@@ -183,6 +184,19 @@ export default function Settings({
           <FolderOpen size={14} />
           Abrir pasta
         </Button>
+      </Card>
+
+      <Card className="neon-ring flex items-center gap-4">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent via-cyan to-violet text-lg font-black text-black shadow-glow">
+          T
+        </div>
+        <div>
+          <p className="text-[10px] font-bold tracking-[0.16em] text-faint uppercase">Créditos</p>
+          <p className="text-base font-extrabold text-text">
+            Created by <span className="text-brand-gradient">{CREDIT_HANDLE}</span>
+          </p>
+          <p className="text-xs text-muted">LisDiscord — app desktop e bot feitos para a comunidade LisFilms.</p>
+        </div>
       </Card>
 
       <ConfirmDialog

@@ -7,6 +7,7 @@ import { cleanIpcError } from '../lib/errors'
 import { Button, Logo, Tabs, Toggle } from '../components/ui'
 import type { AuthState } from '../../shared/types'
 import pkg from '../../package.json'
+import { CREDIT_HANDLE } from '../../shared/branding'
 
 /** Fundo animado partilhado pelos ecrãs antes de entrar na app (login, ligação do bot). */
 export function AuthBackdrop({ children }: { children: React.ReactNode }) {
@@ -161,6 +162,9 @@ export default function Auth({ hasAccount, onAuthenticated }: { hasAccount: bool
           Só explorar em modo demonstração
         </button>
       </div>
+      <p className="mt-4 text-center text-[11px] text-faint">
+        Created by <span className="font-bold text-brand-gradient">{CREDIT_HANDLE}</span>
+      </p>
     </AuthBackdrop>
   )
 }

@@ -18,6 +18,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from 'discord.js'
+import { parseDurationMs } from '../../shared/duration'
 import * as giveawaysStore from '../store/giveaways'
 import { postGiveawayMessage, rerollGiveaway } from './giveaways'
 
@@ -327,18 +328,8 @@ async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild
 // ==========================================================================
 
 function parseDuration(raw: string): number | null {
-  const normalized = raw.trim().toLowerCase().replace(/\s+/g, '')
-  if (normalized === '') return null
-
-  const match = normalized.match(/^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/)
-  if (!match) return null
-
-  const [, d, h, m, s] = match
-  if (!d && !h && !m && !s) return null
-
-  const totalSeconds = Number(d ?? 0) * 86_400 + Number(h ?? 0) * 3_600 + Number(m ?? 0) * 60 + Number(s ?? 0)
-  const ms = totalSeconds * 1000
-  if (ms < MIN_DURATION_MS || ms > MAX_DURATION_MS) return null
+  const ms = parseDurationMs(raw)
+  if (ms === null || ms < MIN_DURATION_MS || ms > MAX_DURATION_MS) return null
   return ms
 }
 

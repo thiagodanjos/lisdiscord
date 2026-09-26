@@ -1,9 +1,11 @@
-import { type ChatInputCommandInteraction, EmbedBuilder, type Guild, type Interaction, type RESTPostAPIChatInputApplicationCommandsJSONBody, SlashCommandBuilder } from 'discord.js'
-import type { GameId, GameInfo } from '../../../shared/types'
-import { enabledGameIds } from '../../store/gameSettings'
+import { type Guild, type Interaction, type RESTPostAPIChatInputApplicationCommandsJSONBody } from 'discord.js'
+import type { GameId } from '../../../shared/types'
 import { addEmojiBotCommandDef, copyEmojiCommandDef, handleAddEmojiBotCommand, handleCopyEmojiCommand } from '../emojiCommand'
 import { embedBuilderCommandDef, handleEmbedBuilderCommand } from '../embedBuilderCommand'
 import { cleanCommandDef, handleCleanCommand } from '../cleanCommand'
+import { handleHelpCommand, helpCommandDef } from '../helpCommand'
+import { addEmoteServerCommandDef, addStickerCommandDef, handleServerAssetsCommand } from '../serverAssetsCommands'
+import { handleUtilityCommand, utilityCommandDefs } from '../utilityCommands'
 import { handleGiveawayCommand, sorteioCommandDef } from '../giveawayCommand'
 import { handleMovCallCommand, movCallCommandDefs } from '../movcall'
 import { handleVerifyCommand, verificarCommandDef } from '../verifyCommand'
@@ -19,24 +21,12 @@ import { runSlots, slotsCommandDef } from './slots'
 import { runTicTacToe, tictactoeCommandDef } from './tictactoe'
 import { runTrivia, triviaCommandDef } from './trivia'
 import { runUnscramble, unscrambleCommandDef } from './unscramble'
+import { runTermo, termoCommandDef } from './termo'
+import { minesCommandDef, runMines } from './mines'
+import { crashCommandDef, runCrash } from './crash'
+import { memoryCommandDef, runMemory } from './memory'
+import { runShip, shipCommandDef } from './ship'
 
-export const GAMES: GameInfo[] = [
-  { id: 'dado', name: 'Dado', command: '/dado', description: 'Lança um dado (padrão 6 lados, configurável).' },
-  { id: 'moeda', name: 'Cara ou Coroa', command: '/moeda', description: 'Atira uma moeda ao ar.' },
-  { id: 'ppt', name: 'Pedra, Papel ou Tesoura', command: '/ppt', description: 'Joga contra o bot.' },
-  { id: 'oitobola', name: 'Bola 8 Mágica', command: '/oitobola', description: 'Faz uma pergunta e recebe uma resposta misteriosa.' },
-  { id: 'trivia', name: 'Trivia', command: '/trivia', description: 'Responde a uma pergunta de escolha múltipla contra o relógio e ganha moedas.' },
-  { id: 'forca', name: 'Forca', command: '/forca', description: 'Adivinha a palavra letra a letra antes que a forca se complete.' },
-  { id: 'blackjack', name: 'Blackjack', command: '/blackjack', description: 'Joga 21 contra a casa, apostando moedas.' },
-  { id: 'jogodavelha', name: 'Jogo do Galo', command: '/jogodavelha', description: 'Desafia outro membro para um jogo do galo por turnos.' },
-  { id: 'duelo', name: 'Duelo', command: '/duelo', description: 'Combate por turnos contra outro membro, apostando moedas, com ataques e defesas.' },
-  { id: 'roleta', name: 'Roleta', command: '/roleta', description: 'Aposta na cor da roleta — vermelho e preto pagam 2x, verde paga 14x.' },
-  { id: 'cacaniqueis', name: 'Caça-níqueis', command: '/caca-niqueis', description: 'Gira os três rolos — três 7️⃣ é o jackpot (20x).' },
-  { id: 'corrida', name: 'Corrida', command: '/corrida', description: 'Aposta em qual bicho vence a corrida animada (paga 3.5x).' },
-  { id: 'numero', name: 'Adivinha o Número', command: '/numero', description: 'Adivinha um número secreto entre 1 e 50 — quantas menos tentativas, mais moedas.' },
-  { id: 'desembaralhar', name: 'Desembaralhar', command: '/desembaralhar', description: 'Desembaralha as letras e escreve a palavra certa antes dos outros.' },
-  { id: 'economia', name: 'Economia', command: '/saldo · /diario · /ranking', description: 'Vê o teu saldo, reclama moedas diárias e consulta o ranking do servidor.' },
-]
 
 type CommandDef = RESTPostAPIChatInputApplicationCommandsJSONBody
 
@@ -70,85 +60,19 @@ function commandDefsForGame(id: GameId): CommandDef[] {
       return [guessNumberCommandDef()]
     case 'desembaralhar':
       return [unscrambleCommandDef()]
+    case 'termo':
+      return [termoCommandDef()]
+    case 'minas':
+      return [minesCommandDef()]
+    case 'crash':
+      return [crashCommandDef()]
+    case 'memoria':
+      return [memoryCommandDef()]
+    case 'ship':
+      return [shipCommandDef()]
     case 'economia':
       return [economyCommandDefs.saldo(), economyCommandDefs.diario(), economyCommandDefs.ranking()]
   }
-}
-
-export function helpCommandDef(): RESTPostAPIChatInputApplicationCommandsJSONBody {
-  return new SlashCommandBuilder().setName('help').setDescription('Mostra todos os comandos do bot e como usá-los').toJSON()
-}
-
-async function handleHelpCommand(interaction: ChatInputCommandInteraction): Promise<boolean> {
-  if (interaction.commandName !== 'help') return false
-  const enabled = interaction.guild ? enabledGameIds(interaction.guild.id) : []
-  await interaction.reply({ embeds: buildHelpEmbeds(enabled), ephemeral: true })
-  return true
-}
-
-function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
-  const movEmbed = new EmbedBuilder()
-    .setColor(0xf0b232)
-    .setTitle('🏅 Pontos de MOV. Call')
-    .setDescription(
-      [
-        '`/movcall` — regista uma Mov. Call de hoje por um assistente com botões: escolhe o tipo e escreve a lista de participantes por ID, numa janela própria. *(gestores)*',
-        '`/movhoras adicionar membro: horas: minutos: segundos:` — adiciona horas de Mov. Call a um membro. *(gestores)*',
-        '`/movhoras remover membro: horas: minutos: segundos:` — remove horas de Mov. Call de um membro. *(gestores)*',
-        '`/pontosmov ver [membro]` — mostra os pontos e horas de alguém (ou os teus).',
-        '`/pontosmov ranking` — mostra o placar completo de pontos de Mov. Call.',
-        '`/pontosmovadmin adicionar|remover` — ajusta pontos de alguém manualmente. *(gestores)*',
-        '`/pontosmovadmin painel` — define o canal onde fica o placar sempre atualizado. *(gestores)*',
-        '`/inativos` — mostra quem não tem pontos ou tem menos de 5 horas de Mov. Call. *(gestores)*',
-        '`/resetmovcall` — apaga todos os pontos e horas do servidor, com confirmação. *(gestores)*',
-        '`/verificar @membro` — mostra os cargos de alguém, pontos, horas, e se já cumpre a meta para upar de cargo (configurada na app, em "Metas").',
-      ].join('\n'),
-    )
-
-  const giveawayEmbed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle('🎉 Sorteios')
-    .setDescription(
-      '`/sorteio` — cria um sorteio por reação 🎉, com assistente para escolher canal, título/prémio, duração exata e nº de vencedores. Depois de terminar, um botão "Rerolar vencedor(es)" permite escolher outro vencedor. *(gestores)*',
-    )
-
-  const emojiEmbed = new EmbedBuilder()
-    .setColor(0xeb459e)
-    .setTitle('😀 Emojis do bot')
-    .setDescription(
-      [
-        '`/addemojibot nome: imagem:` — adiciona uma imagem (PNG/JPG/GIF, até 256 KB) à biblioteca de emojis do bot. *(gestores)*',
-        '`/copiaremoji emoji: [nome:]` — copia um emoji já existente (de qualquer servidor, mesmo onde o bot não está) para a biblioteca do bot. *(gestores)*',
-        '_Os emojis da biblioteca ficam disponíveis em qualquer embed editável na app (Mensagens, Pontos MOV, Justificativas)._',
-      ].join('\n'),
-    )
-
-  const messagesEmbed = new EmbedBuilder()
-    .setColor(0xa855f7)
-    .setTitle('📨 Mensagens / Embeds')
-    .setDescription(
-      '`/embed` — cria um embed (ou webhook com nome e foto próprios) passo a passo: menu para canal, texto, título, descrição, cor, imagens, autor, rodapé e campos, com pré-visualização ao vivo, exportar/importar em JSON e botão de enviar. *(gestores)*',
-    )
-
-  const cleanEmbed = new EmbedBuilder()
-    .setColor(0x22e584)
-    .setTitle('🧹 Limpeza')
-    .setDescription(
-      '`/limparcdo quantidade: [membro:] [canal:]` — apaga até 1000 mensagens de um canal (opcionalmente só as de um membro). Mensagens com mais de 14 dias não podem ser apagadas em massa. Cada limpeza fica registada em **Logs de limpeza**, na app. *(só administração)*',
-    )
-
-  const gamesList = GAMES.filter((g) => enabled.includes(g.id))
-  const gamesEmbed = new EmbedBuilder()
-    .setColor(0x3ba55c)
-    .setTitle('🎮 Jogos')
-    .setDescription(
-      gamesList.length > 0
-        ? gamesList.map((g) => `\`${g.command}\` — ${g.description}`).join('\n') +
-            '\n\n_Nenhum jogo atribui pontos de Mov. Call — isso é só pelos comandos acima._'
-        : '_Nenhum jogo está ativado neste servidor. Ativa em "Jogos", na app desktop._',
-    )
-
-  return [movEmbed, giveawayEmbed, emojiEmbed, messagesEmbed, cleanEmbed, gamesEmbed]
 }
 
 /**
@@ -160,7 +84,19 @@ function buildHelpEmbeds(enabled: GameId[]): EmbedBuilder[] {
  * não há duplicados nem risco de os comandos ficarem indisponíveis enquanto o global propaga.
  */
 export function buildGlobalCommandDefinitions(): CommandDef[] {
-  return [...movCallCommandDefs(), sorteioCommandDef(), verificarCommandDef(), helpCommandDef(), addEmojiBotCommandDef(), copyEmojiCommandDef(), embedBuilderCommandDef(), cleanCommandDef()]
+  return [
+    ...movCallCommandDefs(),
+    sorteioCommandDef(),
+    verificarCommandDef(),
+    helpCommandDef(),
+    addEmojiBotCommandDef(),
+    copyEmojiCommandDef(),
+    embedBuilderCommandDef(),
+    cleanCommandDef(),
+    addEmoteServerCommandDef(),
+    addStickerCommandDef(),
+    ...utilityCommandDefs(),
+  ]
 }
 
 /** Comandos por servidor: os fixos (para ficarem disponíveis já) + os jogos que o servidor ativou. */
@@ -185,6 +121,8 @@ export async function handleGameInteraction(interaction: Interaction): Promise<v
   if (await handleCopyEmojiCommand(interaction)) return
   if (await handleEmbedBuilderCommand(interaction)) return
   if (await handleCleanCommand(interaction)) return
+  if (await handleServerAssetsCommand(interaction)) return
+  if (await handleUtilityCommand(interaction)) return
 
   switch (interaction.commandName) {
     case 'trivia':
@@ -216,6 +154,21 @@ export async function handleGameInteraction(interaction: Interaction): Promise<v
       return
     case 'desembaralhar':
       await runUnscramble(interaction)
+      return
+    case 'termo':
+      await runTermo(interaction)
+      return
+    case 'minas':
+      await runMines(interaction)
+      return
+    case 'crash':
+      await runCrash(interaction)
+      return
+    case 'memoria':
+      await runMemory(interaction)
+      return
+    case 'ship':
+      await runShip(interaction)
       return
     default:
       return

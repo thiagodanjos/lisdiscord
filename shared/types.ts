@@ -373,6 +373,11 @@ export type GameId =
   | 'corrida'
   | 'numero'
   | 'desembaralhar'
+  | 'termo'
+  | 'minas'
+  | 'crash'
+  | 'memoria'
+  | 'ship'
   | 'economia'
 
 export interface GameInfo {

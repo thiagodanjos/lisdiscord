@@ -1,5 +1,5 @@
 import type { GameId, GameSettings } from '../../shared/types'
-import { GAMES } from '../discord/games'
+import { GAMES } from '../discord/games/catalog'
 import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
@@ -19,13 +19,15 @@ function writeAll(settings: StoredSettings): void {
   writeJsonFile(paths.gameSettingsFile, settings)
 }
 
+/** Jogos novos (que ainda não existiam quando o servidor guardou as definições) ficam ativos por omissão. */
 export function getGameSettings(guildId: string): GameSettings {
-  return readAll()[guildId] ?? defaultSettings()
+  const stored = readAll()[guildId]
+  return { enabled: { ...defaultSettings().enabled, ...stored?.enabled } }
 }
 
 export function setGameSetting(guildId: string, gameId: GameId, enabled: boolean): GameSettings {
   const all = readAll()
-  const current = all[guildId] ?? defaultSettings()
+  const current = getGameSettings(guildId)
   const updated: GameSettings = { enabled: { ...current.enabled, [gameId]: enabled } }
   all[guildId] = updated
   writeAll(all)

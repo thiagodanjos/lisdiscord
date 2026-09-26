@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Brain, Cherry, Coins, Dice5, Disc3, Flag, Gamepad2, Grid3x3, Hand, Hash, HelpCircle, Shuffle, Skull, Spade, Swords, Wallet } from 'lucide-react'
+import { Bomb, Brain, Cherry, Coins, Dice5, Disc3, Flag, Gamepad2, Grid3x3, Hand, Hash, Heart, HelpCircle, LayoutGrid, Rocket, Shuffle, Skull, Spade, SpellCheck, Swords, Wallet } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { Card, PageHeader, Toggle } from '../components/ui'
 import type { GameId, GameInfo, GameSettings, GuildSummary } from '../../shared/types'
@@ -19,11 +19,16 @@ const GAME_ICONS: Record<GameId, typeof Gamepad2> = {
   corrida: Flag,
   numero: Hash,
   desembaralhar: Shuffle,
+  termo: SpellCheck,
+  minas: Bomb,
+  crash: Rocket,
+  memoria: LayoutGrid,
+  ship: Heart,
   economia: Wallet,
 }
 
-const REWARDS_COINS: GameId[] = ['trivia', 'forca', 'jogodavelha', 'numero', 'desembaralhar']
-const WAGER_GAMES: GameId[] = ['blackjack', 'duelo', 'roleta', 'cacaniqueis', 'corrida']
+const REWARDS_COINS: GameId[] = ['trivia', 'forca', 'jogodavelha', 'numero', 'desembaralhar', 'termo', 'memoria']
+const WAGER_GAMES: GameId[] = ['blackjack', 'duelo', 'roleta', 'cacaniqueis', 'corrida', 'minas', 'crash', 'moeda']
 
 export default function Games() {
   const [guilds, setGuilds] = useState<GuildSummary[]>([])

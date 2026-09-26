@@ -47,6 +47,7 @@ export const paths = {
   remoteBotKeyFile: path.join(root, 'remote-bot-key.enc'),
   embedTemplatesFile: path.join(root, 'embed-templates.json'),
   cleanLogFile: path.join(root, 'clean-log.json'),
+  remindersFile: path.join(root, 'reminders.json'),
   databaseFile: path.join(root, 'lisdiscord.sqlite'),
 }
 

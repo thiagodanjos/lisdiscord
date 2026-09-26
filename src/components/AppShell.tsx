@@ -32,6 +32,7 @@ import { cn, initials } from '../lib/utils'
 import { Logo, PulseDot } from './ui'
 import type { AuthUser, BotStatus, RemoteBotConfig } from '../../shared/types'
 import pkg from '../../package.json'
+import { CREDIT_HANDLE } from '../../shared/branding'
 
 interface NavItem {
   to: string
@@ -299,7 +300,10 @@ export function AppShell({
 
         <footer className="flex h-9 shrink-0 items-center justify-between border-t border-border bg-bg/60 px-8 text-[11px] text-faint backdrop-blur-xl">
           <span>
-            LisDiscord • v{pkg.version} © {new Date().getFullYear()}
+            LisDiscord • v{pkg.version} © {new Date().getFullYear()} ·{' '}
+            <span className="font-semibold text-muted">
+              Created by <span className="text-brand-gradient">{CREDIT_HANDLE}</span>
+            </span>
           </span>
           <span className="font-mono">Tempo de atividade: {uptime}</span>
         </footer>
