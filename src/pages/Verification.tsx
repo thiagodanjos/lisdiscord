@@ -84,12 +84,12 @@ const TEMPLATE_INFO: Record<
 > = {
   verificationPanel: {
     title: 'Personalizar embed do painel',
-    hint: 'Embed fixo no canal do painel, com o botão por baixo. Ao guardar, o bot atualiza logo a mensagem que já lá está.',
+    hint: 'Mensagem fixa no canal do painel. No Discord aparece como uma caixa com a barra de cor e o botão lá dentro (a pré-visualização mostra o conteúdo). Ao guardar, o bot atualiza logo a mensagem.',
     tokens: VERIFICATION_PANEL_PLACEHOLDERS,
   },
   verificationTicket: {
     title: 'Personalizar embed do ticket (com os botões)',
-    hint: 'Mensagem de abertura de cada ticket — é aqui que ficam os botões da gestão (Assumir · Finalizar · Cancelar · Painel staff). {responsavel} e {estado} atualizam sozinhos; {numero} é o número do ticket.',
+    hint: 'Mensagem de abertura de cada ticket. No Discord aparece como uma caixa com os botões da gestão lá dentro (Assumir · Finalizar · Cancelar · Painel staff), por baixo de uma linha divisória. {responsavel} e {estado} atualizam sozinhos; {numero} é o número do ticket.',
     tokens: VERIFICATION_TICKET_PLACEHOLDERS,
   },
   verificationRequest: {

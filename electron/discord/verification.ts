@@ -11,6 +11,7 @@ import {
   type Guild,
   type GuildMember,
   IntentsBitField,
+  MessageFlags,
   type Message,
   ModalBuilder,
   type NonThreadGuildBasedChannel,
@@ -34,6 +35,7 @@ import type {
 import * as store from '../store/verification'
 import { getTemplate, isCustomized } from '../store/embedTemplates'
 import { buildEmbedFromDraft, embedHasContent } from './embedTemplate'
+import { embedToContainer, textLine } from './componentsV2'
 
 // Fluxo: painel com o botão "Verificar" num canal → o membro clica → o bot cria um canal de ticket
 // privado (só o membro, a gestão e o bot o veem) na categoria escolhida → o membro manda a foto →
@@ -275,10 +277,13 @@ export async function postVerificationPanel(guild: Guild): Promise<string | null
   let embed = buildEmbedFromDraft(getTemplate(guild.id, 'verificationPanel'), { servidor: guild.name })
   if (!embedHasContent(embed)) embed = embed.setDescription('Clica no botão abaixo para te verificares.')
 
+  // Formato V2: o botão fica DENTRO da caixa do painel. Uma mensagem antiga (embed normal) não pode
+  // ser convertida por edição — é apagada e publicada de novo.
   const send = async (withEmoji: boolean) => {
-    const payload = { embeds: [embed], components: panelComponents(settings, withEmoji) }
+    const payload = { flags: MessageFlags.IsComponentsV2 as const, components: [embedToContainer(embed, panelComponents(settings, withEmoji))] }
     const existing = settings.panelMessageId ? await channel.messages.fetch(settings.panelMessageId).catch(() => null) : null
-    if (existing) return (await existing.edit(payload)).id
+    if (existing && existing.flags.has(MessageFlags.IsComponentsV2)) return (await existing.edit(payload)).id
+    if (existing) await existing.delete().catch(() => undefined)
     return (await channel.send(payload)).id
   }
 
@@ -486,9 +491,7 @@ async function openTicket(interaction: ButtonInteraction): Promise<void> {
       // A mensagem de abertura já leva os botões da gestão (Assumir · Finalizar · Cancelar · Painel staff).
       const welcome = await channel
         .send({
-          content: `<@${user.id}>`,
-          embeds: [ticketEmbed(guild, settings, ticket, { name: member?.displayName ?? user.username, avatar: user.displayAvatarURL({ size: 256 }) })],
-          components: staffButtons(settings),
+          ...ticketControlPayload(guild, settings, ticket, { name: member?.displayName ?? user.username, avatar: user.displayAvatarURL({ size: 256 }) }),
           allowedMentions: { users: [user.id] },
         })
         .catch((err) => {
@@ -606,6 +609,20 @@ function ticketEmbed(
     servidor: guild.name,
   })
   return embedHasContent(embed) ? embed : embed.setDescription('Envia aqui o print do teu perfil com os cargos.')
+}
+
+/** Mensagem de abertura no formato V2: menção ao membro + caixa com o texto e os botões lá dentro. */
+function ticketControlPayload(
+  guild: Guild,
+  settings: VerificationSettings,
+  ticket: VerificationTicket,
+  info: { name: string; avatar: string; claimedById?: string; hasPhoto?: boolean },
+  claimedByName?: string,
+) {
+  return {
+    flags: MessageFlags.IsComponentsV2 as const,
+    components: [textLine(`<@${ticket.userId}>`), embedToContainer(ticketEmbed(guild, settings, ticket, info), staffButtons(settings, claimedByName))],
+  }
 }
 
 /** Embed(s) da foto a partir do template — usado ao publicar e sempre que o estado muda (assumido). */
@@ -738,8 +755,13 @@ export async function handleVerificationMessage(message: Message): Promise<void>
   // A abertura passa a dizer "Foto enviada" enquanto ninguém assume.
   if (!existing.claimedById) {
     const control = await channel.messages.fetch(existing.embedMessageId).catch(() => null)
+    const controlInfo = { name: info.name, avatar: info.avatar, hasPhoto: true }
     await control
-      ?.edit({ embeds: [ticketEmbed(message.guild, settings, ticket, { name: info.name, avatar: info.avatar, hasPhoto: true })] })
+      ?.edit(
+        control.flags.has(MessageFlags.IsComponentsV2)
+          ? { ...ticketControlPayload(message.guild, settings, ticket, controlInfo), allowedMentions: { parse: [] } }
+          : { embeds: [ticketEmbed(message.guild, settings, ticket, controlInfo)] },
+      )
       .catch(() => undefined)
   }
   logEvent(message.guildId, 'info', `Foto recebida de ${message.author.tag} no ticket #${ticket.number} (${files.length} imagem(ns)).`)
@@ -796,8 +818,12 @@ async function handleStaffButton(interaction: ButtonInteraction): Promise<void> 
         await interaction.reply({ content: `🙋 Esta verificação já foi assumida por <@${entry.claimedById}>.`, ephemeral: true, allowedMentions: { parse: [] } })
         return
       }
-      const claimed = entry.claimedById ? entry : await claim(interaction, entry, member, settings)
-      if (claimed) await showStaffPanel(interaction, claimed, member, settings)
+      // Responde já com o painel (a Discord só dá 3 s) e só depois atualiza a mensagem do ticket.
+      const fresh = !entry.claimedById
+      const claimed = fresh ? markClaimed(entry, member) : entry
+      if (!claimed) return
+      await showStaffPanel(interaction, claimed, member, settings)
+      if (fresh) await refreshAfterClaim(interaction, claimed, member, settings)
       return
     }
     case PANEL_ID: {
@@ -805,8 +831,12 @@ async function handleStaffButton(interaction: ButtonInteraction): Promise<void> 
         await interaction.reply({ content: `🛠️ Só <@${entry.claimedById}> (quem assumiu) ou um administrador podem abrir o painel.`, ephemeral: true, allowedMentions: { parse: [] } })
         return
       }
-      const claimed = entry.claimedById ? entry : await claim(interaction, entry, member, settings)
-      if (claimed) await showStaffPanel(interaction, claimed, member, settings)
+      // Responde já com o painel (a Discord só dá 3 s) e só depois atualiza a mensagem do ticket.
+      const fresh = !entry.claimedById
+      const claimed = fresh ? markClaimed(entry, member) : entry
+      if (!claimed) return
+      await showStaffPanel(interaction, claimed, member, settings)
+      if (fresh) await refreshAfterClaim(interaction, claimed, member, settings)
       return
     }
     case FINISH_ID: {
@@ -852,10 +882,14 @@ async function handleStaffButton(interaction: ButtonInteraction): Promise<void> 
 }
 
 /** Marca o pedido como assumido e atualiza o embed da foto (estado + responsável). */
-async function claim(interaction: ButtonInteraction, entry: VerificationEntry, member: GuildMember, settings: VerificationSettings): Promise<VerificationEntry | null> {
+function markClaimed(entry: VerificationEntry, member: GuildMember): VerificationEntry | null {
   const updated = store.updatePending(entry.id, { claimedById: member.id, claimedByTag: member.user.tag, claimedAt: new Date().toISOString() })
-  if (!updated) return null
-  logEvent(entry.guildId, 'info', `${member.user.tag} assumiu a verificação de ${entry.userTag}.`)
+  if (updated) logEvent(entry.guildId, 'info', `${member.user.tag} assumiu a verificação de ${entry.userTag}.`)
+  return updated
+}
+
+/** Depois de assumir: "Assumido por …" no botão, responsável/estado na abertura e na foto, e tira a marcação. */
+async function refreshAfterClaim(interaction: ButtonInteraction, entry: VerificationEntry, member: GuildMember, settings: VerificationSettings): Promise<void> {
   const guild = interaction.guild!
   const target = await guild.members.fetch(entry.userId).catch(() => null)
   const info = {
@@ -868,17 +902,20 @@ async function claim(interaction: ButtonInteraction, entry: VerificationEntry, m
   }
   const ticket = entry.ticketId ? store.listTickets(guild.id).find((t) => t.id === entry.ticketId) : undefined
   const controlImages = [...interaction.message.attachments.values()].map((a) => a.name)
-  const controlEmbeds = controlImages.length > 0 || !ticket ? requestEmbeds(guild, info, controlImages) : [ticketEmbed(guild, settings, ticket, info)]
-  await interaction.message
-    .edit({ embeds: controlEmbeds, components: staffButtons(settings, member.displayName) })
-    .catch((err) => logEvent(entry.guildId, 'warn', `Não consegui atualizar o embed ao assumir: ${errText(err)}`))
+  const edit =
+    ticket && interaction.message.flags.has(MessageFlags.IsComponentsV2)
+      ? { ...ticketControlPayload(guild, settings, ticket, info, member.displayName), allowedMentions: { parse: [] as [] } }
+      : {
+          embeds: controlImages.length > 0 || !ticket ? requestEmbeds(guild, info, controlImages) : [ticketEmbed(guild, settings, ticket, info)],
+          components: staffButtons(settings, member.displayName),
+        }
+  await interaction.message.edit(edit).catch((err) => logEvent(entry.guildId, 'warn', `Não consegui atualizar a mensagem ao assumir: ${errText(err)}`))
   if (entry.photoMessageId && interaction.channel?.isTextBased()) {
     const photo = await interaction.channel.messages.fetch(entry.photoMessageId).catch(() => null)
     await photo?.edit({ embeds: requestEmbeds(guild, info, [...photo.attachments.values()].map((a) => a.name)) }).catch(() => undefined)
   }
   // A marcação já não é precisa — alguém pegou no pedido.
   if (entry.pingMessageId && interaction.channel?.isTextBased()) await interaction.channel.messages.delete(entry.pingMessageId).catch(() => undefined)
-  return updated
 }
 
 /** Cargos que este gestor pode dar: abaixo do cargo do bot e (se não for admin) abaixo do cargo mais alto dele. */

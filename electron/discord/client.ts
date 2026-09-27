@@ -16,6 +16,7 @@ import {
 } from './verification'
 import { handleBulkDeleteLog, handleMessageDeleteLog, handleMessageEditLog, postMovPointsLog } from './serverLogs'
 import { onMovPointsLogged } from '../store/movPointsLog'
+import { isRemoteBotConfigured } from '../store/remoteBotFlag'
 
 /**
  * Envolve o Client do discord.js num singleton simples: liga, desliga e dá
@@ -77,6 +78,9 @@ class DiscordManager {
       // resume da ligação) — sem isto, a segunda entrega tentava responder a uma interação já
       // respondida e rebentava com "Interaction has already been acknowledged" (40060).
       if (wasRecentlySeen(interaction.id)) return
+      // Com um bot remoto configurado, é ele que responde — senão os dois respondiam ao mesmo clique
+      // (e um deles, sem os dados do outro, dizia coisas como "esta verificação já foi finalizada").
+      if (isPassive()) return
 
       if (interaction.isChatInputCommand()) {
         await handleGameInteraction(interaction).catch((err) => {
@@ -107,36 +111,48 @@ class DiscordManager {
 
     // Verificação: foto no ticket → embed com os botões da gestão (Assumir · Finalizar · Cancelar).
     client.on(Events.MessageCreate, (message) => {
+      if (isPassive()) return
       handleVerificationMessage(message).catch((err) => console.error('Erro na verificação por foto:', err))
     })
     client.on(Events.MessageDelete, (message) => {
+      if (isPassive()) return
       handleVerificationMessageDelete(message).catch(() => undefined)
       handleMessageDeleteLog(message).catch((err) => console.error('Erro no log de mensagens apagadas:', err))
     })
     client.on(Events.MessageBulkDelete, (messages, channel) => {
+      if (isPassive()) return
       handleBulkDeleteLog(messages, channel.id, channel.guild).catch((err) => console.error('Erro no log de apagamento em massa:', err))
     })
     client.on(Events.MessageUpdate, (oldMessage, newMessage) => {
+      if (isPassive()) return
       handleMessageEditLog(oldMessage, newMessage).catch((err) => console.error('Erro no log de mensagens editadas:', err))
     })
     client.on(Events.ChannelDelete, (channel) => {
+      if (isPassive()) return
       handleVerificationChannelDelete(channel.id)
     })
 
     client.on(Events.GuildCreate, async (guild) => {
+      if (isPassive()) return
       await registerCommandsForGuild(guild, enabledGameIds(guild.id)).catch(() => undefined)
     })
 
     this.client = client
-    if (client.isReady()) this.stopBranding = applyBranding(client)
-    this.stopReminders = startReminderLoop(client)
-    this.stopNotices = startMovNoticeLoop(client)
-    this.stopPointsLog = onMovPointsLogged((entry) => {
-      postMovPointsLog(client, entry).catch((err) => console.error('Erro no log de pontos/horas:', err))
-    })
-    // Registar comandos nunca pode prender a ligação (e com ela a app, presa em "A ligar o bot…"):
-    // corre em segundo plano, e só envia o que mudou desde o último registo.
-    void this.syncCommands(client)
+    // Modo passivo (bot remoto configurado): a app liga-se só para ler, sem ciclos nem comandos.
+    if (!isPassive()) {
+      if (client.isReady()) this.stopBranding = applyBranding(client)
+      this.stopReminders = startReminderLoop(client)
+      this.stopNotices = startMovNoticeLoop(client)
+      this.stopPointsLog = onMovPointsLogged((entry) => {
+        if (isPassive()) return
+        postMovPointsLog(client, entry).catch((err) => console.error('Erro no log de pontos/horas:', err))
+      })
+      // Registar comandos nunca pode prender a ligação (e com ela a app, presa em "A ligar o bot…"):
+      // corre em segundo plano, e só envia o que mudou desde o último registo.
+      void this.syncCommands(client)
+    } else {
+      console.log('[LisDiscord] Bot remoto configurado — a ligação local fica passiva (não responde no Discord).')
+    }
     return this.getStatus()
   }
 
@@ -294,6 +310,13 @@ function isAlreadyAcknowledgedError(err: unknown): boolean {
 function asFriendlyError(err: unknown): Error {
   const message = err instanceof Error ? err.message : String(err)
   return new Error(`Não foi possível ligar com este token: ${message}`)
+}
+
+/** Cache de 5 s do "há bot remoto?" — é consultado em cada mensagem do servidor. */
+let passiveCache = { at: 0, value: false }
+function isPassive(): boolean {
+  if (Date.now() - passiveCache.at > 5_000) passiveCache = { at: Date.now(), value: isRemoteBotConfigured() }
+  return passiveCache.value
 }
 
 const SEEN_INTERACTION_TTL_MS = 60_000
