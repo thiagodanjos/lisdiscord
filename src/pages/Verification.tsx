@@ -21,18 +21,19 @@ import { cleanIpcError } from '../lib/errors'
 import { formatDateTime, formatRelativeDate } from '../lib/format'
 import { Avatar, Badge, Button, Card, EmptyState, PageHeader, StatCard, Toggle } from '../components/ui'
 import { TemplateEditorModal } from '../components/TemplateEditorModal'
+import { DiscordButtonEditor, DiscordButtonPreview } from '../components/DiscordButtonEditor'
 import {
   TICKET_NAME_PLACEHOLDERS,
   VERIFICATION_LOG_PLACEHOLDERS,
   VERIFICATION_PANEL_PLACEHOLDERS,
   VERIFICATION_PLACEHOLDERS,
   VERIFICATION_TICKET_PLACEHOLDERS,
+  type BotEmoji,
   type ChannelPickerEntry,
   type EmbedTemplateKind,
   type GuildSummary,
   type RemoteBotConfig,
   type RolePickerEntry,
-  type VerificationButtonStyle,
   type VerificationDiagnostics,
   type VerificationEntry,
   type VerificationSettings,
@@ -60,6 +61,14 @@ const EMPTY_SETTINGS: VerificationSettings = {
   finishLabel: 'Finalizar',
   cancelLabel: 'Cancelar',
   staffPanelLabel: 'Painel staff',
+  claimEmoji: '🙋',
+  finishEmoji: '✅',
+  cancelEmoji: '✖️',
+  staffPanelEmoji: '🛠️',
+  claimStyle: 'primary',
+  finishStyle: 'success',
+  cancelStyle: 'danger',
+  staffPanelStyle: 'secondary',
   pingRoleId: null,
   pingRoleName: null,
   pingText: '{cargo}',
@@ -71,12 +80,12 @@ const EMPTY_SETTINGS: VerificationSettings = {
   deleteNonImage: true,
 }
 
-const BUTTON_STYLE_CLASS: Record<VerificationButtonStyle, string> = {
-  success: 'bg-[#248046]',
-  primary: 'bg-[#5865f2]',
-  secondary: 'bg-[#4e5058]',
-  danger: 'bg-[#da373c]',
-}
+const STAFF_BUTTONS = [
+  { title: 'Assumir', label: 'claimLabel', emoji: 'claimEmoji', style: 'claimStyle', fallback: 'Assumir' },
+  { title: 'Finalizar', label: 'finishLabel', emoji: 'finishEmoji', style: 'finishStyle', fallback: 'Finalizar' },
+  { title: 'Cancelar', label: 'cancelLabel', emoji: 'cancelEmoji', style: 'cancelStyle', fallback: 'Cancelar' },
+  { title: 'Painel staff', label: 'staffPanelLabel', emoji: 'staffPanelEmoji', style: 'staffPanelStyle', fallback: 'Painel staff' },
+] as const
 
 const TEMPLATE_INFO: Record<
   'verificationPanel' | 'verificationTicket' | 'verificationRequest' | 'verificationLog',
@@ -207,6 +216,7 @@ export default function Verification() {
   const [savedOk, setSavedOk] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [editing, setEditing] = useState<keyof typeof TEMPLATE_INFO | null>(null)
+  const [emojis, setEmojis] = useState<BotEmoji[]>([])
 
   const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
   const guildName = guilds.find((g) => g.id === guildId)?.name ?? 'este servidor'
@@ -223,6 +233,8 @@ export default function Verification() {
         setGuildId(g[0]?.id ?? '')
       })
       .catch((err) => setLoadError(cleanIpcError(err)))
+    const listEmojis = isRemote ? bridge.listRemoteEmojis : bridge.listEmojis
+    listEmojis().then(setEmojis).catch(() => setEmojis([]))
   }, [isRemote])
 
   function refreshLive() {
@@ -400,8 +412,8 @@ export default function Verification() {
             </Button>
           }
         />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="xl:col-span-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
             <Label>Canal do painel</Label>
             <select value={draft.channelId ?? ''} onChange={(e) => set('channelId', e.target.value || null)} className={`mt-1.5 ${inputClass}`}>
               <option value="">Desligada</option>
@@ -411,34 +423,17 @@ export default function Verification() {
                 </option>
               ))}
             </select>
-            <Hint>Ao guardar, o bot publica (ou atualiza) o painel neste canal.</Hint>
+            <Hint>Ao guardar, o bot publica (ou atualiza) o painel neste canal — no Discord, o botão fica dentro da caixa do painel.</Hint>
           </div>
-          <div>
-            <Label>Texto do botão</Label>
-            <input value={draft.buttonLabel} onChange={(e) => set('buttonLabel', e.target.value)} maxLength={80} className={`mt-1.5 ${inputClass}`} />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label>Emoji</Label>
-              <input value={draft.buttonEmoji} onChange={(e) => set('buttonEmoji', e.target.value)} placeholder="✅" className={`mt-1.5 ${inputClass}`} />
-            </div>
-            <div>
-              <Label>Cor</Label>
-              <select value={draft.buttonStyle} onChange={(e) => set('buttonStyle', e.target.value as VerificationButtonStyle)} className={`mt-1.5 ${inputClass}`}>
-                <option value="success">Verde</option>
-                <option value="primary">Azul</option>
-                <option value="secondary">Cinzento</option>
-                <option value="danger">Vermelho</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] text-faint">Pré-visualização do botão:</span>
-          <span className={`inline-flex items-center gap-1.5 rounded px-4 py-1.5 text-sm font-medium text-white ${BUTTON_STYLE_CLASS[draft.buttonStyle]}`}>
-            {draft.buttonEmoji && <span>{draft.buttonEmoji}</span>}
-            {draft.buttonLabel || 'Verificar'}
-          </span>
+          <DiscordButtonEditor
+            title="Botão que abre o ticket"
+            label={draft.buttonLabel}
+            emoji={draft.buttonEmoji}
+            style={draft.buttonStyle}
+            fallbackLabel="Verificar"
+            emojis={emojis}
+            onChange={(p) => setDraft((d) => ({ ...d, ...(p.label !== undefined && { buttonLabel: p.label }), ...(p.emoji !== undefined && { buttonEmoji: p.emoji }), ...(p.style && { buttonStyle: p.style }) }))}
+          />
         </div>
       </Card>
 
@@ -576,25 +571,38 @@ export default function Verification() {
         </div>
 
         <div>
-          <Label>Botões da gestão (na mensagem de abertura do ticket)</Label>
-          <div className="mt-1.5 grid grid-cols-2 gap-2 md:grid-cols-4">
-            {(
-              [
-                ['claimLabel', 'Assumir'],
-                ['finishLabel', 'Finalizar'],
-                ['cancelLabel', 'Cancelar'],
-                ['staffPanelLabel', 'Painel staff'],
-              ] as const
-            ).map(([key, fallback]) => (
-              <input key={key} value={draft[key]} onChange={(e) => set(key, e.target.value)} maxLength={60} placeholder={fallback} className={inputClass} />
+          <Label>Botões da gestão (dentro da caixa de abertura do ticket)</Label>
+          <div className="mt-1.5 grid grid-cols-1 gap-3 md:grid-cols-2">
+            {STAFF_BUTTONS.map((b) => (
+              <DiscordButtonEditor
+                key={b.label}
+                title={b.title}
+                label={draft[b.label]}
+                emoji={draft[b.emoji]}
+                style={draft[b.style]}
+                fallbackLabel={b.fallback}
+                emojis={emojis}
+                onChange={(p) =>
+                  setDraft((d) => ({
+                    ...d,
+                    ...(p.label !== undefined && { [b.label]: p.label }),
+                    ...(p.emoji !== undefined && { [b.emoji]: p.emoji }),
+                    ...(p.style && { [b.style]: p.style }),
+                  }))
+                }
+              />
             ))}
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-black/20 p-3">
-            <span className={`inline-flex items-center gap-1.5 rounded px-4 py-1.5 text-sm font-medium text-white ${BUTTON_STYLE_CLASS.primary}`}>🙋 {draft.claimLabel || 'Assumir'}</span>
-            <span className={`inline-flex items-center gap-1.5 rounded px-4 py-1.5 text-sm font-medium text-white ${BUTTON_STYLE_CLASS.success}`}>✅ {draft.finishLabel || 'Finalizar'}</span>
-            <span className={`inline-flex items-center gap-1.5 rounded px-4 py-1.5 text-sm font-medium text-white ${BUTTON_STYLE_CLASS.danger}`}>✖️ {draft.cancelLabel || 'Cancelar'}</span>
-            <span className="basis-full" />
-            <span className={`inline-flex items-center gap-1.5 rounded px-4 py-1.5 text-sm font-medium text-white ${BUTTON_STYLE_CLASS.secondary}`}>🛠️ {draft.staffPanelLabel || 'Painel staff'}</span>
+          <div className="mt-2 flex flex-col gap-2 rounded-lg border-l-4 border-[#eb459e] bg-black/30 p-3">
+            <p className="text-[10px] font-bold tracking-[0.14em] text-faint uppercase">Assim fica no Discord</p>
+            <div className="flex flex-wrap gap-2">
+              {STAFF_BUTTONS.slice(0, 3).map((b) => (
+                <DiscordButtonPreview key={b.label} label={draft[b.label] || b.fallback} emoji={draft[b.emoji]} style={draft[b.style]} emojis={emojis} />
+              ))}
+            </div>
+            <div>
+              <DiscordButtonPreview label={draft.staffPanelLabel || 'Painel staff'} emoji={draft.staffPanelEmoji} style={draft.staffPanelStyle} emojis={emojis} />
+            </div>
           </div>
           <Hint>
             <b>Assumir</b> marca o gestor como responsável e abre-lhe um painel (só ele vê) para escolher os cargos do membro — dados na hora. <b>Finalizar</b> dá

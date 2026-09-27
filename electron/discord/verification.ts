@@ -177,6 +177,15 @@ export async function applyVerificationSettings(guild: Guild, input: Verificatio
     finishLabel: (input.finishLabel ?? '').trim().slice(0, 80) || 'Finalizar',
     cancelLabel: (input.cancelLabel ?? '').trim().slice(0, 80) || 'Cancelar',
     staffPanelLabel: (input.staffPanelLabel ?? '').trim().slice(0, 80) || 'Painel staff',
+    claimEmoji: (input.claimEmoji ?? '').trim(),
+    finishEmoji: (input.finishEmoji ?? '').trim(),
+    cancelEmoji: (input.cancelEmoji ?? '').trim(),
+    staffPanelEmoji: (input.staffPanelEmoji ?? '').trim(),
+    claimStyle: validStyle(input.claimStyle, 'primary'),
+    finishStyle: validStyle(input.finishStyle, 'success'),
+    cancelStyle: validStyle(input.cancelStyle, 'danger'),
+    staffPanelStyle: validStyle(input.staffPanelStyle, 'secondary'),
+    buttonStyle: validStyle(input.buttonStyle, 'success'),
     buttonEmoji: (input.buttonEmoji ?? '').trim(),
     maxTicketsPerWindow: clampInt(input.maxTicketsPerWindow, 1, 20, 2),
     ticketWindowMinutes: clampInt(input.ticketWindowMinutes, 1, 10_080, 60),
@@ -256,15 +265,38 @@ export async function applyVerificationSettings(guild: Guild, input: Verificatio
   return store.getVerificationSettings(guild.id)
 }
 
+function validStyle(value: unknown, fallback: VerificationButtonStyle): VerificationButtonStyle {
+  return value === 'success' || value === 'primary' || value === 'secondary' || value === 'danger' ? value : fallback
+}
+
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
   const n = Math.round(Number(value))
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback
 }
 
+/** Emoji de botão: normal (✅) ou da biblioteca do bot (`<:nome:id>` / `<a:nome:id>`). */
+export function parseButtonEmoji(raw: string): { id?: string; name?: string; animated?: boolean } | null {
+  const value = (raw ?? '').trim()
+  if (!value) return null
+  const custom = value.match(/^<(a?):(\w{2,32}):(\d{15,21})>$/)
+  if (custom) return { id: custom[3], name: custom[2], animated: custom[1] === 'a' }
+  return { name: value }
+}
+
+/** Botão com texto, emoji e cor configuráveis — sem emoji se `withEmoji` for falso (fallback). */
+function styledButton(customId: string, label: string, emoji: string, style: VerificationButtonStyle, withEmoji: boolean): ButtonBuilder {
+  const button = new ButtonBuilder().setCustomId(customId).setLabel(label.slice(0, 80)).setStyle(BUTTON_STYLES[style] ?? ButtonStyle.Secondary)
+  const parsed = withEmoji ? parseButtonEmoji(emoji) : null
+  if (parsed) button.setEmoji(parsed)
+  return button
+}
+
 function panelComponents(settings: VerificationSettings, withEmoji = true): ActionRowBuilder<ButtonBuilder>[] {
-  const button = new ButtonBuilder().setCustomId(OPEN_BUTTON_ID).setLabel(settings.buttonLabel || 'Verificar').setStyle(BUTTON_STYLES[settings.buttonStyle] ?? ButtonStyle.Success)
-  if (withEmoji && settings.buttonEmoji) button.setEmoji(settings.buttonEmoji)
-  return [new ActionRowBuilder<ButtonBuilder>().addComponents(button)]
+  return [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      styledButton(OPEN_BUTTON_ID, settings.buttonLabel || 'Verificar', settings.buttonEmoji, settings.buttonStyle ?? 'success', withEmoji),
+    ),
+  ]
 }
 
 /** Publica ou atualiza o painel com o botão "Verificar". Devolve o id da mensagem. */
@@ -489,10 +521,14 @@ async function openTicket(interaction: ButtonInteraction): Promise<void> {
 
     if (channel.isTextBased()) {
       // A mensagem de abertura já leva os botões da gestão (Assumir · Finalizar · Cancelar · Painel staff).
-      const welcome = await channel
-        .send({
-          ...ticketControlPayload(guild, settings, ticket, { name: member?.displayName ?? user.username, avatar: user.displayAvatarURL({ size: 256 }) }),
-          allowedMentions: { users: [user.id] },
+      const welcomeInfo = { name: member?.displayName ?? user.username, avatar: user.displayAvatarURL({ size: 256 }) }
+      const sendWelcome = (withEmoji: boolean) =>
+        channel.send({ ...ticketControlPayload(guild, settings, ticket, welcomeInfo, undefined, withEmoji), allowedMentions: { users: [user.id] } })
+      const welcome = await sendWelcome(true)
+        .catch((err) => {
+          // Um emoji inválido nos botões (ex.: apagado da biblioteca do bot) não pode impedir o ticket.
+          logEvent(guild.id, 'warn', `Não consegui mandar a abertura com os emojis dos botões (${errText(err)}) — a tentar sem emojis.`)
+          return sendWelcome(false)
         })
         .catch((err) => {
           logEvent(guild.id, 'warn', `Ticket criado, mas não consegui mandar a mensagem inicial: ${errText(err)}`)
@@ -571,21 +607,23 @@ const PANEL_TTL_MS = 14 * 60_000
 const activePanels = new Set<string>()
 const MAX_MANUAL_ROLES = 10
 
-/** Botões da gestão no embed da foto — "Assumir" fica desativado depois de alguém assumir. */
-function staffButtons(settings: VerificationSettings, claimedByName?: string): ActionRowBuilder<ButtonBuilder>[] {
+/** Botões da gestão — texto, emoji e cor vêm da app; "Assumir" fica desativado depois de alguém assumir. */
+function staffButtons(settings: VerificationSettings, claimedByName?: string, withEmoji = true): ActionRowBuilder<ButtonBuilder>[] {
+  const claim = styledButton(
+    CLAIM_ID,
+    claimedByName ? `Assumido por ${claimedByName}` : settings.claimLabel || 'Assumir',
+    settings.claimEmoji,
+    settings.claimStyle ?? 'primary',
+    withEmoji,
+  ).setDisabled(Boolean(claimedByName))
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(CLAIM_ID)
-        .setLabel(claimedByName ? `Assumido por ${claimedByName}`.slice(0, 80) : settings.claimLabel || 'Assumir')
-        .setEmoji('🙋')
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(Boolean(claimedByName)),
-      new ButtonBuilder().setCustomId(FINISH_ID).setLabel(settings.finishLabel || 'Finalizar').setEmoji('✅').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(CANCEL_ID).setLabel(settings.cancelLabel || 'Cancelar').setEmoji('✖️').setStyle(ButtonStyle.Danger),
+      claim,
+      styledButton(FINISH_ID, settings.finishLabel || 'Finalizar', settings.finishEmoji, settings.finishStyle ?? 'success', withEmoji),
+      styledButton(CANCEL_ID, settings.cancelLabel || 'Cancelar', settings.cancelEmoji, settings.cancelStyle ?? 'danger', withEmoji),
     ),
     new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId(PANEL_ID).setLabel(settings.staffPanelLabel || 'Painel staff').setEmoji('🛠️').setStyle(ButtonStyle.Secondary),
+      styledButton(PANEL_ID, settings.staffPanelLabel || 'Painel staff', settings.staffPanelEmoji, settings.staffPanelStyle ?? 'secondary', withEmoji),
     ),
   ]
 }
@@ -618,10 +656,11 @@ function ticketControlPayload(
   ticket: VerificationTicket,
   info: { name: string; avatar: string; claimedById?: string; hasPhoto?: boolean },
   claimedByName?: string,
+  withEmoji = true,
 ) {
   return {
     flags: MessageFlags.IsComponentsV2 as const,
-    components: [textLine(`<@${ticket.userId}>`), embedToContainer(ticketEmbed(guild, settings, ticket, info), staffButtons(settings, claimedByName))],
+    components: [textLine(`<@${ticket.userId}>`), embedToContainer(ticketEmbed(guild, settings, ticket, info), staffButtons(settings, claimedByName, withEmoji))],
   }
 }
 
@@ -756,12 +795,14 @@ export async function handleVerificationMessage(message: Message): Promise<void>
   if (!existing.claimedById) {
     const control = await channel.messages.fetch(existing.embedMessageId).catch(() => null)
     const controlInfo = { name: info.name, avatar: info.avatar, hasPhoto: true }
+    const v2 = control?.flags.has(MessageFlags.IsComponentsV2)
+    const payload = (withEmoji: boolean) =>
+      v2
+        ? { ...ticketControlPayload(message.guild, settings, ticket, controlInfo, undefined, withEmoji), allowedMentions: { parse: [] as [] } }
+        : { embeds: [ticketEmbed(message.guild, settings, ticket, controlInfo)] }
     await control
-      ?.edit(
-        control.flags.has(MessageFlags.IsComponentsV2)
-          ? { ...ticketControlPayload(message.guild, settings, ticket, controlInfo), allowedMentions: { parse: [] } }
-          : { embeds: [ticketEmbed(message.guild, settings, ticket, controlInfo)] },
-      )
+      ?.edit(payload(true))
+      .catch(() => control.edit(payload(false)))
       .catch(() => undefined)
   }
   logEvent(message.guildId, 'info', `Foto recebida de ${message.author.tag} no ticket #${ticket.number} (${files.length} imagem(ns)).`)
@@ -909,7 +950,16 @@ async function refreshAfterClaim(interaction: ButtonInteraction, entry: Verifica
           embeds: controlImages.length > 0 || !ticket ? requestEmbeds(guild, info, controlImages) : [ticketEmbed(guild, settings, ticket, info)],
           components: staffButtons(settings, member.displayName),
         }
-  await interaction.message.edit(edit).catch((err) => logEvent(entry.guildId, 'warn', `Não consegui atualizar a mensagem ao assumir: ${errText(err)}`))
+  await interaction.message
+    .edit(edit)
+    .catch(() =>
+      interaction.message.edit(
+        ticket && interaction.message.flags.has(MessageFlags.IsComponentsV2)
+          ? { ...ticketControlPayload(guild, settings, ticket, info, member.displayName, false), allowedMentions: { parse: [] as [] } }
+          : { components: staffButtons(settings, member.displayName, false) },
+      ),
+    )
+    .catch((err) => logEvent(entry.guildId, 'warn', `Não consegui atualizar a mensagem ao assumir: ${errText(err)}`))
   if (entry.photoMessageId && interaction.channel?.isTextBased()) {
     const photo = await interaction.channel.messages.fetch(entry.photoMessageId).catch(() => null)
     await photo?.edit({ embeds: requestEmbeds(guild, info, [...photo.attachments.values()].map((a) => a.name)) }).catch(() => undefined)
@@ -959,7 +1009,7 @@ async function showStaffPanel(interaction: ButtonInteraction, entry: Verificatio
       .setMinValues(0)
       .setMaxValues(MAX_MANUAL_ROLES)
     if (manual.length) select.setDefaultRoles(manual.slice(0, MAX_MANUAL_ROLES))
-    const finish = new ButtonBuilder().setCustomId(`verif:pfinish:${entry.id}`).setLabel(settings.finishLabel || 'Finalizar').setEmoji('✅').setStyle(ButtonStyle.Success)
+    const finish = styledButton(`verif:pfinish:${entry.id}`, settings.finishLabel || 'Finalizar', settings.finishEmoji, settings.finishStyle ?? 'success', true)
     return {
       embeds: [embed],
       components: [new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(select), new ActionRowBuilder<ButtonBuilder>().addComponents(finish)],

@@ -627,6 +627,15 @@ export interface VerificationSettings {
   finishLabel: string
   cancelLabel: string
   staffPanelLabel: string
+  /** Emoji (normal ou do bot, `<:nome:id>`) e cor de cada botão da gestão. */
+  claimEmoji: string
+  finishEmoji: string
+  cancelEmoji: string
+  staffPanelEmoji: string
+  claimStyle: VerificationButtonStyle
+  finishStyle: VerificationButtonStyle
+  cancelStyle: VerificationButtonStyle
+  staffPanelStyle: VerificationButtonStyle
   /** Cargos que podem aprovar/recusar e que veem os tickets (além de quem tem Administrador). */
   approverRoleIds: string[]
   /** Cargos dados ao membro quando é aprovado (opcional). */
