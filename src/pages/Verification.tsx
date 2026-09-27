@@ -88,13 +88,13 @@ const TEMPLATE_INFO: Record<
     tokens: VERIFICATION_PANEL_PLACEHOLDERS,
   },
   verificationTicket: {
-    title: 'Personalizar embed do ticket',
-    hint: 'Primeira mensagem de cada ticket, com o botão "Fechar ticket". {numero} é o número do ticket; {avatar} serve como URL de miniatura.',
+    title: 'Personalizar embed do ticket (com os botões)',
+    hint: 'Mensagem de abertura de cada ticket — é aqui que ficam os botões da gestão (Assumir · Finalizar · Cancelar · Painel staff). {responsavel} e {estado} atualizam sozinhos; {numero} é o número do ticket.',
     tokens: VERIFICATION_TICKET_PLACEHOLDERS,
   },
   verificationRequest: {
     title: 'Personalizar embed da foto',
-    hint: 'Embed publicado com a foto do membro, com os botões da gestão por baixo. {responsavel} e {estado} atualizam sozinhos quando alguém assume.',
+    hint: 'Embed publicado com a foto que o membro mandou no ticket. {responsavel} atualiza sozinho quando alguém assume.',
     tokens: VERIFICATION_PLACEHOLDERS,
     imageNote: 'A imagem grande é sempre a foto que o membro mandou.',
   },
@@ -263,7 +263,7 @@ export default function Verification() {
   const dirty = JSON.stringify(draft) !== JSON.stringify(settings)
   const openTickets = useMemo(() => tickets.filter((t) => t.status === 'open'), [tickets])
   const history = useMemo(() => entries.filter((e) => e.status !== 'pending'), [entries])
-  const pendingByTicket = useMemo(() => new Set(entries.filter((e) => e.status === 'pending').map((e) => e.ticketId)), [entries])
+  const pendingByTicket = useMemo(() => new Set(entries.filter((e) => e.status === 'pending' && e.imageCount > 0).map((e) => e.ticketId)), [entries])
   const approved = history.filter((e) => e.status === 'approved').length
   const rejected = history.filter((e) => e.status === 'rejected').length
   const pingRole = roles.find((r) => r.id === draft.pingRoleId)
@@ -452,7 +452,7 @@ export default function Verification() {
           actions={
             <Button variant="dark" onClick={() => setEditing('verificationTicket')} disabled={!guildId}>
               <Palette size={14} />
-              Personalizar embed do ticket
+              Personalizar embed do ticket (botões)
             </Button>
           }
         />
@@ -527,7 +527,7 @@ export default function Verification() {
           n={3}
           icon={ShieldCheck}
           title="Foto e botões da gestão"
-          subtitle="O membro manda a foto no ticket → embed com os botões da gestão → marcação → um gestor assume, escolhe os cargos num painel só dele e finaliza."
+          subtitle="O ticket abre já com os botões da gestão → o membro manda a foto → marcação → um gestor assume, escolhe os cargos num painel só dele e finaliza."
           actions={
             <>
               <Button variant="dark" onClick={() => setEditing('verificationRequest')} disabled={!guildId}>
@@ -576,7 +576,7 @@ export default function Verification() {
         </div>
 
         <div>
-          <Label>Botões no embed da foto</Label>
+          <Label>Botões da gestão (na mensagem de abertura do ticket)</Label>
           <div className="mt-1.5 grid grid-cols-2 gap-2 md:grid-cols-4">
             {(
               [
@@ -599,7 +599,7 @@ export default function Verification() {
           <Hint>
             <b>Assumir</b> marca o gestor como responsável e abre-lhe um painel (só ele vê) para escolher os cargos do membro — dados na hora. <b>Finalizar</b> dá
             também os cargos automáticos abaixo, manda o log e fecha o ticket. <b>Cancelar</b> pede um motivo opcional, retira os cargos dados no painel e fecha o
-            ticket. <b>Painel staff</b> reabre o painel.
+            ticket. <b>Painel staff</b> reabre o painel. O próprio membro também pode usar <b>Cancelar</b> para fechar o ticket dele.
           </Hint>
         </div>
 

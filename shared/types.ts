@@ -668,6 +668,8 @@ export interface VerificationEntry {
   pingMessageId: string | null
   ticketId?: string
   imageCount: number
+  /** Mensagem com a foto (separada da mensagem de abertura do ticket, onde estão os botões). */
+  photoMessageId?: string
   claimedById?: string
   claimedByTag?: string
   claimedAt?: string
@@ -696,7 +698,7 @@ export interface VerificationDiagnostics {
 }
 
 export const VERIFICATION_PANEL_PLACEHOLDERS = ['{servidor}'] as const
-export const VERIFICATION_TICKET_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{numero}', '{cargo}', '{servidor}'] as const
+export const VERIFICATION_TICKET_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{numero}', '{responsavel}', '{estado}', '{cargo}', '{servidor}'] as const
 export const TICKET_NAME_PLACEHOLDERS = ['{usuario}', '{id}', '{numero}'] as const
 export const VERIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{criada}', '{entrou}', '{responsavel}', '{estado}', '{servidor}'] as const
 export const VERIFICATION_LOG_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{estado}', '{moderador}', '{responsavel}', '{cargosDados}', '{cargosTirados}', '{motivo}', '{ticket}', '{duracao}', '{servidor}'] as const

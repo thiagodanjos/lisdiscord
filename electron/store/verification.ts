@@ -200,13 +200,20 @@ export function decide(
 }
 
 /** Atualiza campos de um pedido pendente (assumir, cargos escolhidos no painel staff). */
-export function updatePending(id: string, patch: Partial<Pick<VerificationEntry, 'claimedById' | 'claimedByTag' | 'claimedAt' | 'manualRoleIds'>>): VerificationEntry | null {
+export function updatePending(
+  id: string,
+  patch: Partial<Pick<VerificationEntry, 'claimedById' | 'claimedByTag' | 'claimedAt' | 'manualRoleIds' | 'photoMessageId' | 'pingMessageId' | 'imageCount'>>,
+): VerificationEntry | null {
   const all = readEntries()
   const entry = all.find((e) => e.id === id && e.status === 'pending')
   if (!entry) return null
   Object.assign(entry, patch)
   writeEntries(all)
   return entry
+}
+
+export function findPendingByPhoto(messageId: string): VerificationEntry | null {
+  return readEntries().find((e) => e.status === 'pending' && e.photoMessageId === messageId) ?? null
 }
 
 export function findPendingById(id: string): VerificationEntry | null {

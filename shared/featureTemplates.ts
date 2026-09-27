@@ -43,14 +43,14 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     footerIconUrl: '{avatarAutor}',
   }),
   verificationRequest: draft({
-    title: '🔎 Verificação em andamento',
-    description: '{membro} enviou os prints dos cargos na CDO e aguarda um **verificador**.',
+    title: '📸 Comprovação de {nome}',
+    description: '{membro} enviou os prints dos cargos na CDO.',
     color: '#EB459E',
     thumbnailUrl: '{avatar}',
     fields: [
-      { name: 'Membro', value: '{membro}', inline: true },
+      { name: 'Conta criada', value: '{criada}', inline: true },
+      { name: 'Entrou no servidor', value: '{entrou}', inline: true },
       { name: 'Responsável', value: '{responsavel}', inline: true },
-      { name: 'Estado', value: '{estado}', inline: true },
     ],
     footer: '{servidor} · ID {id}',
   }),
@@ -77,14 +77,15 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     footer: '{servidor}',
   }),
   verificationTicket: draft({
-    title: '📋 Ticket de verificação #{numero}',
-    description:
-      'Olá {membro}! 👋\n\n' +
-      'Envia aqui um **print do teu perfil** onde se vejam bem os teus cargos na CDO.\n' +
-      'Só imagens contam — texto é apagado. Um gestor vai rever e aprovar ou recusar.',
-    color: '#5865F2',
+    title: '🔎 Verificação em andamento',
+    description: 'Olá {membro}! Envia **prints dos teus cargos** dentro da CDO e aguarda um **verificador**.\n\nSó imagens contam — texto é apagado.',
+    color: '#EB459E',
     thumbnailUrl: '{avatar}',
-    footer: 'Só tu e a gestão veem este canal.',
+    fields: [
+      { name: 'Responsável', value: '{responsavel}', inline: true },
+      { name: 'Estado', value: '{estado}', inline: true },
+    ],
+    footer: 'Ticket #{numero} · só tu e a gestão veem este canal',
   }),
   logMessageDelete: draft({
     title: '🗑️ Mensagem apagada',

@@ -483,22 +483,31 @@ async function openTicket(interaction: ButtonInteraction): Promise<void> {
     const ticket = store.addTicket({ guildId: guild.id, channelId: channel.id, channelName: channel.name, userId: user.id, userTag: user.tag, number })
 
     if (channel.isTextBased()) {
-      let embed = buildEmbedFromDraft(getTemplate(guild.id, 'verificationTicket'), {
-        membro: `<@${user.id}>`,
-        nome: member?.displayName ?? user.username,
-        avatar: user.displayAvatarURL({ size: 256 }),
-        id: user.id,
-        numero: String(number),
-        cargo: settings.pingRoleId ? `<@&${settings.pingRoleId}>` : '',
-        servidor: guild.name,
-      })
-      if (!embedHasContent(embed)) embed = embed.setDescription('Envia aqui o print do teu perfil com os cargos.')
-      const close = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId(`${CLOSE_BUTTON_PREFIX}${ticket.id}`).setLabel('Fechar ticket').setEmoji('🔒').setStyle(ButtonStyle.Secondary),
-      )
-      await channel
-        .send({ content: `<@${user.id}>`, embeds: [embed], components: [close], allowedMentions: { users: [user.id] } })
-        .catch((err) => logEvent(guild.id, 'warn', `Ticket criado, mas não consegui mandar a mensagem inicial: ${errText(err)}`))
+      // A mensagem de abertura já leva os botões da gestão (Assumir · Finalizar · Cancelar · Painel staff).
+      const welcome = await channel
+        .send({
+          content: `<@${user.id}>`,
+          embeds: [ticketEmbed(guild, settings, ticket, { name: member?.displayName ?? user.username, avatar: user.displayAvatarURL({ size: 256 }) })],
+          components: staffButtons(settings),
+          allowedMentions: { users: [user.id] },
+        })
+        .catch((err) => {
+          logEvent(guild.id, 'warn', `Ticket criado, mas não consegui mandar a mensagem inicial: ${errText(err)}`)
+          return null
+        })
+      if (welcome) {
+        store.addPending({
+          guildId: guild.id,
+          channelId: channel.id,
+          userId: user.id,
+          userTag: user.tag,
+          userAvatar: user.displayAvatarURL({ size: 128 }),
+          embedMessageId: welcome.id,
+          pingMessageId: null,
+          ticketId: ticket.id,
+          imageCount: 0,
+        })
+      }
     }
 
     logEvent(guild.id, 'info', `Ticket #${number} aberto por ${user.tag} (#${channel.name}).`)
@@ -578,6 +587,27 @@ function staffButtons(settings: VerificationSettings, claimedByName?: string): A
   ]
 }
 
+/** Embed de abertura do ticket (com {responsavel}/{estado}) — usado ao abrir e ao assumir. */
+function ticketEmbed(
+  guild: Guild,
+  settings: VerificationSettings,
+  ticket: VerificationTicket,
+  info: { name: string; avatar: string; claimedById?: string; hasPhoto?: boolean },
+): EmbedBuilder {
+  const embed = buildEmbedFromDraft(getTemplate(guild.id, 'verificationTicket'), {
+    membro: `<@${ticket.userId}>`,
+    nome: info.name,
+    avatar: info.avatar,
+    id: ticket.userId,
+    numero: String(ticket.number),
+    responsavel: info.claimedById ? `<@${info.claimedById}>` : '*ninguém ainda*',
+    estado: info.claimedById ? '🟡 Em análise' : info.hasPhoto ? '📸 Foto enviada — à espera de um verificador' : '⏳ À espera dos prints',
+    cargo: settings.pingRoleId ? `<@&${settings.pingRoleId}>` : '',
+    servidor: guild.name,
+  })
+  return embedHasContent(embed) ? embed : embed.setDescription('Envia aqui o print do teu perfil com os cargos.')
+}
+
 /** Embed(s) da foto a partir do template — usado ao publicar e sempre que o estado muda (assumido). */
 function requestEmbeds(
   guild: Guild,
@@ -639,80 +669,99 @@ export async function handleVerificationMessage(message: Message): Promise<void>
     return
   }
 
-  // Uma foto nova substitui o pedido anterior do mesmo ticket — mas quem já tinha assumido continua.
-  const previous = store.findPendingByTicket(ticket.id)
-  if (previous) {
-    await deleteRequestMessages(message.guild, previous)
-    store.dropPending(previous.id)
+  const member = message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null))
+  const existing = store.findPendingByTicket(ticket.id)
+  const legacy = !existing || (existing.imageCount > 0 && !existing.photoMessageId)
+  const info = {
+    userId: message.author.id,
+    name: member?.displayName ?? message.author.username,
+    avatar: message.author.displayAvatarURL({ size: 256 }),
+    createdAt: message.author.createdAt,
+    joinedAt: member?.joinedAt ?? null,
+    claimedById: existing?.claimedById,
   }
 
-  const member = message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null))
-  const claimer = previous?.claimedById ? await message.guild.members.fetch(previous.claimedById).catch(() => null) : null
-  const embeds = requestEmbeds(
-    message.guild,
-    {
+  // Ticket antigo (aberto antes desta versão, sem botões na abertura): a foto leva os botões.
+  if (legacy) {
+    if (existing) {
+      await deleteRequestMessages(message.guild, existing)
+      store.dropPending(existing.id)
+    }
+    const claimer = existing?.claimedById ? await message.guild.members.fetch(existing.claimedById).catch(() => null) : null
+    let sent: Message<true>
+    try {
+      sent = await message.channel.send({
+        embeds: requestEmbeds(message.guild, info, files.map((f) => f.name ?? '')),
+        files,
+        components: staffButtons(settings, claimer?.displayName ?? existing?.claimedByTag),
+        allowedMentions: { parse: [] },
+      })
+    } catch (err) {
+      logEvent(message.guildId, 'error', `Não consegui publicar o embed de ${message.author.tag}: ${errText(err)}`)
+      return
+    }
+    await message.delete().catch((err) => logEvent(message.guildId, 'warn', `Não consegui apagar a foto original: ${errText(err)}`))
+    const pingMessageId = existing?.claimedById ? null : await sendPing(message, settings)
+    const entry = store.addPending({
+      guildId: message.guildId,
+      channelId: message.channelId,
       userId: message.author.id,
-      name: member?.displayName ?? message.author.username,
-      avatar: message.author.displayAvatarURL({ size: 256 }),
-      createdAt: message.author.createdAt,
-      joinedAt: member?.joinedAt ?? null,
-      claimedById: previous?.claimedById,
-    },
-    files.map((f) => f.name ?? ''),
-  )
-
-  let sent: Message<true>
-  try {
-    sent = await message.channel.send({
-      embeds,
-      files,
-      components: staffButtons(settings, claimer?.displayName ?? previous?.claimedByTag),
-      allowedMentions: { parse: [] },
+      userTag: message.author.tag,
+      userAvatar: message.author.displayAvatarURL({ size: 128 }),
+      embedMessageId: sent.id,
+      pingMessageId,
+      ticketId: ticket.id,
+      imageCount: files.length,
     })
+    if (existing?.claimedById) {
+      store.updatePending(entry.id, { claimedById: existing.claimedById, claimedByTag: existing.claimedByTag, claimedAt: existing.claimedAt, manualRoleIds: existing.manualRoleIds })
+    }
+    logEvent(message.guildId, 'info', `Pedido criado para ${message.author.tag} no ticket #${ticket.number} (${files.length} imagem(ns)).`)
+    return
+  }
+
+  // Fluxo normal: os botões estão na abertura do ticket — aqui só entra (ou é trocada) a foto.
+  const channel = message.channel
+  if (existing.photoMessageId) await channel.messages.delete(existing.photoMessageId).catch(() => undefined)
+  if (existing.pingMessageId) await channel.messages.delete(existing.pingMessageId).catch(() => undefined)
+  let photo: Message<true>
+  try {
+    photo = await channel.send({ embeds: requestEmbeds(message.guild, info, files.map((f) => f.name ?? '')), files, allowedMentions: { parse: [] } })
   } catch (err) {
-    logEvent(message.guildId, 'error', `Não consegui publicar o embed de ${message.author.tag}: ${errText(err)}`)
+    logEvent(message.guildId, 'error', `Não consegui publicar a foto de ${message.author.tag}: ${errText(err)}`)
     return
   }
   await message.delete().catch((err) => logEvent(message.guildId, 'warn', `Não consegui apagar a foto original: ${errText(err)}`))
+  const pingMessageId = existing.claimedById ? null : await sendPing(message, settings)
+  store.updatePending(existing.id, { photoMessageId: photo.id, pingMessageId, imageCount: files.length })
 
-  let pingMessageId: string | null = null
+  // A abertura passa a dizer "Foto enviada" enquanto ninguém assume.
+  if (!existing.claimedById) {
+    const control = await channel.messages.fetch(existing.embedMessageId).catch(() => null)
+    await control
+      ?.edit({ embeds: [ticketEmbed(message.guild, settings, ticket, { name: info.name, avatar: info.avatar, hasPhoto: true })] })
+      .catch(() => undefined)
+  }
+  logEvent(message.guildId, 'info', `Foto recebida de ${message.author.tag} no ticket #${ticket.number} (${files.length} imagem(ns)).`)
+}
+
+async function sendPing(message: Message<true>, settings: VerificationSettings): Promise<string | null> {
   const pingText = fillPingText(settings.pingText, settings.pingRoleId, message.author.id)
-  if (settings.pingRoleId && pingText && !previous?.claimedById) {
-    const ping = await message.channel
-      .send({ content: pingText.slice(0, 2000), allowedMentions: { roles: [settings.pingRoleId], users: [] } })
-      .catch((err) => {
-        logEvent(message.guildId, 'warn', `Não consegui mandar a marcação: ${errText(err)}`)
-        return null
-      })
-    pingMessageId = ping?.id ?? null
-  }
-  logEvent(message.guildId, 'info', `Pedido criado para ${message.author.tag} no ticket #${ticket.number} (${files.length} imagem(ns)).`)
-
-  const entry = store.addPending({
-    guildId: message.guildId,
-    channelId: message.channelId,
-    userId: message.author.id,
-    userTag: message.author.tag,
-    userAvatar: message.author.displayAvatarURL({ size: 128 }),
-    embedMessageId: sent.id,
-    pingMessageId,
-    ticketId: ticket.id,
-    imageCount: files.length,
-  })
-  if (previous?.claimedById) {
-    store.updatePending(entry.id, {
-      claimedById: previous.claimedById,
-      claimedByTag: previous.claimedByTag,
-      claimedAt: previous.claimedAt,
-      manualRoleIds: previous.manualRoleIds,
+  if (!settings.pingRoleId || !pingText) return null
+  const ping = await message.channel
+    .send({ content: pingText.slice(0, 2000), allowedMentions: { roles: [settings.pingRoleId], users: [] } })
+    .catch((err) => {
+      logEvent(message.guildId, 'warn', `Não consegui mandar a marcação: ${errText(err)}`)
+      return null
     })
-  }
+  return ping?.id ?? null
 }
 
 async function deleteRequestMessages(guild: Guild, entry: VerificationEntry): Promise<void> {
   const channel = await guild.channels.fetch(entry.channelId).catch(() => null)
   if (!channel || !channel.isTextBased()) return
   await channel.messages.delete(entry.embedMessageId).catch(() => undefined)
+  if (entry.photoMessageId) await channel.messages.delete(entry.photoMessageId).catch(() => undefined)
   if (entry.pingMessageId) await channel.messages.delete(entry.pingMessageId).catch(() => undefined)
 }
 
@@ -730,8 +779,12 @@ async function handleStaffButton(interaction: ButtonInteraction): Promise<void> 
   }
   const settings = store.getVerificationSettings(guild.id)
   const member = await guild.members.fetch(interaction.user.id).catch(() => null)
-  if (!member || !isApprover(member, settings)) {
-    await interaction.reply({ content: '❌ Só a gestão pode usar estes botões.', ephemeral: true })
+  const ownerCancelling = member?.id === entry.userId && interaction.customId === CANCEL_ID
+  if (!member || (!isApprover(member, settings) && !ownerCancelling)) {
+    await interaction.reply({
+      content: member?.id === entry.userId ? '⏳ Estes botões são da gestão — manda o print dos teus cargos e aguarda um verificador.' : '❌ Só a gestão pode usar estes botões.',
+      ephemeral: true,
+    })
     return
   }
   const isAdmin = member.permissions.has(PermissionFlagsBits.Administrator)
@@ -767,7 +820,7 @@ async function handleStaffButton(interaction: ButtonInteraction): Promise<void> 
       return
     }
     case CANCEL_ID: {
-      if (claimedByOther && !isAdmin) {
+      if (claimedByOther && !isAdmin && !ownerCancelling) {
         await interaction.reply({ content: `✖️ Só <@${entry.claimedById}> (quem assumiu) ou um administrador podem cancelar.`, ephemeral: true, allowedMentions: { parse: [] } })
         return
       }
@@ -805,24 +858,24 @@ async function claim(interaction: ButtonInteraction, entry: VerificationEntry, m
   logEvent(entry.guildId, 'info', `${member.user.tag} assumiu a verificação de ${entry.userTag}.`)
   const guild = interaction.guild!
   const target = await guild.members.fetch(entry.userId).catch(() => null)
-  const imageNames = [...interaction.message.attachments.values()].map((a) => a.name)
+  const info = {
+    userId: entry.userId,
+    name: target?.displayName ?? entry.userTag,
+    avatar: target?.user.displayAvatarURL({ size: 256 }) ?? entry.userAvatar ?? '',
+    createdAt: target?.user.createdAt ?? null,
+    joinedAt: target?.joinedAt ?? null,
+    claimedById: member.id,
+  }
+  const ticket = entry.ticketId ? store.listTickets(guild.id).find((t) => t.id === entry.ticketId) : undefined
+  const controlImages = [...interaction.message.attachments.values()].map((a) => a.name)
+  const controlEmbeds = controlImages.length > 0 || !ticket ? requestEmbeds(guild, info, controlImages) : [ticketEmbed(guild, settings, ticket, info)]
   await interaction.message
-    .edit({
-      embeds: requestEmbeds(
-        guild,
-        {
-          userId: entry.userId,
-          name: target?.displayName ?? entry.userTag,
-          avatar: target?.user.displayAvatarURL({ size: 256 }) ?? entry.userAvatar ?? '',
-          createdAt: target?.user.createdAt ?? null,
-          joinedAt: target?.joinedAt ?? null,
-          claimedById: member.id,
-        },
-        imageNames,
-      ),
-      components: staffButtons(settings, member.displayName),
-    })
+    .edit({ embeds: controlEmbeds, components: staffButtons(settings, member.displayName) })
     .catch((err) => logEvent(entry.guildId, 'warn', `Não consegui atualizar o embed ao assumir: ${errText(err)}`))
+  if (entry.photoMessageId && interaction.channel?.isTextBased()) {
+    const photo = await interaction.channel.messages.fetch(entry.photoMessageId).catch(() => null)
+    await photo?.edit({ embeds: requestEmbeds(guild, info, [...photo.attachments.values()].map((a) => a.name)) }).catch(() => undefined)
+  }
   // A marcação já não é precisa — alguém pegou no pedido.
   if (entry.pingMessageId && interaction.channel?.isTextBased()) await interaction.channel.messages.delete(entry.pingMessageId).catch(() => undefined)
   return updated
@@ -986,7 +1039,8 @@ async function finishVerification(guild: Guild, entry: VerificationEntry, modera
 
     // Guarda as imagens antes de apagar o embed — é a única cópia da foto, e vai para o log.
     const channel = await guild.channels.fetch(fresh.channelId).catch(() => null)
-    const embedMessage = channel?.isTextBased() ? await channel.messages.fetch(fresh.embedMessageId).catch(() => null) : null
+    const photoId = fresh.photoMessageId ?? fresh.embedMessageId
+    const embedMessage = channel?.isTextBased() ? await channel.messages.fetch(photoId).catch(() => null) : null
     const logFiles = settings.logChannelId && embedMessage ? await collectImages(embedMessage).catch(() => []) : []
 
     const decided = store.decide(fresh.id, finished ? 'approved' : 'rejected', { id: moderator.id, tag: moderator.user.tag }, { added, removed }, reason)
@@ -1061,8 +1115,15 @@ async function postLog(guild: Guild, channelId: string, entry: VerificationEntry
 
 export async function handleVerificationMessageDelete(message: Message | PartialMessage): Promise<void> {
   if (!message.guild) return
+  // Apagaram a foto (novo fluxo): o pedido continua, só volta a estar "à espera dos prints".
+  const byPhoto = store.findPendingByPhoto(message.id)
+  if (byPhoto) {
+    store.updatePending(byPhoto.id, { photoMessageId: undefined, imageCount: 0 })
+    return
+  }
+  // Tickets antigos: a foto era a mensagem com os botões — sem ela, o pedido deixa de existir.
   const entry = store.findPendingByMessage(message.id)
-  if (!entry) return
+  if (!entry || entry.imageCount === 0) return
   store.dropPending(entry.id)
   await deleteRequestMessages(message.guild, entry)
 }
