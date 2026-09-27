@@ -41,9 +41,11 @@ import type {
   TimeoutDuration,
   Transcript,
   TranscriptSummary,
+  ServerLogSettings,
   VerificationDiagnostics,
   VerificationEntry,
   VerificationSettings,
+  VerificationTicket,
 } from './types'
 
 /** Nomes dos canais IPC — usados em ambos os lados para nunca ficarem dessincronizados. */
@@ -183,6 +185,14 @@ export const IPC = {
   listRemoteVerifications: 'remoteBot:verification:list',
   getVerificationDiagnostics: 'verification:diagnostics',
   getRemoteVerificationDiagnostics: 'remoteBot:verification:diagnostics',
+  listVerificationTickets: 'verification:tickets',
+  listRemoteVerificationTickets: 'remoteBot:verification:tickets',
+  listCategories: 'guilds:categories',
+  listRemoteCategories: 'remoteBot:guilds:categories',
+  getServerLogSettings: 'serverLogs:get',
+  setServerLogSettings: 'serverLogs:set',
+  getRemoteServerLogSettings: 'remoteBot:serverLogs:get',
+  setRemoteServerLogSettings: 'remoteBot:serverLogs:set',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -327,4 +337,12 @@ export interface LisDiscordBridge {
   listRemoteVerifications(guildId: string): Promise<VerificationEntry[]>
   getVerificationDiagnostics(guildId: string): Promise<VerificationDiagnostics>
   getRemoteVerificationDiagnostics(guildId: string): Promise<VerificationDiagnostics>
+  listVerificationTickets(guildId: string): Promise<VerificationTicket[]>
+  listRemoteVerificationTickets(guildId: string): Promise<VerificationTicket[]>
+  listCategories(guildId: string): Promise<ChannelPickerEntry[]>
+  listRemoteCategories(guildId: string): Promise<ChannelPickerEntry[]>
+  getServerLogSettings(guildId: string): Promise<ServerLogSettings>
+  setServerLogSettings(guildId: string, settings: ServerLogSettings): Promise<ServerLogSettings>
+  getRemoteServerLogSettings(guildId: string): Promise<ServerLogSettings>
+  setRemoteServerLogSettings(guildId: string, settings: ServerLogSettings): Promise<ServerLogSettings>
 }

@@ -32,6 +32,8 @@ import type {
   MovNotice,
   VerificationEntry,
   VerificationSettings,
+  VerificationTicket,
+  ServerLogSettings,
 } from '../../shared/types'
 import { DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
 
@@ -518,6 +520,16 @@ let verificationSettingsData: Record<string, VerificationSettings> = {
   g1: {
     channelId: 'c4',
     channelName: 'geral',
+    panelMessageId: 'pm1',
+    buttonLabel: 'Verificar',
+    buttonEmoji: '✅',
+    buttonStyle: 'success',
+    ticketCategoryId: 'cat1',
+    ticketCategoryName: '🔐 Verifique-se',
+    ticketNameTemplate: 'verificacao-{usuario}',
+    maxTicketsPerWindow: 2,
+    ticketWindowMinutes: 60,
+    closeMessage: 'Verificação **{estado}** por {moderador}. Este canal vai ser apagado em {segundos} segundos.',
     pingRoleId: 'r3',
     pingRoleName: 'Veterano',
     pingText: '{cargo}',
@@ -529,6 +541,13 @@ let verificationSettingsData: Record<string, VerificationSettings> = {
     deleteNonImage: true,
   },
 }
+
+const verificationTicketsData: VerificationTicket[] = [
+  { id: 't1', guildId: 'g1', channelId: 'tc1', channelName: 'verificacao-joao99', userId: 'u13', userTag: 'joao99#0420', number: 3, createdAt: daysAgo(0), status: 'open' },
+  { id: 't2', guildId: 'g1', channelId: 'tc2', channelName: 'verificacao-sofia_gamer', userId: 'u12', userTag: 'sofia_gamer#7788', number: 2, createdAt: daysAgo(1), status: 'closed', closedAt: daysAgo(1), closedByTag: 'ana.dev#0001', result: 'approved' },
+]
+
+let serverLogSettingsData: Record<string, ServerLogSettings> = {}
 
 const verificationsData: VerificationEntry[] = [
   { id: 'vf1', guildId: 'g1', channelId: 'c4', userId: 'u13', userTag: 'joao99#0420', userAvatar: null, embedMessageId: 'm1', pingMessageId: 'm2', imageCount: 1, createdAt: daysAgo(0), status: 'pending' },
@@ -1230,6 +1249,16 @@ export const demoBridge: LisDiscordBridge = {
       verificationSettingsData[guildId] ?? {
         channelId: null,
         channelName: null,
+        panelMessageId: null,
+        buttonLabel: 'Verificar',
+        buttonEmoji: '✅',
+        buttonStyle: 'success',
+        ticketCategoryId: null,
+        ticketCategoryName: null,
+        ticketNameTemplate: 'verificacao-{usuario}',
+        maxTicketsPerWindow: 2,
+        ticketWindowMinutes: 60,
+        closeMessage: 'Verificação **{estado}** por {moderador}. Este canal vai ser apagado em {segundos} segundos.',
         pingRoleId: null,
         pingRoleName: null,
         pingText: '{cargo}',
@@ -1250,6 +1279,8 @@ export const demoBridge: LisDiscordBridge = {
       channelName: channels.find((c) => c.id === settings.channelId)?.name ?? null,
       logChannelName: channels.find((c) => c.id === settings.logChannelId)?.name ?? null,
       pingRoleName: demoRoles.find((r) => r.id === settings.pingRoleId)?.name ?? null,
+      ticketCategoryName: settings.ticketCategoryId ? '🔐 Verifique-se' : null,
+      panelMessageId: settings.channelId ? 'pm1' : null,
     }
     verificationSettingsData = { ...verificationSettingsData, [guildId]: saved }
     return saved
@@ -1270,16 +1301,72 @@ export const demoBridge: LisDiscordBridge = {
   async getVerificationDiagnostics() {
     await delay()
     return {
-      connected: true,
-      messageContent: true,
-      channelOk: true,
-      missingPermissions: [],
-      pingRoleOk: true,
+      checks: [
+        { label: 'Bot ligado à Discord', ok: true },
+        { label: 'Intent Message Content', ok: true },
+        { label: 'Painel em #geral', ok: true },
+        { label: 'Categoria 🔐 Verifique-se', ok: true },
+        { label: 'Cargo a marcar', ok: true },
+      ],
       events: [
-        { at: new Date(Date.now() - 60_000).toISOString(), level: 'info' as const, text: 'Pedido criado para joao99#0420 (1 imagem(ns)).' },
+        { at: new Date(Date.now() - 60_000).toISOString(), level: 'info' as const, text: 'Pedido criado para joao99#0420 no ticket #3 (1 imagem(ns)).' },
+        { at: new Date(Date.now() - 120_000).toISOString(), level: 'info' as const, text: 'Ticket #3 aberto por joao99#0420 (#verificacao-joao99).' },
         { at: new Date(Date.now() - 3_600_000).toISOString(), level: 'info' as const, text: 'sofia_gamer#7788 aprovado ✅ por ana.dev#0001.' },
       ],
     }
+  },
+  async listVerificationTickets(guildId) {
+    await delay()
+    return verificationTicketsData.filter((t) => t.guildId === guildId)
+  },
+  async listRemoteVerificationTickets(guildId) {
+    return demoBridge.listVerificationTickets(guildId)
+  },
+  async listCategories() {
+    await delay()
+    return [
+      { id: 'cat1', name: '🔐 Verifique-se', kind: 'category' as const },
+      { id: 'cat2', name: 'Gestão', kind: 'category' as const },
+      { id: 'cat3', name: 'Logs', kind: 'category' as const },
+    ]
+  },
+  async listRemoteCategories(guildId) {
+    return demoBridge.listCategories(guildId)
+  },
+  async getServerLogSettings(guildId) {
+    await delay()
+    return (
+      serverLogSettingsData[guildId] ?? {
+        messageDeleteChannelId: null,
+        messageDeleteChannelName: null,
+        messageEditChannelId: null,
+        messageEditChannelName: null,
+        pointsChannelId: null,
+        pointsChannelName: null,
+        hoursChannelId: null,
+        hoursChannelName: null,
+        ignoreBots: true,
+      }
+    )
+  },
+  async setServerLogSettings(guildId, settings) {
+    await delay()
+    const name = (id: string | null) => makeChannels().find((c) => c.id === id)?.name ?? null
+    const saved: ServerLogSettings = {
+      ...settings,
+      messageDeleteChannelName: name(settings.messageDeleteChannelId),
+      messageEditChannelName: name(settings.messageEditChannelId),
+      pointsChannelName: name(settings.pointsChannelId),
+      hoursChannelName: name(settings.hoursChannelId),
+    }
+    serverLogSettingsData = { ...serverLogSettingsData, [guildId]: saved }
+    return saved
+  },
+  async getRemoteServerLogSettings(guildId) {
+    return demoBridge.getServerLogSettings(guildId)
+  },
+  async setRemoteServerLogSettings(guildId, settings) {
+    return demoBridge.setServerLogSettings(guildId, settings)
   },
   async getRemoteVerificationDiagnostics(guildId) {
     return demoBridge.getVerificationDiagnostics(guildId)

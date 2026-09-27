@@ -1,5 +1,5 @@
-import type { Guild } from 'discord.js'
-import type { MemberProfile, RolePickerEntry } from '../../shared/types'
+import { ChannelType, type Guild } from 'discord.js'
+import type { ChannelPickerEntry, MemberProfile, RolePickerEntry } from '../../shared/types'
 import * as movPoints from '../store/movPoints'
 
 function toRoleEntries(guild: Guild, roles: Iterable<{ id: string; name: string; hexColor: string; position: number }>): RolePickerEntry[] {
@@ -26,4 +26,13 @@ export async function getMemberProfile(guild: Guild, userId: string): Promise<Me
     points: entry?.points ?? 0,
     totalSeconds: entry?.totalSeconds ?? 0,
   }
+}
+
+/** Categorias do servidor, pela ordem em que aparecem na Discord (para escolher onde criar tickets). */
+export async function listGuildCategories(guild: Guild): Promise<ChannelPickerEntry[]> {
+  await guild.channels.fetch()
+  return [...guild.channels.cache.values()]
+    .filter((c) => c.type === ChannelType.GuildCategory)
+    .sort((a, b) => ('rawPosition' in a && 'rawPosition' in b ? a.rawPosition - b.rawPosition : 0))
+    .map((c) => ({ id: c.id, name: c.name, kind: 'category' as const }))
 }

@@ -130,6 +130,11 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
     setVerificationSettings: <T>(guildId: string, settings: unknown) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification/settings`, { method: 'POST', body: { settings } }),
     listVerifications: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification`),
+    listVerificationTickets: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification/tickets`),
+    listCategories: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/categories`),
+    getServerLogSettings: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/logs/settings`),
+    setServerLogSettings: <T>(guildId: string, settings: unknown) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/logs/settings`, { method: 'POST', body: { settings } }),
     getVerificationDiagnostics: <T>(guildId: string) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification/diagnostics`),
 

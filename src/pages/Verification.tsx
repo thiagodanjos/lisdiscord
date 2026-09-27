@@ -1,21 +1,42 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, AlertTriangle, AtSign, BadgeCheck, Camera, CheckCircle2, Clock3, Hash, ImageIcon, Palette, Radio, ScrollText, ShieldCheck, XCircle } from 'lucide-react'
+import {
+  Activity,
+  AlertTriangle,
+  BadgeCheck,
+  CheckCircle2,
+  Clock3,
+  FolderLock,
+  Hash,
+  ImageIcon,
+  MousePointerClick,
+  Palette,
+  Radio,
+  ScrollText,
+  ShieldCheck,
+  Ticket,
+  XCircle,
+} from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { cleanIpcError } from '../lib/errors'
 import { formatDateTime, formatRelativeDate } from '../lib/format'
 import { Avatar, Badge, Button, Card, EmptyState, PageHeader, StatCard, Toggle } from '../components/ui'
 import { TemplateEditorModal } from '../components/TemplateEditorModal'
 import {
+  TICKET_NAME_PLACEHOLDERS,
   VERIFICATION_LOG_PLACEHOLDERS,
+  VERIFICATION_PANEL_PLACEHOLDERS,
   VERIFICATION_PLACEHOLDERS,
+  VERIFICATION_TICKET_PLACEHOLDERS,
   type ChannelPickerEntry,
   type EmbedTemplateKind,
   type GuildSummary,
   type RemoteBotConfig,
   type RolePickerEntry,
+  type VerificationButtonStyle,
   type VerificationDiagnostics,
   type VerificationEntry,
   type VerificationSettings,
+  type VerificationTicket,
 } from '../../shared/types'
 
 const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
@@ -25,6 +46,16 @@ const inputClass = 'w-full rounded-lg border border-border bg-black/30 px-3 py-2
 const EMPTY_SETTINGS: VerificationSettings = {
   channelId: null,
   channelName: null,
+  panelMessageId: null,
+  buttonLabel: 'Verificar',
+  buttonEmoji: '✅',
+  buttonStyle: 'success',
+  ticketCategoryId: null,
+  ticketCategoryName: null,
+  ticketNameTemplate: 'verificacao-{usuario}',
+  maxTicketsPerWindow: 2,
+  ticketWindowMinutes: 60,
+  closeMessage: 'Verificação **{estado}** por {moderador}. Este canal vai ser apagado em {segundos} segundos.',
   pingRoleId: null,
   pingRoleName: null,
   pingText: '{cargo}',
@@ -36,8 +67,47 @@ const EMPTY_SETTINGS: VerificationSettings = {
   deleteNonImage: true,
 }
 
+const BUTTON_STYLE_CLASS: Record<VerificationButtonStyle, string> = {
+  success: 'bg-[#248046]',
+  primary: 'bg-[#5865f2]',
+  secondary: 'bg-[#4e5058]',
+  danger: 'bg-[#da373c]',
+}
+
+const TEMPLATE_INFO: Record<
+  'verificationPanel' | 'verificationTicket' | 'verificationRequest' | 'verificationLog',
+  { title: string; hint: string; tokens: readonly string[]; imageNote?: string }
+> = {
+  verificationPanel: {
+    title: 'Personalizar embed do painel',
+    hint: 'Embed fixo no canal do painel, com o botão por baixo. Ao guardar, o bot atualiza logo a mensagem que já lá está.',
+    tokens: VERIFICATION_PANEL_PLACEHOLDERS,
+  },
+  verificationTicket: {
+    title: 'Personalizar embed do ticket',
+    hint: 'Primeira mensagem de cada ticket, com o botão "Fechar ticket". {numero} é o número do ticket; {avatar} serve como URL de miniatura.',
+    tokens: VERIFICATION_TICKET_PLACEHOLDERS,
+  },
+  verificationRequest: {
+    title: 'Personalizar embed da foto',
+    hint: 'Embed publicado com a foto do membro, com as reações ✅ e ❌ por baixo.',
+    tokens: VERIFICATION_PLACEHOLDERS,
+    imageNote: 'A imagem grande é sempre a foto que o membro mandou.',
+  },
+  verificationLog: {
+    title: 'Personalizar log da verificação',
+    hint: "Enviado para o canal de log quando um gestor aprova ou recusa. {estado} fica 'aprovada ✅' ou 'recusada ❌'.",
+    tokens: VERIFICATION_LOG_PLACEHOLDERS,
+    imageNote: 'A imagem grande é sempre a foto que o membro mandou.',
+  },
+}
+
 function Label({ children }: { children: React.ReactNode }) {
   return <label className="text-[10px] font-bold tracking-[0.14em] text-faint uppercase">{children}</label>
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+  return <p className="mt-1 text-[11px] text-faint">{children}</p>
 }
 
 /** Escolha de vários cargos com chips clicáveis. */
@@ -66,24 +136,55 @@ function RoleChips({ roles, selected, onChange, tone }: { roles: RolePickerEntry
   )
 }
 
-function Check({ ok, label, fail }: { ok: boolean; label: string; fail: string }) {
+function Check({ ok, label, detail }: { ok: boolean; label: string; detail?: string }) {
   return (
     <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 ${ok ? 'border-success/30 bg-success/5' : 'border-danger/40 bg-danger/10'}`}>
       {ok ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-success" /> : <AlertTriangle size={15} className="mt-0.5 shrink-0 text-danger" />}
       <div>
         <p className="text-xs font-semibold text-text">{label}</p>
-        {!ok && <p className="mt-0.5 text-[11px] text-danger">{fail}</p>}
+        {!ok && detail && <p className="mt-0.5 text-[11px] text-danger">{detail}</p>}
       </div>
     </div>
   )
 }
 
-const STEPS = [
-  { icon: Camera, title: 'O membro manda a foto', text: 'Print do perfil com os cargos, no canal de verificação.' },
-  { icon: ImageIcon, title: 'O bot recria em embed', text: 'Apaga a mensagem original e publica o embed com a foto e ✅ ❌.' },
-  { icon: AtSign, title: 'Marca a gestão', text: 'Uma mensagem simples (sem embed) marca o cargo escolhido.' },
-  { icon: ShieldCheck, title: 'Um gestor reage', text: 'Só gestores/administração contam — o embed e a marcação somem, fica só a explicação.' },
-]
+function SectionTitle({ n, icon: Icon, title, subtitle, actions }: { n: number; icon: typeof Ticket; title: string; subtitle: string; actions?: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
+          <Icon size={17} />
+        </div>
+        <div>
+          <p className="text-[10px] font-bold tracking-[0.14em] text-faint uppercase">Passo {n}</p>
+          <h3 className="text-sm font-black tracking-wide uppercase">{title}</h3>
+          <p className="text-xs text-muted">{subtitle}</p>
+        </div>
+      </div>
+      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+    </div>
+  )
+}
+
+/** Mesmo algoritmo do bot (buildTicketName) — para a pré-visualização bater certo com o canal criado. */
+function previewTicketName(template: string, username: string, id: string, number: number): string {
+  const raw = (template || 'verificacao-{usuario}')
+    .split('{usuario}')
+    .join(username)
+    .split('{id}')
+    .join(id)
+    .split('{numero}')
+    .join(String(number).padStart(3, '0'))
+  return (
+    raw
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^\p{L}\p{N}\p{Extended_Pictographic}_・•|-]/gu, '')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 100) || `verificacao-${number}`
+  )
+}
 
 export default function Verification() {
   const [remoteConfig, setRemoteConfig] = useState<RemoteBotConfig>(EMPTY_REMOTE_CONFIG)
@@ -91,15 +192,17 @@ export default function Verification() {
   const [guilds, setGuilds] = useState<GuildSummary[]>([])
   const [guildId, setGuildId] = useState('')
   const [channels, setChannels] = useState<ChannelPickerEntry[]>([])
+  const [categories, setCategories] = useState<ChannelPickerEntry[]>([])
   const [roles, setRoles] = useState<RolePickerEntry[]>([])
   const [settings, setSettings] = useState<VerificationSettings>(EMPTY_SETTINGS)
   const [draft, setDraft] = useState<VerificationSettings>(EMPTY_SETTINGS)
   const [entries, setEntries] = useState<VerificationEntry[]>([])
+  const [tickets, setTickets] = useState<VerificationTicket[]>([])
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [savedOk, setSavedOk] = useState(false)
   const [loadError, setLoadError] = useState('')
-  const [editing, setEditing] = useState<EmbedTemplateKind | null>(null)
+  const [editing, setEditing] = useState<keyof typeof TEMPLATE_INFO | null>(null)
 
   const isRemote = Boolean(remoteConfig.url && remoteConfig.hasApiKey)
   const guildName = guilds.find((g) => g.id === guildId)?.name ?? 'este servidor'
@@ -118,15 +221,27 @@ export default function Verification() {
       .catch((err) => setLoadError(cleanIpcError(err)))
   }, [isRemote])
 
+  function refreshLive() {
+    if (!guildId) return
+    const list = isRemote ? bridge.listRemoteVerifications : bridge.listVerifications
+    list(guildId).then(setEntries).catch(() => undefined)
+    const listTickets = isRemote ? bridge.listRemoteVerificationTickets : bridge.listVerificationTickets
+    listTickets(guildId).then(setTickets).catch(() => undefined)
+    const diagnose = isRemote ? bridge.getRemoteVerificationDiagnostics : bridge.getVerificationDiagnostics
+    diagnose(guildId).then(setDiagnostics).catch(() => setDiagnostics(null))
+  }
+
   useEffect(() => {
     if (!guildId) return
     setLoadError('')
     const listChannels = isRemote ? bridge.listRemoteChannels : bridge.listChannels
+    const listCategories = isRemote ? bridge.listRemoteCategories : bridge.listCategories
     const listRoles = isRemote ? bridge.listRemoteRoles : bridge.listRoles
     const getSettings = isRemote ? bridge.getRemoteVerificationSettings : bridge.getVerificationSettings
     listChannels(guildId)
       .then((c) => setChannels(c.filter((ch) => ch.kind === 'text' || ch.kind === 'announcement')))
       .catch((err) => setLoadError(cleanIpcError(err)))
+    listCategories(guildId).then(setCategories).catch(() => setCategories([]))
     listRoles(guildId).then(setRoles).catch(() => setRoles([]))
     getSettings(guildId)
       .then((s) => {
@@ -135,25 +250,20 @@ export default function Verification() {
       })
       .catch((err) => setLoadError(cleanIpcError(err)))
 
-    const load = () => {
-      const list = isRemote ? bridge.listRemoteVerifications : bridge.listVerifications
-      list(guildId).then(setEntries).catch(() => undefined)
-      const diagnose = isRemote ? bridge.getRemoteVerificationDiagnostics : bridge.getVerificationDiagnostics
-      diagnose(guildId).then(setDiagnostics).catch(() => setDiagnostics(null))
-    }
-    load()
-    const id = setInterval(load, POLL_INTERVAL_MS)
+    refreshLive()
+    const id = setInterval(refreshLive, POLL_INTERVAL_MS)
     return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guildId, isRemote])
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(settings)
-  const pending = useMemo(() => entries.filter((e) => e.status === 'pending'), [entries])
+  const openTickets = useMemo(() => tickets.filter((t) => t.status === 'open'), [tickets])
   const history = useMemo(() => entries.filter((e) => e.status !== 'pending'), [entries])
+  const pendingByTicket = useMemo(() => new Set(entries.filter((e) => e.status === 'pending').map((e) => e.ticketId)), [entries])
   const approved = history.filter((e) => e.status === 'approved').length
   const rejected = history.filter((e) => e.status === 'rejected').length
-  const roleName = (id: string | null) => roles.find((r) => r.id === id)?.name
   const pingRole = roles.find((r) => r.id === draft.pingRoleId)
-  const approversFallback = draft.approverRoleIds.length === 0 && pingRole
+  const nextNumber = tickets.reduce((max, t) => Math.max(max, t.number), 0) + 1
 
   async function save() {
     setSaving(true)
@@ -163,8 +273,7 @@ export default function Verification() {
       const saved = await setRemote(guildId, draft)
       setSettings(saved)
       setDraft(saved)
-      const diagnose = isRemote ? bridge.getRemoteVerificationDiagnostics : bridge.getVerificationDiagnostics
-      diagnose(guildId).then(setDiagnostics).catch(() => undefined)
+      refreshLive()
       setSavedOk(true)
       setTimeout(() => setSavedOk(false), 2500)
     } catch (err) {
@@ -180,11 +289,30 @@ export default function Verification() {
     .split('{membro}')
     .join('@membro')
 
+  const set = <K extends keyof VerificationSettings>(key: K, value: VerificationSettings[K]) => setDraft((d) => ({ ...d, [key]: value }))
+
+  const templateInfo = editing ? TEMPLATE_INFO[editing] : null
+  const templatePlaceholders: Record<string, string> = {
+    membro: '@membro',
+    nome: 'membro',
+    avatar: '',
+    id: '123456789012345678',
+    numero: String(nextNumber),
+    cargo: pingRole ? `@${pingRole.name}` : '',
+    criada: '12/03/2023',
+    entrou: 'há 2 dias',
+    estado: 'aprovada ✅',
+    moderador: '@gestor',
+    cargosDados: roles.filter((r) => draft.addRoleIds.includes(r.id)).map((r) => `@${r.name}`).join(', ') || '—',
+    cargosTirados: roles.filter((r) => draft.removeRoleIds.includes(r.id)).map((r) => `@${r.name}`).join(', ') || '—',
+    servidor: guildName,
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Verificação"
-        subtitle="O membro manda o print do perfil com os cargos, o bot transforma-o num embed com ✅ ❌ e marca a gestão para aprovar"
+        subtitle="Painel com botão → ticket privado → o membro manda o print dos cargos → a gestão aprova com ✅ ou recusa com ❌"
         action={
           <div className="flex flex-wrap items-center gap-2">
             {isRemote && (
@@ -192,12 +320,12 @@ export default function Verification() {
                 <Radio size={11} /> A usar o bot remoto
               </Badge>
             )}
-            {settings.channelId ? (
+            {settings.channelId && settings.ticketCategoryId ? (
               <Badge tone="success">
-                <Radio size={11} /> Ativa em #{settings.channelName}
+                <Radio size={11} /> Painel em #{settings.channelName}
               </Badge>
             ) : (
-              <Badge tone="warning">Desligada</Badge>
+              <Badge tone="warning">Por configurar</Badge>
             )}
           </div>
         }
@@ -215,48 +343,23 @@ export default function Verification() {
         {loadError && <p className="mt-1.5 text-xs text-danger">❌ {loadError}</p>}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {STEPS.map((step, i) => (
-          <Card key={step.title} className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
-              <step.icon size={17} />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold tracking-[0.14em] text-faint uppercase">Passo {i + 1}</p>
-              <p className="text-sm font-bold text-text">{step.title}</p>
-              <p className="mt-0.5 text-xs text-muted">{step.text}</p>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {diagnostics && settings.channelId && (
+      {diagnostics && (
         <Card className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <Activity size={16} className="text-accent" />
             <h3 className="text-sm font-black tracking-wide uppercase">Diagnóstico</h3>
             <span className="text-[11px] text-faint">· atualiza sozinho a cada 15 s</span>
           </div>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
-            <Check ok={diagnostics.connected} label="Bot ligado à Discord" fail="O bot não está ligado." />
-            <Check
-              ok={diagnostics.messageContent}
-              label="Intent Message Content"
-              fail="Desligada — ativa em Developer Portal → Bot → Privileged Gateway Intents e reinicia o bot."
-            />
-            <Check
-              ok={diagnostics.channelOk && diagnostics.missingPermissions.length === 0}
-              label={`Permissões em #${settings.channelName ?? 'canal'}`}
-              fail={diagnostics.channelOk ? `Faltam: ${diagnostics.missingPermissions.join(', ')}` : 'O canal já não existe.'}
-            />
-            <Check ok={diagnostics.pingRoleOk} label="Cargo a marcar" fail="O cargo escolhido já não existe." />
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {diagnostics.checks.map((c) => (
+              <Check key={c.label} ok={c.ok} label={c.label} detail={c.detail} />
+            ))}
           </div>
           <div>
             <Label>O que o bot fez recentemente</Label>
             {diagnostics.events.length === 0 ? (
               <p className="mt-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-faint">
-                Ainda não chegou nenhuma mensagem ao bot neste canal desde que ele arrancou. Manda uma foto no canal — se continuar vazio, o bot não está
-                a receber as mensagens (confirma a intent Message Content e que o bot remoto foi atualizado).
+                Ainda nada desde que o bot arrancou. Clica no botão do painel no Discord para testar — a gestão não tem limite de tickets.
               </p>
             ) : (
               <div className="mt-1.5 flex max-h-56 flex-col overflow-y-auto rounded-lg border border-border bg-black/20">
@@ -275,32 +378,24 @@ export default function Verification() {
         </Card>
       )}
 
-      <Card className="flex flex-col gap-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <BadgeCheck size={16} className="text-accent" />
-            <h3 className="text-sm font-black tracking-wide uppercase">Configuração</h3>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="dark" onClick={() => setEditing('verificationRequest')} disabled={!guildId}>
+      {/* 1. Painel */}
+      <Card className="flex flex-col gap-4">
+        <SectionTitle
+          n={1}
+          icon={MousePointerClick}
+          title="Painel com o botão"
+          subtitle="Embed fixo num canal (ex.: #verificação) com o botão que abre o ticket."
+          actions={
+            <Button variant="dark" onClick={() => setEditing('verificationPanel')} disabled={!guildId}>
               <Palette size={14} />
-              Personalizar embed da verificação
+              Personalizar embed do painel
             </Button>
-            <Button variant="dark" onClick={() => setEditing('verificationLog')} disabled={!guildId}>
-              <ScrollText size={14} />
-              Personalizar log
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <Label>Canal de verificação</Label>
-            <select
-              value={draft.channelId ?? ''}
-              onChange={(e) => setDraft({ ...draft, channelId: e.target.value || null })}
-              className={`mt-1.5 ${inputClass}`}
-            >
+          }
+        />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="xl:col-span-2">
+            <Label>Canal do painel</Label>
+            <select value={draft.channelId ?? ''} onChange={(e) => set('channelId', e.target.value || null)} className={`mt-1.5 ${inputClass}`}>
               <option value="">Desligada</option>
               {channels.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -308,15 +403,140 @@ export default function Verification() {
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-[11px] text-faint">Onde os membros mandam a foto. A mensagem de explicação que já lá tens fica intacta.</p>
+            <Hint>Ao guardar, o bot publica (ou atualiza) o painel neste canal.</Hint>
           </div>
           <div>
+            <Label>Texto do botão</Label>
+            <input value={draft.buttonLabel} onChange={(e) => set('buttonLabel', e.target.value)} maxLength={80} className={`mt-1.5 ${inputClass}`} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label>Emoji</Label>
+              <input value={draft.buttonEmoji} onChange={(e) => set('buttonEmoji', e.target.value)} placeholder="✅" className={`mt-1.5 ${inputClass}`} />
+            </div>
+            <div>
+              <Label>Cor</Label>
+              <select value={draft.buttonStyle} onChange={(e) => set('buttonStyle', e.target.value as VerificationButtonStyle)} className={`mt-1.5 ${inputClass}`}>
+                <option value="success">Verde</option>
+                <option value="primary">Azul</option>
+                <option value="secondary">Cinzento</option>
+                <option value="danger">Vermelho</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] text-faint">Pré-visualização do botão:</span>
+          <span className={`inline-flex items-center gap-1.5 rounded px-4 py-1.5 text-sm font-medium text-white ${BUTTON_STYLE_CLASS[draft.buttonStyle]}`}>
+            {draft.buttonEmoji && <span>{draft.buttonEmoji}</span>}
+            {draft.buttonLabel || 'Verificar'}
+          </span>
+        </div>
+      </Card>
+
+      {/* 2. Tickets */}
+      <Card className="flex flex-col gap-4">
+        <SectionTitle
+          n={2}
+          icon={FolderLock}
+          title="Tickets"
+          subtitle="Canal privado criado ao clicar no botão — só o membro, a gestão (cargos de aprovação) e o bot o veem."
+          actions={
+            <Button variant="dark" onClick={() => setEditing('verificationTicket')} disabled={!guildId}>
+              <Palette size={14} />
+              Personalizar embed do ticket
+            </Button>
+          }
+        />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <Label>Categoria dos tickets</Label>
+            <select value={draft.ticketCategoryId ?? ''} onChange={(e) => set('ticketCategoryId', e.target.value || null)} className={`mt-1.5 ${inputClass}`}>
+              <option value="">Escolhe uma categoria…</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  📁 {c.name}
+                </option>
+              ))}
+            </select>
+            <Hint>Ex.: a categoria “Verifique-se”. O bot precisa de Gerir canais nela e de Gerir cargos no servidor.</Hint>
+          </div>
+          <div>
+            <Label>Nome do canal</Label>
+            <input value={draft.ticketNameTemplate} onChange={(e) => set('ticketNameTemplate', e.target.value)} maxLength={90} className={`mt-1.5 ${inputClass}`} />
+            <Hint>
+              Tokens: {TICKET_NAME_PLACEHOLDERS.map((t) => <code key={t} className="mr-1">{t}</code>)} · fica:{' '}
+              <span className="font-mono text-muted">#{previewTicketName(draft.ticketNameTemplate, 'thiagoanjoss', '123456789012345678', nextNumber)}</span>
+            </Hint>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label>Máx. de tickets</Label>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={draft.maxTicketsPerWindow}
+                onChange={(e) => set('maxTicketsPerWindow', Number(e.target.value))}
+                className={`mt-1.5 ${inputClass}`}
+              />
+            </div>
+            <div>
+              <Label>Por quantos minutos</Label>
+              <input
+                type="number"
+                min={1}
+                max={10080}
+                value={draft.ticketWindowMinutes}
+                onChange={(e) => set('ticketWindowMinutes', Number(e.target.value))}
+                className={`mt-1.5 ${inputClass}`}
+              />
+            </div>
+            <p className="col-span-2 text-[11px] text-faint">
+              Cada membro pode abrir no máximo {draft.maxTicketsPerWindow} ticket(s) a cada {draft.ticketWindowMinutes} min — e só um aberto de cada vez. A gestão não
+              tem limite (para poder testar).
+            </p>
+          </div>
+          <div>
+            <Label>Mensagem quando a verificação é decidida</Label>
+            <input value={draft.closeMessage} onChange={(e) => set('closeMessage', e.target.value)} maxLength={500} className={`mt-1.5 ${inputClass}`} />
+            <Hint>
+              Tokens: <code>{'{estado}'}</code> <code>{'{membro}'}</code> <code>{'{moderador}'}</code> <code>{'{segundos}'}</code> · depois o canal é apagado
+              sozinho.
+            </Hint>
+          </div>
+        </div>
+        <Toggle
+          checked={draft.deleteNonImage}
+          onChange={(v) => set('deleteNonImage', v)}
+          label="Apagar o texto que o membro mandar no ticket (com um aviso que desaparece) — só fotos contam; a gestão pode escrever à vontade"
+        />
+      </Card>
+
+      {/* 3. Aprovação */}
+      <Card className="flex flex-col gap-4">
+        <SectionTitle
+          n={3}
+          icon={ShieldCheck}
+          title="Foto, marcação e aprovação"
+          subtitle="O membro manda a foto no ticket → embed com ✅/❌ → marcação da gestão → um gestor decide."
+          actions={
+            <>
+              <Button variant="dark" onClick={() => setEditing('verificationRequest')} disabled={!guildId}>
+                <ImageIcon size={14} />
+                Personalizar embed da foto
+              </Button>
+              <Button variant="dark" onClick={() => setEditing('verificationLog')} disabled={!guildId}>
+                <ScrollText size={14} />
+                Personalizar log
+              </Button>
+            </>
+          }
+        />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div>
             <Label>Cargo a marcar</Label>
-            <select
-              value={draft.pingRoleId ?? ''}
-              onChange={(e) => setDraft({ ...draft, pingRoleId: e.target.value || null })}
-              className={`mt-1.5 ${inputClass}`}
-            >
+            <select value={draft.pingRoleId ?? ''} onChange={(e) => set('pingRoleId', e.target.value || null)} className={`mt-1.5 ${inputClass}`}>
               <option value="">Não marcar ninguém</option>
               {roles.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -324,28 +544,18 @@ export default function Verification() {
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-[11px] text-faint">Ex.: @Gestão — marcado numa mensagem simples, sem embed, logo a seguir ao embed.</p>
+            <Hint>Ex.: @Gestão — numa mensagem simples, sem embed, logo a seguir à foto.</Hint>
           </div>
           <div>
             <Label>Texto da marcação</Label>
-            <input
-              value={draft.pingText}
-              onChange={(e) => setDraft({ ...draft, pingText: e.target.value })}
-              className={`mt-1.5 ${inputClass}`}
-              maxLength={300}
-              placeholder="{cargo}"
-            />
-            <p className="mt-1 text-[11px] text-faint">
-              Tokens: <code>{'{cargo}'}</code> <code>{'{membro}'}</code> · fica assim: <span className="text-muted">{pingPreview}</span>
-            </p>
+            <input value={draft.pingText} onChange={(e) => set('pingText', e.target.value)} className={`mt-1.5 ${inputClass}`} maxLength={300} placeholder="{cargo}" />
+            <Hint>
+              <code>{'{cargo}'}</code> <code>{'{membro}'}</code> · fica: <span className="text-muted">{pingPreview}</span>
+            </Hint>
           </div>
           <div>
             <Label>Canal de log (opcional)</Label>
-            <select
-              value={draft.logChannelId ?? ''}
-              onChange={(e) => setDraft({ ...draft, logChannelId: e.target.value || null })}
-              className={`mt-1.5 ${inputClass}`}
-            >
+            <select value={draft.logChannelId ?? ''} onChange={(e) => set('logChannelId', e.target.value || null)} className={`mt-1.5 ${inputClass}`}>
               <option value="">Sem log</option>
               {channels.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -353,74 +563,76 @@ export default function Verification() {
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-[11px] text-faint">Guarda o resultado de cada verificação, com a foto, depois de o embed ser apagado.</p>
+            <Hint>Guarda o resultado com a foto, depois de o ticket ser apagado.</Hint>
           </div>
         </div>
 
         <div>
-          <Label>Quem pode aprovar ✅ / recusar ❌</Label>
-          <RoleChips roles={roles} selected={draft.approverRoleIds} onChange={(ids) => setDraft({ ...draft, approverRoleIds: ids })} tone="border-accent bg-accent-soft" />
-          <p className="mt-1 text-[11px] text-faint">
-            Quem tem <span className="text-muted">Administrador</span> pode sempre.{' '}
-            {approversFallback ? `Sem cargos escolhidos, vale o cargo marcado (@${pingRole.name}).` : ''} Reações de mais alguém são removidas na hora.
-          </p>
+          <Label>Gestão — quem vê os tickets e pode aprovar ✅ / recusar ❌</Label>
+          <RoleChips roles={roles} selected={draft.approverRoleIds} onChange={(ids) => set('approverRoleIds', ids)} tone="border-accent bg-accent-soft" />
+          <Hint>
+            Quem tem <span className="text-muted">Administrador</span> também pode sempre.{' '}
+            {draft.approverRoleIds.length === 0 && pingRole ? `Sem cargos escolhidos, vale o cargo marcado (@${pingRole.name}).` : ''} Reações de mais alguém são removidas.
+          </Hint>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <Label>Dar cargos ao aprovar (opcional)</Label>
-            <RoleChips roles={roles} selected={draft.addRoleIds} onChange={(ids) => setDraft({ ...draft, addRoleIds: ids })} tone="border-success bg-success/10" />
+            <RoleChips roles={roles} selected={draft.addRoleIds} onChange={(ids) => set('addRoleIds', ids)} tone="border-success bg-success/10" />
           </div>
           <div>
             <Label>Tirar cargos ao aprovar (opcional)</Label>
-            <RoleChips roles={roles} selected={draft.removeRoleIds} onChange={(ids) => setDraft({ ...draft, removeRoleIds: ids })} tone="border-danger bg-danger/10" />
-            <p className="mt-1 text-[11px] text-faint">Ex.: tirar o @Novato. O cargo do bot tem de estar acima destes cargos.</p>
+            <RoleChips roles={roles} selected={draft.removeRoleIds} onChange={(ids) => set('removeRoleIds', ids)} tone="border-danger bg-danger/10" />
+            <Hint>Ex.: tirar o @Novato. O cargo do bot tem de estar acima destes cargos.</Hint>
           </div>
         </div>
-
-        <Toggle
-          checked={draft.deleteNonImage}
-          onChange={(v) => setDraft({ ...draft, deleteNonImage: v })}
-          label="Apagar mensagens sem imagem no canal (com um aviso que desaparece sozinho) — texto da gestão nunca é apagado"
-        />
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={save} loading={saving} disabled={!guildId || !dirty}>
-            {savedOk ? 'Guardado ✓' : 'Guardar configuração'}
-          </Button>
-          {dirty && <span className="text-xs text-warning">Alterações por guardar</span>}
-        </div>
-        {saveError && <p className="text-xs text-danger">❌ {saveError}</p>}
       </Card>
 
+      <div className="sticky bottom-0 z-10 -mx-2 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-black/70 px-4 py-3 backdrop-blur">
+        <Button onClick={save} loading={saving} disabled={!guildId || !dirty}>
+          <BadgeCheck size={14} />
+          {savedOk ? 'Guardado ✓' : 'Guardar e publicar painel'}
+        </Button>
+        {dirty ? <span className="text-xs text-warning">Alterações por guardar</span> : <span className="text-xs text-faint">Tudo guardado</span>}
+        {saveError && <p className="w-full text-xs text-danger">❌ {saveError}</p>}
+      </div>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="À espera" value={pending.length} icon={Clock3} tone="amber" />
+        <StatCard label="Tickets abertos" value={openTickets.length} icon={Ticket} tone="amber" />
         <StatCard label="Aprovadas" value={approved} icon={CheckCircle2} tone="green" />
         <StatCard label="Recusadas" value={rejected} icon={XCircle} tone="pink" />
       </div>
 
       <Card className="p-0">
         <div className="border-b border-border px-5 py-4">
-          <h3 className="text-sm font-black tracking-wide uppercase">À espera de um gestor</h3>
-          <p className="text-[11px] text-faint">Pedidos com o embed publicado e ainda sem ✅ ou ❌</p>
+          <h3 className="text-sm font-black tracking-wide uppercase">Tickets abertos</h3>
+          <p className="text-[11px] text-faint">Canais de verificação que ainda não foram decididos nem fechados</p>
         </div>
-        {pending.length === 0 ? (
+        {openTickets.length === 0 ? (
           <div className="p-5">
-            <EmptyState title="Nenhuma verificação à espera" description="Quando alguém mandar a foto no canal, aparece aqui." />
+            <EmptyState title="Nenhum ticket aberto" description="Quando alguém clicar no botão do painel, aparece aqui." />
           </div>
         ) : (
-          pending.map((e) => (
-            <div key={e.id} className="flex items-center gap-3 border-t border-border/70 px-5 py-3 first:border-t-0">
-              <Avatar name={e.userTag} color="#f5b53d" size="sm" />
+          openTickets.map((t) => (
+            <div key={t.id} className="flex items-center gap-3 border-t border-border/70 px-5 py-3 first:border-t-0">
+              <Avatar name={t.userTag} color="#f5b53d" size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-text">{e.userTag}</p>
+                <p className="truncate text-sm font-semibold text-text">{t.userTag}</p>
                 <p className="text-[11px] text-faint">
-                  {e.imageCount} imagem(ns) · <Hash size={10} className="inline" />
-                  {settings.channelName ?? 'canal'}
+                  <Hash size={10} className="inline" />
+                  {t.channelName} · ticket #{t.number}
                 </p>
               </div>
-              <span className="text-xs text-muted" title={formatDateTime(e.createdAt)}>
-                {formatRelativeDate(e.createdAt)}
+              {pendingByTicket.has(t.id) ? (
+                <Badge tone="warning">
+                  <Clock3 size={10} /> Foto à espera da gestão
+                </Badge>
+              ) : (
+                <Badge tone="default">À espera da foto</Badge>
+              )}
+              <span className="text-xs text-muted" title={formatDateTime(t.createdAt)}>
+                {formatRelativeDate(t.createdAt)}
               </span>
             </div>
           ))
@@ -457,9 +669,7 @@ export default function Verification() {
                         <span className="font-semibold text-text">{e.userTag}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3">
-                      {e.status === 'approved' ? <Badge tone="success">✅ Aprovada</Badge> : <Badge tone="danger">❌ Recusada</Badge>}
-                    </td>
+                    <td className="px-5 py-3">{e.status === 'approved' ? <Badge tone="success">✅ Aprovada</Badge> : <Badge tone="danger">❌ Recusada</Badge>}</td>
                     <td className="px-5 py-3 text-xs text-muted">{e.moderatorTag ?? '—'}</td>
                     <td className="px-5 py-3 text-xs">
                       {e.rolesAdded?.map((n) => (
@@ -485,57 +695,24 @@ export default function Verification() {
         )}
       </Card>
 
-      <Card className="flex items-start gap-3 text-xs text-muted">
-        <ShieldCheck size={16} className="mt-0.5 shrink-0 text-accent" />
-        <p>
-          O bot precisa, no canal de verificação, de: <span className="text-text">Ver canal, Enviar mensagens, Inserir links, Anexar ficheiros, Adicionar
-          reações, Gerir mensagens e Ler histórico</span> — ao guardar, a app confirma tudo isto. Se o mesmo membro mandar outra foto antes de ser visto, o
-          pedido antigo é substituído. {roleName(draft.pingRoleId) ? '' : 'Sem cargo a marcar, só aparece o embed.'}
-        </p>
-      </Card>
-
-      <TemplateEditorModal
-        open={editing === 'verificationRequest'}
-        onClose={() => setEditing(null)}
-        kind="verificationRequest"
-        guildId={guildId}
-        isRemote={isRemote}
-        title="Personalizar embed da verificação"
-        hint="Embed publicado com a foto do membro, com as reações ✅ e ❌ por baixo. {avatar} serve como URL de miniatura ou ícone."
-        tokens={VERIFICATION_PLACEHOLDERS}
-        imageNote="A imagem grande é sempre a foto que o membro mandou."
-        previewPlaceholders={{
-          membro: '@membro',
-          nome: 'membro',
-          avatar: '',
-          id: '123456789012345678',
-          criada: '12/03/2023',
-          entrou: 'há 2 dias',
-          servidor: guildName,
-        }}
-      />
-      <TemplateEditorModal
-        open={editing === 'verificationLog'}
-        onClose={() => setEditing(null)}
-        kind="verificationLog"
-        guildId={guildId}
-        isRemote={isRemote}
-        title="Personalizar log da verificação"
-        hint="Enviado para o canal de log quando um gestor aprova ou recusa. {estado} fica 'aprovada ✅' ou 'recusada ❌'."
-        tokens={VERIFICATION_LOG_PLACEHOLDERS}
-        imageNote="A imagem grande é sempre a foto que o membro mandou."
-        previewPlaceholders={{
-          membro: '@membro',
-          nome: 'membro',
-          avatar: '',
-          id: '123456789012345678',
-          estado: 'aprovada ✅',
-          moderador: '@gestor',
-          cargosDados: '@Membro',
-          cargosTirados: '@Novato',
-          servidor: guildName,
-        }}
-      />
+      {editing && templateInfo && (
+        <TemplateEditorModal
+          open
+          onClose={() => {
+            setEditing(null)
+            refreshLive()
+          }}
+          kind={editing as EmbedTemplateKind}
+          guildId={guildId}
+          isRemote={isRemote}
+          title={templateInfo.title}
+          hint={templateInfo.hint}
+          tokens={templateInfo.tokens}
+          imageNote={templateInfo.imageNote}
+          previewContent={editing === 'verificationTicket' ? '@membro' : undefined}
+          previewPlaceholders={templatePlaceholders}
+        />
+      )}
     </div>
   )
 }

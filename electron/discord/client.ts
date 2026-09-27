@@ -8,7 +8,15 @@ import { applyBranding } from './branding'
 import { startReminderLoop } from './utilityCommands'
 import { commandsHash, isUpToDate, markSynced } from '../store/commandSync'
 import { handleAvisoMovButtons, startMovNoticeLoop } from './movNotices'
-import { handleVerificationMessage, handleVerificationMessageDelete, handleVerificationReaction } from './verification'
+import {
+  handleVerificationButtons,
+  handleVerificationChannelDelete,
+  handleVerificationMessage,
+  handleVerificationMessageDelete,
+  handleVerificationReaction,
+} from './verification'
+import { handleBulkDeleteLog, handleMessageDeleteLog, handleMessageEditLog, postMovPointsLog } from './serverLogs'
+import { onMovPointsLogged } from '../store/movPointsLog'
 
 /**
  * Envolve o Client do discord.js num singleton simples: liga, desliga e dá
@@ -27,6 +35,7 @@ class DiscordManager {
   private stopBranding: (() => void) | null = null
   private stopReminders: (() => void) | null = null
   private stopNotices: (() => void) | null = null
+  private stopPointsLog: (() => void) | null = null
   private messageContentEnabled = false
   private guildMembersEnabled = false
 
@@ -86,6 +95,10 @@ class DiscordManager {
           if (isAlreadyAcknowledgedError(err)) return
           console.error('Erro a processar botão de justificativa:', err)
         })
+        await handleVerificationButtons(interaction).catch((err) => {
+          if (isAlreadyAcknowledgedError(err)) return
+          console.error('Erro a processar botão de verificação:', err)
+        })
         await handleAvisoMovButtons(interaction).catch((err) => {
           if (isAlreadyAcknowledgedError(err)) return
           console.error('Erro a processar botão de aviso:', err)
@@ -102,6 +115,16 @@ class DiscordManager {
     })
     client.on(Events.MessageDelete, (message) => {
       handleVerificationMessageDelete(message).catch(() => undefined)
+      handleMessageDeleteLog(message).catch((err) => console.error('Erro no log de mensagens apagadas:', err))
+    })
+    client.on(Events.MessageBulkDelete, (messages, channel) => {
+      handleBulkDeleteLog(messages, channel.id, channel.guild).catch((err) => console.error('Erro no log de apagamento em massa:', err))
+    })
+    client.on(Events.MessageUpdate, (oldMessage, newMessage) => {
+      handleMessageEditLog(oldMessage, newMessage).catch((err) => console.error('Erro no log de mensagens editadas:', err))
+    })
+    client.on(Events.ChannelDelete, (channel) => {
+      handleVerificationChannelDelete(channel.id)
     })
 
     client.on(Events.GuildCreate, async (guild) => {
@@ -112,6 +135,9 @@ class DiscordManager {
     if (client.isReady()) this.stopBranding = applyBranding(client)
     this.stopReminders = startReminderLoop(client)
     this.stopNotices = startMovNoticeLoop(client)
+    this.stopPointsLog = onMovPointsLogged((entry) => {
+      postMovPointsLog(client, entry).catch((err) => console.error('Erro no log de pontos/horas:', err))
+    })
     // Registar comandos nunca pode prender a ligação (e com ela a app, presa em "A ligar o bot…"):
     // corre em segundo plano, e só envia o que mudou desde o último registo.
     void this.syncCommands(client)
@@ -156,6 +182,8 @@ class DiscordManager {
     this.stopReminders = null
     this.stopNotices?.()
     this.stopNotices = null
+    this.stopPointsLog?.()
+    this.stopPointsLog = null
     await this.client.destroy().catch(() => undefined)
     this.client = null
   }

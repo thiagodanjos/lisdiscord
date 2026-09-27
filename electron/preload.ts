@@ -154,6 +154,14 @@ const bridge: LisDiscordBridge = {
   listRemoteVerifications: (guildId) => ipcRenderer.invoke(IPC.listRemoteVerifications, guildId),
   getVerificationDiagnostics: (guildId) => ipcRenderer.invoke(IPC.getVerificationDiagnostics, guildId),
   getRemoteVerificationDiagnostics: (guildId) => ipcRenderer.invoke(IPC.getRemoteVerificationDiagnostics, guildId),
+  listVerificationTickets: (guildId) => ipcRenderer.invoke(IPC.listVerificationTickets, guildId),
+  listRemoteVerificationTickets: (guildId) => ipcRenderer.invoke(IPC.listRemoteVerificationTickets, guildId),
+  listCategories: (guildId) => ipcRenderer.invoke(IPC.listCategories, guildId),
+  listRemoteCategories: (guildId) => ipcRenderer.invoke(IPC.listRemoteCategories, guildId),
+  getServerLogSettings: (guildId) => ipcRenderer.invoke(IPC.getServerLogSettings, guildId),
+  setServerLogSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setServerLogSettings, guildId, settings),
+  getRemoteServerLogSettings: (guildId) => ipcRenderer.invoke(IPC.getRemoteServerLogSettings, guildId),
+  setRemoteServerLogSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setRemoteServerLogSettings, guildId, settings),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

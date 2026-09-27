@@ -292,6 +292,12 @@ export type EmbedTemplateKind =
   | 'avisoMov'
   | 'verificationRequest'
   | 'verificationLog'
+  | 'verificationPanel'
+  | 'verificationTicket'
+  | 'logMessageDelete'
+  | 'logMessageEdit'
+  | 'logPoints'
+  | 'logHours'
 
 export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'pontosBoard',
@@ -307,6 +313,12 @@ export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'avisoMov',
   'verificationRequest',
   'verificationLog',
+  'verificationPanel',
+  'verificationTicket',
+  'logMessageDelete',
+  'logMessageEdit',
+  'logPoints',
+  'logHours',
 ]
 
 /** Tokens disponíveis nas mensagens que o bot manda quando alguém se justifica (ou pede remoção). */
@@ -584,16 +596,33 @@ export const MOV_NOTICE_PLACEHOLDERS = ['{mensagem}', '{autor}', '{nomeAutor}', 
 // Verificação por foto
 // ==========================================================================
 
+export type VerificationButtonStyle = 'success' | 'primary' | 'secondary' | 'danger'
+
 export interface VerificationSettings {
-  /** Canal onde os membros mandam a foto do perfil com os cargos. */
+  /** Canal do painel — onde fica o embed com o botão "Verificar". */
   channelId: string | null
   channelName: string | null
-  /** Cargo marcado na mensagem simples (sem embed) depois do embed. */
+  /** Mensagem do painel já publicada (para ser atualizada em vez de duplicada). */
+  panelMessageId: string | null
+  buttonLabel: string
+  buttonEmoji: string
+  buttonStyle: VerificationButtonStyle
+  /** Categoria onde os canais de ticket são criados. */
+  ticketCategoryId: string | null
+  ticketCategoryName: string | null
+  /** Nome do canal de ticket — {usuario}, {id}, {numero}. */
+  ticketNameTemplate: string
+  /** Quantos tickets cada membro pode abrir dentro da janela de tempo (gestão não tem limite). */
+  maxTicketsPerWindow: number
+  ticketWindowMinutes: number
+  /** Mensagem no ticket depois de um gestor decidir — {estado}, {membro}, {moderador}, {segundos}. */
+  closeMessage: string
+  /** Cargo marcado na mensagem simples (sem embed) depois do embed com a foto. */
   pingRoleId: string | null
   pingRoleName: string | null
   /** Texto da marcação — {cargo} e {membro}. */
   pingText: string
-  /** Cargos que podem aprovar/recusar (além de quem tem Administrador). */
+  /** Cargos que podem aprovar/recusar e que veem os tickets (além de quem tem Administrador). */
   approverRoleIds: string[]
   /** Cargos dados ao membro quando é aprovado (opcional). */
   addRoleIds: string[]
@@ -602,8 +631,23 @@ export interface VerificationSettings {
   /** Canal de log com o resultado de cada verificação (opcional). */
   logChannelId: string | null
   logChannelName: string | null
-  /** Apagar mensagens sem imagem no canal de verificação (com aviso temporário). */
+  /** Apagar texto do membro dentro do ticket (com aviso temporário) — só fotos contam. */
   deleteNonImage: boolean
+}
+
+export interface VerificationTicket {
+  id: string
+  guildId: string
+  channelId: string
+  channelName: string
+  userId: string
+  userTag: string
+  number: number
+  createdAt: string
+  status: 'open' | 'closed'
+  closedAt?: string
+  closedByTag?: string
+  result?: 'approved' | 'rejected' | 'closed'
 }
 
 export type VerificationStatus = 'pending' | 'approved' | 'rejected'
@@ -617,6 +661,7 @@ export interface VerificationEntry {
   userAvatar: string | null
   embedMessageId: string
   pingMessageId: string | null
+  ticketId?: string
   imageCount: number
   createdAt: string
   status: VerificationStatus
@@ -635,15 +680,35 @@ export interface VerificationEvent {
 
 /** O que a página Verificação mostra no diagnóstico — tudo o que pode impedir a verificação de funcionar. */
 export interface VerificationDiagnostics {
-  connected: boolean
-  messageContent: boolean
-  channelOk: boolean
-  missingPermissions: string[]
-  pingRoleOk: boolean
+  checks: { label: string; ok: boolean; detail?: string }[]
   events: VerificationEvent[]
 }
 
+export const VERIFICATION_PANEL_PLACEHOLDERS = ['{servidor}'] as const
+export const VERIFICATION_TICKET_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{numero}', '{cargo}', '{servidor}'] as const
+export const TICKET_NAME_PLACEHOLDERS = ['{usuario}', '{id}', '{numero}'] as const
 export const VERIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{criada}', '{entrou}', '{servidor}'] as const
 export const VERIFICATION_LOG_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{estado}', '{moderador}', '{cargosDados}', '{cargosTirados}', '{servidor}'] as const
 export const VERIFY_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{pontos}', '{horas}', '{cargos}', '{cumpridos}', '{total}', '{servidor}'] as const
 export const VERIFY_LINE_PLACEHOLDERS = ['{cargo}', '{cargoNome}', '{pontos}', '{metaPontos}', '{horas}', '{metaHoras}', '{faltamPontos}', '{faltamHoras}'] as const
+
+// ==========================================================================
+// Canais de log do servidor (mensagens apagadas/editadas, pontos, horas)
+// ==========================================================================
+
+export interface ServerLogSettings {
+  messageDeleteChannelId: string | null
+  messageDeleteChannelName: string | null
+  messageEditChannelId: string | null
+  messageEditChannelName: string | null
+  pointsChannelId: string | null
+  pointsChannelName: string | null
+  hoursChannelId: string | null
+  hoursChannelName: string | null
+  /** Não registar mensagens de bots. */
+  ignoreBots: boolean
+}
+
+export const LOG_DELETE_PLACEHOLDERS = ['{autor}', '{nomeAutor}', '{avatarAutor}', '{idAutor}', '{canal}', '{conteudo}', '{anexos}', '{apagadaPor}', '{enviadaEm}', '{idMensagem}'] as const
+export const LOG_EDIT_PLACEHOLDERS = ['{autor}', '{nomeAutor}', '{avatarAutor}', '{idAutor}', '{canal}', '{antes}', '{depois}', '{link}'] as const
+export const LOG_POINTS_PLACEHOLDERS = ['{membro}', '{nomeMembro}', '{acao}', '{quantidade}', '{total}', '{autor}', '{nota}'] as const

@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import type { Guild } from 'discord.js'
-import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovPointsEntry, type SendMessageOptions, type VerificationSettings } from '../shared/types'
+import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings } from '../shared/types'
 import { discordManager } from '../electron/discord/client'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
 import { applyJustificationChannel, postJustificationMessage } from '../electron/discord/justifications'
@@ -30,10 +30,17 @@ import * as embedTemplatesStore from '../electron/store/embedTemplates'
 import * as movNoticesStore from '../electron/store/movNotices'
 import * as verificationStore from '../electron/store/verification'
 import { createNotice } from '../electron/discord/movNotices'
-import { applyVerificationSettings, getVerificationDiagnostics } from '../electron/discord/verification'
+import { applyVerificationSettings, getVerificationDiagnostics, postVerificationPanel } from '../electron/discord/verification'
+import { applyServerLogSettings } from '../electron/discord/serverLogs'
+import * as serverLogsStore from '../electron/store/serverLogs'
+import { listGuildCategories } from '../electron/discord/memberProfile'
 
 /** Mesma lógica que o IPC da app usa — atualiza logo a mensagem já publicada quando o template muda. */
 async function refreshEmbedTemplateTarget(guild: Guild, kind: EmbedTemplateKind): Promise<void> {
+  if (kind === 'verificationPanel') {
+    await postVerificationPanel(guild).catch(() => undefined)
+    return
+  }
   if (kind === 'pontosBoard') {
     await refreshBoard(guild).catch(() => undefined)
     return
@@ -153,7 +160,9 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     (req.method === 'GET' && parts.length === 6 && isGuildRoute && parts[3] === 'members' && parts[5] === 'profile') ||
     (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'messages') ||
     (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'notices') ||
-    (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'verification' && parts[4] === 'settings')
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'verification' && parts[4] === 'settings') ||
+    (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'categories') ||
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'logs' && parts[4] === 'settings')
 
   if (needsConnection && !discordManager.isConnected()) {
     sendJson(res, 503, { error: 'O bot não está ligado à Discord neste momento.' })
@@ -434,6 +443,35 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     // GET /api/guilds/:guildId/verification
     if (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'verification') {
       sendJson(res, 200, verificationStore.listVerifications(parts[2]))
+      return
+    }
+
+    // GET /api/guilds/:guildId/verification/tickets
+    if (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'verification' && parts[4] === 'tickets') {
+      sendJson(res, 200, verificationStore.listTickets(parts[2]))
+      return
+    }
+
+    // GET /api/guilds/:guildId/categories
+    if (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'categories') {
+      sendJson(res, 200, await listGuildCategories(await discordManager.getClient().guilds.fetch(parts[2])))
+      return
+    }
+
+    // GET /api/guilds/:guildId/logs/settings
+    if (req.method === 'GET' && parts.length === 5 && isGuildRoute && parts[3] === 'logs' && parts[4] === 'settings') {
+      sendJson(res, 200, serverLogsStore.getServerLogSettings(parts[2]))
+      return
+    }
+
+    // POST /api/guilds/:guildId/logs/settings  { settings: ServerLogSettings }
+    if (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'logs' && parts[4] === 'settings') {
+      const body = (await readJsonBody(req)) as { settings?: ServerLogSettings }
+      if (!body.settings) {
+        sendJson(res, 400, { error: 'Falta o campo "settings".' })
+        return
+      }
+      sendJson(res, 200, await applyServerLogSettings(await discordManager.getClient().guilds.fetch(parts[2]), body.settings))
       return
     }
 

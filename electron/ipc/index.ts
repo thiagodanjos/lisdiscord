@@ -24,7 +24,9 @@ import type {
   JustificationSettings,
   MovNotice,
   MovNoticeInput,
+  ServerLogSettings,
   VerificationDiagnostics,
+  VerificationTicket,
   VerificationEntry,
   VerificationSettings,
   LoginHistoryEntry,
@@ -82,7 +84,10 @@ import * as auth from '../auth/auth'
 import * as movNoticesStore from '../store/movNotices'
 import * as verificationStore from '../store/verification'
 import { createNotice } from '../discord/movNotices'
-import { applyVerificationSettings, getVerificationDiagnostics } from '../discord/verification'
+import { applyVerificationSettings, getVerificationDiagnostics, postVerificationPanel } from '../discord/verification'
+import { applyServerLogSettings } from '../discord/serverLogs'
+import * as serverLogsStore from '../store/serverLogs'
+import { listGuildCategories } from '../discord/memberProfile'
 
 /** Identifica no log de pontos ações feitas pela app desktop (em vez de comandos do Discord). */
 const DESKTOP_APP_ACTOR = 'Aplicação desktop'
@@ -464,6 +469,26 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle(IPC.getRemoteVerificationDiagnostics, async (_e, guildId: string): Promise<VerificationDiagnostics> =>
     remoteApi(requireRemoteCredentials()).getVerificationDiagnostics(guildId),
   )
+  ipcMain.handle(IPC.listVerificationTickets, async (_e, guildId: string): Promise<VerificationTicket[]> => verificationStore.listTickets(guildId))
+  ipcMain.handle(IPC.listRemoteVerificationTickets, async (_e, guildId: string): Promise<VerificationTicket[]> =>
+    remoteApi(requireRemoteCredentials()).listVerificationTickets(guildId),
+  )
+  ipcMain.handle(IPC.listCategories, async (_e, guildId: string): Promise<ChannelPickerEntry[]> =>
+    listGuildCategories(await discordManager.getClient().guilds.fetch(guildId)),
+  )
+  ipcMain.handle(IPC.listRemoteCategories, async (_e, guildId: string): Promise<ChannelPickerEntry[]> => remoteApi(requireRemoteCredentials()).listCategories(guildId))
+
+  // ---- Canais de log (mensagens apagadas/editadas, pontos, horas) ----
+  ipcMain.handle(IPC.getServerLogSettings, async (_e, guildId: string): Promise<ServerLogSettings> => serverLogsStore.getServerLogSettings(guildId))
+  ipcMain.handle(IPC.setServerLogSettings, async (_e, guildId: string, settings: ServerLogSettings): Promise<ServerLogSettings> =>
+    applyServerLogSettings(await discordManager.getClient().guilds.fetch(guildId), settings),
+  )
+  ipcMain.handle(IPC.getRemoteServerLogSettings, async (_e, guildId: string): Promise<ServerLogSettings> =>
+    remoteApi(requireRemoteCredentials()).getServerLogSettings(guildId),
+  )
+  ipcMain.handle(IPC.setRemoteServerLogSettings, async (_e, guildId: string, settings: ServerLogSettings): Promise<ServerLogSettings> =>
+    remoteApi(requireRemoteCredentials()).setServerLogSettings(guildId, settings),
+  )
   ipcMain.handle(IPC.listRemoteVerifications, async (_e, guildId: string): Promise<VerificationEntry[]> =>
     remoteApi(requireRemoteCredentials()).listVerifications(guildId),
   )
@@ -658,6 +683,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
  * veria na próxima vez que algo mudasse pontos ou o canal fosse reconfigurado.
  */
 async function refreshEmbedTemplateTarget(guild: Guild, kind: EmbedTemplateKind): Promise<void> {
+  if (kind === 'verificationPanel') {
+    await postVerificationPanel(guild).catch(() => undefined)
+    return
+  }
   if (kind === 'pontosBoard') {
     await refreshBoard(guild).catch(() => undefined)
     return

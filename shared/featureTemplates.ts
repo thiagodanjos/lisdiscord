@@ -65,6 +65,57 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     ],
     footer: 'ID: {id}',
   }),
+  verificationPanel: draft({
+    title: 'Verificação Mov Call',
+    description:
+      'Seja bem-vindo ao servidor interno de Mov Call!\n\n' +
+      'Para retirar o cargo de novato e ter acesso ao resto dos canais, clica em **Verificar** abaixo. ' +
+      'Vai ser criado um canal só teu, onde envias uma comprovação bem nítida dos teus cargos na CDO.',
+    color: '#ED4245',
+    timestamp: false,
+    footer: '{servidor}',
+  }),
+  verificationTicket: draft({
+    title: '📋 Ticket de verificação #{numero}',
+    description:
+      'Olá {membro}! 👋\n\n' +
+      'Envia aqui um **print do teu perfil** onde se vejam bem os teus cargos na CDO.\n' +
+      'Só imagens contam — texto é apagado. Um gestor vai rever e aprovar ou recusar.',
+    color: '#5865F2',
+    thumbnailUrl: '{avatar}',
+    footer: 'Só tu e a gestão veem este canal.',
+  }),
+  logMessageDelete: draft({
+    title: '🗑️ Mensagem apagada',
+    description: '**Autor:** {autor}\n**Canal:** {canal}\n**Apagada por:** {apagadaPor}\n**Enviada:** {enviadaEm}\n\n**Conteúdo:**\n{conteudo}',
+    color: '#ED4245',
+    thumbnailUrl: '{avatarAutor}',
+    fields: [{ name: 'Anexos', value: '{anexos}', inline: false }],
+    footer: 'Autor: {idAutor} · Mensagem: {idMensagem}',
+  }),
+  logMessageEdit: draft({
+    title: '✏️ Mensagem editada',
+    description: '**Autor:** {autor}\n**Canal:** {canal} · [ir para a mensagem]({link})',
+    color: '#F0B232',
+    thumbnailUrl: '{avatarAutor}',
+    fields: [
+      { name: 'Antes', value: '{antes}', inline: false },
+      { name: 'Depois', value: '{depois}', inline: false },
+    ],
+    footer: 'Autor: {idAutor}',
+  }),
+  logPoints: draft({
+    title: '🏅 Pontos de Mov. Call',
+    description: '{autor} **{acao}** {quantidade} pontos a {membro}.\n**Total agora:** {total}',
+    color: '#F0B232',
+    fields: [{ name: 'Nota', value: '{nota}', inline: false }],
+  }),
+  logHours: draft({
+    title: '⏱️ Horas de Mov. Call',
+    description: '{autor} **{acao}** {quantidade} a {membro}.\n**Total agora:** {total}',
+    color: '#22D3EE',
+    fields: [{ name: 'Nota', value: '{nota}', inline: false }],
+  }),
 } satisfies Record<string, EmbedDraft>
 
 export interface VerifyProfileInput {

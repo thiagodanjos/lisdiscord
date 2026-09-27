@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { AlertTriangle, Loader2, X } from 'lucide-react'
 import { type ButtonHTMLAttributes, type ReactNode, forwardRef, useEffect } from 'react'
 import { cn, initials } from '../lib/utils'
@@ -229,7 +230,11 @@ export function Modal({
   }, [open, onClose])
 
   if (!open) return null
-  return (
+  // Portal para o <body>: a animação de entrada das páginas deixa um `transform` no conteúdo, e um
+  // `position: fixed` dentro de um elemento com transform fica preso a ele — em páginas compridas
+  // (ex.: Pontos MOV com o ranking inteiro) o modal abria a meio da página, fora do ecrã, e só se via
+  // o fundo escurecido.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
       <div
         className={cn(
@@ -245,7 +250,8 @@ export function Modal({
         </div>
         <div className="overflow-y-auto px-5 py-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { VerificationEntry, VerificationSettings } from '../../shared/types'
+import type { VerificationEntry, VerificationSettings, VerificationTicket } from '../../shared/types'
 import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
@@ -7,11 +7,26 @@ import { paths } from './paths'
 const MAX_HISTORY_PER_GUILD = 200
 
 export const DEFAULT_PING_TEXT = '{cargo}'
+export const DEFAULT_TICKET_NAME = 'verificacao-{usuario}'
+export const DEFAULT_CLOSE_MESSAGE = 'Verificação **{estado}** por {moderador}. Este canal vai ser apagado em {segundos} segundos.'
+/** Quanto tempo o ticket fica aberto depois de um gestor decidir, antes de ser apagado. */
+export const CLOSE_DELAY_SECONDS = 10
+const MAX_CLOSED_TICKETS_PER_GUILD = 300
 
 export function defaultVerificationSettings(): VerificationSettings {
   return {
     channelId: null,
     channelName: null,
+    panelMessageId: null,
+    buttonLabel: 'Verificar',
+    buttonEmoji: '✅',
+    buttonStyle: 'success',
+    ticketCategoryId: null,
+    ticketCategoryName: null,
+    ticketNameTemplate: DEFAULT_TICKET_NAME,
+    maxTicketsPerWindow: 2,
+    ticketWindowMinutes: 60,
+    closeMessage: DEFAULT_CLOSE_MESSAGE,
     pingRoleId: null,
     pingRoleName: null,
     pingText: DEFAULT_PING_TEXT,
@@ -41,10 +56,75 @@ export function saveVerificationSettings(guildId: string, settings: Verification
   return settings
 }
 
-/** Servidor cujo canal de verificação é este canal (ou null). */
-export function guildForVerificationChannel(guildId: string, channelId: string): VerificationSettings | null {
-  const settings = readSettings()[guildId]
-  return settings?.channelId === channelId ? { ...defaultVerificationSettings(), ...settings } : null
+export function setPanelMessageId(guildId: string, messageId: string | null): void {
+  const all = readSettings()
+  all[guildId] = { ...defaultVerificationSettings(), ...all[guildId], panelMessageId: messageId }
+  writeJsonFile(paths.verificationSettingsFile, all)
+}
+
+// ---- Tickets ----
+
+function readTickets(): VerificationTicket[] {
+  return readJsonFile<VerificationTicket[]>(paths.verificationTicketsFile, [])
+}
+
+function writeTickets(list: VerificationTicket[]): void {
+  const perGuild = new Map<string, number>()
+  const sorted = [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  writeJsonFile(
+    paths.verificationTicketsFile,
+    sorted.filter((t) => {
+      if (t.status === 'open') return true
+      const n = (perGuild.get(t.guildId) ?? 0) + 1
+      perGuild.set(t.guildId, n)
+      return n <= MAX_CLOSED_TICKETS_PER_GUILD
+    }),
+  )
+}
+
+export function listTickets(guildId: string): VerificationTicket[] {
+  return readTickets()
+    .filter((t) => t.guildId === guildId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+export function findOpenTicketByChannel(channelId: string): VerificationTicket | null {
+  return readTickets().find((t) => t.status === 'open' && t.channelId === channelId) ?? null
+}
+
+export function findOpenTicketByUser(guildId: string, userId: string): VerificationTicket | null {
+  return readTickets().find((t) => t.status === 'open' && t.guildId === guildId && t.userId === userId) ?? null
+}
+
+/** Tickets que o membro abriu dentro da janela de tempo (para o limite de N por hora). */
+export function ticketsOpenedSince(guildId: string, userId: string, since: Date): VerificationTicket[] {
+  return readTickets().filter((t) => t.guildId === guildId && t.userId === userId && new Date(t.createdAt) >= since)
+}
+
+export function nextTicketNumber(guildId: string): number {
+  return readTickets().filter((t) => t.guildId === guildId).reduce((max, t) => Math.max(max, t.number), 0) + 1
+}
+
+export function addTicket(ticket: Omit<VerificationTicket, 'id' | 'createdAt' | 'status'>): VerificationTicket {
+  const created: VerificationTicket = { ...ticket, id: randomUUID().slice(0, 8), createdAt: new Date().toISOString(), status: 'open' }
+  writeTickets([...readTickets(), created])
+  return created
+}
+
+export function closeTicket(id: string, result: NonNullable<VerificationTicket['result']>, closedByTag: string): VerificationTicket | null {
+  const all = readTickets()
+  const ticket = all.find((t) => t.id === id && t.status === 'open')
+  if (!ticket) return null
+  ticket.status = 'closed'
+  ticket.closedAt = new Date().toISOString()
+  ticket.closedByTag = closedByTag
+  ticket.result = result
+  writeTickets(all)
+  return ticket
+}
+
+export function findPendingByTicket(ticketId: string): VerificationEntry | null {
+  return readEntries().find((e) => e.status === 'pending' && e.ticketId === ticketId) ?? null
 }
 
 // ---- Pedidos (pendentes + histórico) ----

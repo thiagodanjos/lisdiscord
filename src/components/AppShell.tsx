@@ -101,6 +101,7 @@ const NAV: NavSection[] = [
     items: [
       { to: '/moderacao', label: 'Moderação', icon: ShieldAlert },
       { to: '/logs-limpeza', label: 'Logs de limpeza', icon: Eraser },
+      { to: '/canais-log', label: 'Canais de log', icon: ScrollText },
     ],
   },
   {
