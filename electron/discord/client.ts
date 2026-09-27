@@ -13,7 +13,6 @@ import {
   handleVerificationChannelDelete,
   handleVerificationMessage,
   handleVerificationMessageDelete,
-  handleVerificationReaction,
 } from './verification'
 import { handleBulkDeleteLog, handleMessageDeleteLog, handleMessageEditLog, postMovPointsLog } from './serverLogs'
 import { onMovPointsLogged } from '../store/movPointsLog'
@@ -106,12 +105,9 @@ class DiscordManager {
       }
     })
 
-    // Verificação por foto: foto no canal → embed com ✅/❌; reação de um gestor → aprova/recusa.
+    // Verificação: foto no ticket → embed com os botões da gestão (Assumir · Finalizar · Cancelar).
     client.on(Events.MessageCreate, (message) => {
       handleVerificationMessage(message).catch((err) => console.error('Erro na verificação por foto:', err))
-    })
-    client.on(Events.MessageReactionAdd, (reaction, user) => {
-      handleVerificationReaction(reaction, user, client).catch((err) => console.error('Erro a processar reação de verificação:', err))
     })
     client.on(Events.MessageDelete, (message) => {
       handleVerificationMessageDelete(message).catch(() => undefined)

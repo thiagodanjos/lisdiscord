@@ -27,6 +27,10 @@ export function defaultVerificationSettings(): VerificationSettings {
     maxTicketsPerWindow: 2,
     ticketWindowMinutes: 60,
     closeMessage: DEFAULT_CLOSE_MESSAGE,
+    claimLabel: 'Assumir',
+    finishLabel: 'Finalizar',
+    cancelLabel: 'Cancelar',
+    staffPanelLabel: 'Painel staff',
     pingRoleId: null,
     pingRoleName: null,
     pingText: DEFAULT_PING_TEXT,
@@ -179,6 +183,7 @@ export function decide(
   status: 'approved' | 'rejected',
   moderator: { id: string; tag: string },
   roles: { added: string[]; removed: string[] },
+  cancelReason?: string,
 ): VerificationEntry | null {
   const all = readEntries()
   const entry = all.find((e) => e.id === id && e.status === 'pending')
@@ -189,6 +194,21 @@ export function decide(
   entry.moderatorTag = moderator.tag
   entry.rolesAdded = roles.added
   entry.rolesRemoved = roles.removed
+  if (cancelReason) entry.cancelReason = cancelReason
   writeEntries(all)
   return entry
+}
+
+/** Atualiza campos de um pedido pendente (assumir, cargos escolhidos no painel staff). */
+export function updatePending(id: string, patch: Partial<Pick<VerificationEntry, 'claimedById' | 'claimedByTag' | 'claimedAt' | 'manualRoleIds'>>): VerificationEntry | null {
+  const all = readEntries()
+  const entry = all.find((e) => e.id === id && e.status === 'pending')
+  if (!entry) return null
+  Object.assign(entry, patch)
+  writeEntries(all)
+  return entry
+}
+
+export function findPendingById(id: string): VerificationEntry | null {
+  return readEntries().find((e) => e.id === id && e.status === 'pending') ?? null
 }

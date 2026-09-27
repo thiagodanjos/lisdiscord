@@ -622,6 +622,11 @@ export interface VerificationSettings {
   pingRoleName: string | null
   /** Texto da marcação — {cargo} e {membro}. */
   pingText: string
+  /** Textos dos botões da gestão no embed da foto. */
+  claimLabel: string
+  finishLabel: string
+  cancelLabel: string
+  staffPanelLabel: string
   /** Cargos que podem aprovar/recusar e que veem os tickets (além de quem tem Administrador). */
   approverRoleIds: string[]
   /** Cargos dados ao membro quando é aprovado (opcional). */
@@ -663,6 +668,12 @@ export interface VerificationEntry {
   pingMessageId: string | null
   ticketId?: string
   imageCount: number
+  claimedById?: string
+  claimedByTag?: string
+  claimedAt?: string
+  /** Cargos escolhidos pelo gestor no painel staff (já dados ao membro). */
+  manualRoleIds?: string[]
+  cancelReason?: string
   createdAt: string
   status: VerificationStatus
   decidedAt?: string
@@ -687,8 +698,8 @@ export interface VerificationDiagnostics {
 export const VERIFICATION_PANEL_PLACEHOLDERS = ['{servidor}'] as const
 export const VERIFICATION_TICKET_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{numero}', '{cargo}', '{servidor}'] as const
 export const TICKET_NAME_PLACEHOLDERS = ['{usuario}', '{id}', '{numero}'] as const
-export const VERIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{criada}', '{entrou}', '{servidor}'] as const
-export const VERIFICATION_LOG_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{estado}', '{moderador}', '{cargosDados}', '{cargosTirados}', '{servidor}'] as const
+export const VERIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{criada}', '{entrou}', '{responsavel}', '{estado}', '{servidor}'] as const
+export const VERIFICATION_LOG_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{estado}', '{moderador}', '{responsavel}', '{cargosDados}', '{cargosTirados}', '{motivo}', '{ticket}', '{duracao}', '{servidor}'] as const
 export const VERIFY_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{pontos}', '{horas}', '{cargos}', '{cumpridos}', '{total}', '{servidor}'] as const
 export const VERIFY_LINE_PLACEHOLDERS = ['{cargo}', '{cargoNome}', '{pontos}', '{metaPontos}', '{horas}', '{metaHoras}', '{faltamPontos}', '{faltamHoras}'] as const
 

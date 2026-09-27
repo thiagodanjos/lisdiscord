@@ -56,6 +56,10 @@ const EMPTY_SETTINGS: VerificationSettings = {
   maxTicketsPerWindow: 2,
   ticketWindowMinutes: 60,
   closeMessage: 'Verificação **{estado}** por {moderador}. Este canal vai ser apagado em {segundos} segundos.',
+  claimLabel: 'Assumir',
+  finishLabel: 'Finalizar',
+  cancelLabel: 'Cancelar',
+  staffPanelLabel: 'Painel staff',
   pingRoleId: null,
   pingRoleName: null,
   pingText: '{cargo}',
@@ -90,13 +94,13 @@ const TEMPLATE_INFO: Record<
   },
   verificationRequest: {
     title: 'Personalizar embed da foto',
-    hint: 'Embed publicado com a foto do membro, com as reações ✅ e ❌ por baixo.',
+    hint: 'Embed publicado com a foto do membro, com os botões da gestão por baixo. {responsavel} e {estado} atualizam sozinhos quando alguém assume.',
     tokens: VERIFICATION_PLACEHOLDERS,
     imageNote: 'A imagem grande é sempre a foto que o membro mandou.',
   },
   verificationLog: {
     title: 'Personalizar log da verificação',
-    hint: "Enviado para o canal de log quando um gestor aprova ou recusa. {estado} fica 'aprovada ✅' ou 'recusada ❌'.",
+    hint: "Enviado para o canal de log quando um gestor finaliza ou cancela. {estado} fica 'finalizada ✅' ou 'cancelada ✖️'; {motivo} é o motivo do cancelamento; {duracao} o tempo desde que o ticket abriu.",
     tokens: VERIFICATION_LOG_PLACEHOLDERS,
     imageNote: 'A imagem grande é sempre a foto que o membro mandou.',
   },
@@ -301,8 +305,12 @@ export default function Verification() {
     cargo: pingRole ? `@${pingRole.name}` : '',
     criada: '12/03/2023',
     entrou: 'há 2 dias',
-    estado: 'aprovada ✅',
+    estado: editing === 'verificationLog' ? 'finalizada ✅' : '🟡 Em análise',
+    responsavel: '@gestor',
     moderador: '@gestor',
+    motivo: '—',
+    ticket: String(nextNumber),
+    duracao: '12 min',
     cargosDados: roles.filter((r) => draft.addRoleIds.includes(r.id)).map((r) => `@${r.name}`).join(', ') || '—',
     cargosTirados: roles.filter((r) => draft.removeRoleIds.includes(r.id)).map((r) => `@${r.name}`).join(', ') || '—',
     servidor: guildName,
@@ -312,7 +320,7 @@ export default function Verification() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Verificação"
-        subtitle="Painel com botão → ticket privado → o membro manda o print dos cargos → a gestão aprova com ✅ ou recusa com ❌"
+        subtitle="Painel com botão → ticket privado → o membro manda o print dos cargos → a gestão assume, escolhe os cargos e finaliza"
         action={
           <div className="flex flex-wrap items-center gap-2">
             {isRemote && (
@@ -518,8 +526,8 @@ export default function Verification() {
         <SectionTitle
           n={3}
           icon={ShieldCheck}
-          title="Foto, marcação e aprovação"
-          subtitle="O membro manda a foto no ticket → embed com ✅/❌ → marcação da gestão → um gestor decide."
+          title="Foto e botões da gestão"
+          subtitle="O membro manda a foto no ticket → embed com os botões da gestão → marcação → um gestor assume, escolhe os cargos num painel só dele e finaliza."
           actions={
             <>
               <Button variant="dark" onClick={() => setEditing('verificationRequest')} disabled={!guildId}>
@@ -568,21 +576,49 @@ export default function Verification() {
         </div>
 
         <div>
-          <Label>Gestão — quem vê os tickets e pode aprovar ✅ / recusar ❌</Label>
+          <Label>Botões no embed da foto</Label>
+          <div className="mt-1.5 grid grid-cols-2 gap-2 md:grid-cols-4">
+            {(
+              [
+                ['claimLabel', 'Assumir'],
+                ['finishLabel', 'Finalizar'],
+                ['cancelLabel', 'Cancelar'],
+                ['staffPanelLabel', 'Painel staff'],
+              ] as const
+            ).map(([key, fallback]) => (
+              <input key={key} value={draft[key]} onChange={(e) => set(key, e.target.value)} maxLength={60} placeholder={fallback} className={inputClass} />
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-black/20 p-3">
+            <span className={`inline-flex items-center gap-1.5 rounded px-4 py-1.5 text-sm font-medium text-white ${BUTTON_STYLE_CLASS.primary}`}>🙋 {draft.claimLabel || 'Assumir'}</span>
+            <span className={`inline-flex items-center gap-1.5 rounded px-4 py-1.5 text-sm font-medium text-white ${BUTTON_STYLE_CLASS.success}`}>✅ {draft.finishLabel || 'Finalizar'}</span>
+            <span className={`inline-flex items-center gap-1.5 rounded px-4 py-1.5 text-sm font-medium text-white ${BUTTON_STYLE_CLASS.danger}`}>✖️ {draft.cancelLabel || 'Cancelar'}</span>
+            <span className="basis-full" />
+            <span className={`inline-flex items-center gap-1.5 rounded px-4 py-1.5 text-sm font-medium text-white ${BUTTON_STYLE_CLASS.secondary}`}>🛠️ {draft.staffPanelLabel || 'Painel staff'}</span>
+          </div>
+          <Hint>
+            <b>Assumir</b> marca o gestor como responsável e abre-lhe um painel (só ele vê) para escolher os cargos do membro — dados na hora. <b>Finalizar</b> dá
+            também os cargos automáticos abaixo, manda o log e fecha o ticket. <b>Cancelar</b> pede um motivo opcional, retira os cargos dados no painel e fecha o
+            ticket. <b>Painel staff</b> reabre o painel.
+          </Hint>
+        </div>
+
+        <div>
+          <Label>Gestão — quem vê os tickets e pode usar os botões</Label>
           <RoleChips roles={roles} selected={draft.approverRoleIds} onChange={(ids) => set('approverRoleIds', ids)} tone="border-accent bg-accent-soft" />
           <Hint>
             Quem tem <span className="text-muted">Administrador</span> também pode sempre.{' '}
-            {draft.approverRoleIds.length === 0 && pingRole ? `Sem cargos escolhidos, vale o cargo marcado (@${pingRole.name}).` : ''} Reações de mais alguém são removidas.
+            {draft.approverRoleIds.length === 0 && pingRole ? `Sem cargos escolhidos, vale o cargo marcado (@${pingRole.name}).` : ''} Depois de alguém assumir, só essa pessoa (ou um administrador) finaliza ou cancela.
           </Hint>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <Label>Dar cargos ao aprovar (opcional)</Label>
+            <Label>Dar cargos automaticamente ao finalizar (opcional)</Label>
             <RoleChips roles={roles} selected={draft.addRoleIds} onChange={(ids) => set('addRoleIds', ids)} tone="border-success bg-success/10" />
           </div>
           <div>
-            <Label>Tirar cargos ao aprovar (opcional)</Label>
+            <Label>Tirar cargos automaticamente ao finalizar (opcional)</Label>
             <RoleChips roles={roles} selected={draft.removeRoleIds} onChange={(ids) => set('removeRoleIds', ids)} tone="border-danger bg-danger/10" />
             <Hint>Ex.: tirar o @Novato. O cargo do bot tem de estar acima destes cargos.</Hint>
           </div>
@@ -600,8 +636,8 @@ export default function Verification() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Tickets abertos" value={openTickets.length} icon={Ticket} tone="amber" />
-        <StatCard label="Aprovadas" value={approved} icon={CheckCircle2} tone="green" />
-        <StatCard label="Recusadas" value={rejected} icon={XCircle} tone="pink" />
+        <StatCard label="Finalizadas" value={approved} icon={CheckCircle2} tone="green" />
+        <StatCard label="Canceladas" value={rejected} icon={XCircle} tone="pink" />
       </div>
 
       <Card className="p-0">
@@ -669,8 +705,12 @@ export default function Verification() {
                         <span className="font-semibold text-text">{e.userTag}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3">{e.status === 'approved' ? <Badge tone="success">✅ Aprovada</Badge> : <Badge tone="danger">❌ Recusada</Badge>}</td>
-                    <td className="px-5 py-3 text-xs text-muted">{e.moderatorTag ?? '—'}</td>
+                    <td className="px-5 py-3">{e.status === 'approved' ? <Badge tone="success">✅ Finalizada</Badge> : <Badge tone="danger">✖️ Cancelada</Badge>}</td>
+                    <td className="px-5 py-3 text-xs text-muted">
+                      {e.moderatorTag ?? '—'}
+                      {e.claimedByTag && e.claimedByTag !== e.moderatorTag && <span className="block text-faint">assumido por {e.claimedByTag}</span>}
+                      {e.cancelReason && <span className="block text-danger">motivo: {e.cancelReason}</span>}
+                    </td>
                     <td className="px-5 py-3 text-xs">
                       {e.rolesAdded?.map((n) => (
                         <span key={`a${n}`} className="mr-1 text-success">

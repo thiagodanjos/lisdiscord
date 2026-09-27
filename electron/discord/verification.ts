@@ -12,16 +12,16 @@ import {
   type GuildMember,
   IntentsBitField,
   type Message,
-  type MessageReaction,
+  ModalBuilder,
   type NonThreadGuildBasedChannel,
   type OverwriteResolvable,
   type PartialMessage,
-  type PartialMessageReaction,
-  type PartialUser,
   PermissionFlagsBits,
+  RoleSelectMenuBuilder,
+  TextInputBuilder,
+  TextInputStyle,
   time,
   TimestampStyles,
-  type User,
 } from 'discord.js'
 import type {
   VerificationButtonStyle,
@@ -37,10 +37,10 @@ import { buildEmbedFromDraft, embedHasContent } from './embedTemplate'
 
 // Fluxo: painel com o botão "Verificar" num canal → o membro clica → o bot cria um canal de ticket
 // privado (só o membro, a gestão e o bot o veem) na categoria escolhida → o membro manda a foto →
-// o bot recria-a num embed com ✅/❌ e marca a gestão → um gestor reage → cargos, log e o ticket fecha.
+// o bot recria-a num embed com os botões da gestão (Assumir · Finalizar · Cancelar · Painel staff) e
+// marca a gestão → um gestor assume, escolhe os cargos num painel só dele e finaliza → cargos, log e
+// o ticket fecha.
 
-const APPROVE = '✅'
-const REJECT = '❌'
 const OPEN_BUTTON_ID = 'verif:open'
 const CLOSE_BUTTON_PREFIX = 'verif:close:'
 const MAX_IMAGES = 4
@@ -171,6 +171,10 @@ export async function applyVerificationSettings(guild: Guild, input: Verificatio
     ticketNameTemplate: (input.ticketNameTemplate ?? '').trim() || store.DEFAULT_TICKET_NAME,
     closeMessage: (input.closeMessage ?? '').trim() || store.DEFAULT_CLOSE_MESSAGE,
     buttonLabel: (input.buttonLabel ?? '').trim().slice(0, 80) || 'Verificar',
+    claimLabel: (input.claimLabel ?? '').trim().slice(0, 60) || 'Assumir',
+    finishLabel: (input.finishLabel ?? '').trim().slice(0, 80) || 'Finalizar',
+    cancelLabel: (input.cancelLabel ?? '').trim().slice(0, 80) || 'Cancelar',
+    staffPanelLabel: (input.staffPanelLabel ?? '').trim().slice(0, 80) || 'Painel staff',
     buttonEmoji: (input.buttonEmoji ?? '').trim(),
     maxTicketsPerWindow: clampInt(input.maxTicketsPerWindow, 1, 20, 2),
     ticketWindowMinutes: clampInt(input.ticketWindowMinutes, 1, 10_080, 60),
@@ -368,6 +372,15 @@ export async function handleVerificationButtons(interaction: ButtonInteraction):
     await closeTicketByButton(interaction, interaction.customId.slice(CLOSE_BUTTON_PREFIX.length))
     return true
   }
+  if (STAFF_BUTTON_IDS.has(interaction.customId)) {
+    await handleStaffButton(interaction)
+    return true
+  }
+  // "Finalizar" de um painel staff antigo (o coletor já expirou, ou o bot reiniciou entretanto).
+  if (interaction.customId.startsWith('verif:pfinish:') && !activePanels.has(interaction.message.id)) {
+    await finishFromStalePanel(interaction, interaction.customId.slice('verif:pfinish:'.length))
+    return true
+  }
   return false
 }
 
@@ -536,6 +549,57 @@ function scheduleChannelDelete(guild: Guild, channelId: string, delayMs: number,
 // Mensagem nova dentro de um ticket
 // ==========================================================================
 
+const CLAIM_ID = 'verif:claim'
+const FINISH_ID = 'verif:finish'
+const CANCEL_ID = 'verif:cancel'
+const PANEL_ID = 'verif:panel'
+const STAFF_BUTTON_IDS = new Set([CLAIM_ID, FINISH_ID, CANCEL_ID, PANEL_ID])
+const PANEL_TTL_MS = 14 * 60_000
+/** Painéis staff com um coletor ativo — os outros são tratados pelo handler global. */
+const activePanels = new Set<string>()
+const MAX_MANUAL_ROLES = 10
+
+/** Botões da gestão no embed da foto — "Assumir" fica desativado depois de alguém assumir. */
+function staffButtons(settings: VerificationSettings, claimedByName?: string): ActionRowBuilder<ButtonBuilder>[] {
+  return [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CLAIM_ID)
+        .setLabel(claimedByName ? `Assumido por ${claimedByName}`.slice(0, 80) : settings.claimLabel || 'Assumir')
+        .setEmoji('🙋')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(Boolean(claimedByName)),
+      new ButtonBuilder().setCustomId(FINISH_ID).setLabel(settings.finishLabel || 'Finalizar').setEmoji('✅').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(CANCEL_ID).setLabel(settings.cancelLabel || 'Cancelar').setEmoji('✖️').setStyle(ButtonStyle.Danger),
+    ),
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(PANEL_ID).setLabel(settings.staffPanelLabel || 'Painel staff').setEmoji('🛠️').setStyle(ButtonStyle.Secondary),
+    ),
+  ]
+}
+
+/** Embed(s) da foto a partir do template — usado ao publicar e sempre que o estado muda (assumido). */
+function requestEmbeds(
+  guild: Guild,
+  info: { userId: string; name: string; avatar: string; createdAt: Date | null; joinedAt: Date | null; claimedById?: string },
+  imageNames: string[],
+): EmbedBuilder[] {
+  const embed = buildEmbedFromDraft(getTemplate(guild.id, 'verificationRequest'), {
+    membro: `<@${info.userId}>`,
+    nome: info.name,
+    avatar: info.avatar,
+    id: info.userId,
+    criada: info.createdAt ? time(info.createdAt, TimestampStyles.ShortDate) : '—',
+    entrou: info.joinedAt ? time(info.joinedAt, TimestampStyles.RelativeTime) : '—',
+    responsavel: info.claimedById ? `<@${info.claimedById}>` : '*ninguém ainda*',
+    estado: info.claimedById ? '🟡 Em análise' : '⏳ À espera de um verificador',
+    servidor: guild.name,
+  })
+  if (imageNames[0]) embed.setImage(`attachment://${imageNames[0]}`)
+  const color = embed.data.color ?? 0xeb459e
+  return [embed, ...imageNames.slice(1).map((n) => new EmbedBuilder().setColor(color).setImage(`attachment://${n}`))]
+}
+
 export async function handleVerificationMessage(message: Message): Promise<void> {
   if (!message.inGuild() || message.author.bot || message.webhookId || message.system) return
   const ticket = store.findOpenTicketByChannel(message.channelId)
@@ -569,13 +633,13 @@ export async function handleVerificationMessage(message: Message): Promise<void>
 
   let files: AttachmentBuilder[]
   try {
-    files = await Promise.all(usable.map((a, i) => download(a.url, `verificacao-${message.author.id}-${i + 1}.${extensionOf(a)}`)))
+    files = await Promise.all(usable.map((a, i) => download(a.url, `verificacao-${message.author.id}-${Date.now()}-${i + 1}.${extensionOf(a)}`)))
   } catch (err) {
     logEvent(message.guildId, 'error', `Não consegui descarregar a foto de ${message.author.tag}: ${errText(err)}`)
     return
   }
 
-  // Uma foto nova substitui o pedido anterior do mesmo ticket que ainda não tinha sido visto.
+  // Uma foto nova substitui o pedido anterior do mesmo ticket — mas quem já tinha assumido continua.
   const previous = store.findPendingByTicket(ticket.id)
   if (previous) {
     await deleteRequestMessages(message.guild, previous)
@@ -583,34 +647,37 @@ export async function handleVerificationMessage(message: Message): Promise<void>
   }
 
   const member = message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null))
-  const joinedAt = member?.joinedAt ?? null
-  const embed = buildEmbedFromDraft(getTemplate(message.guildId, 'verificationRequest'), {
-    membro: `<@${message.author.id}>`,
-    nome: member?.displayName ?? message.author.username,
-    avatar: message.author.displayAvatarURL({ size: 256 }),
-    id: message.author.id,
-    criada: time(message.author.createdAt, TimestampStyles.ShortDate),
-    entrou: joinedAt ? time(joinedAt, TimestampStyles.RelativeTime) : '—',
-    servidor: message.guild.name,
-  })
-  embed.setImage(`attachment://${files[0].name}`)
-  const color = embed.data.color ?? 0xed4245
-  const extra = files.slice(1).map((f) => new EmbedBuilder().setColor(color).setImage(`attachment://${f.name}`))
+  const claimer = previous?.claimedById ? await message.guild.members.fetch(previous.claimedById).catch(() => null) : null
+  const embeds = requestEmbeds(
+    message.guild,
+    {
+      userId: message.author.id,
+      name: member?.displayName ?? message.author.username,
+      avatar: message.author.displayAvatarURL({ size: 256 }),
+      createdAt: message.author.createdAt,
+      joinedAt: member?.joinedAt ?? null,
+      claimedById: previous?.claimedById,
+    },
+    files.map((f) => f.name ?? ''),
+  )
 
   let sent: Message<true>
   try {
-    sent = await message.channel.send({ embeds: [embed, ...extra], files, allowedMentions: { parse: [] } })
+    sent = await message.channel.send({
+      embeds,
+      files,
+      components: staffButtons(settings, claimer?.displayName ?? previous?.claimedByTag),
+      allowedMentions: { parse: [] },
+    })
   } catch (err) {
     logEvent(message.guildId, 'error', `Não consegui publicar o embed de ${message.author.tag}: ${errText(err)}`)
     return
   }
   await message.delete().catch((err) => logEvent(message.guildId, 'warn', `Não consegui apagar a foto original: ${errText(err)}`))
-  await sent.react(APPROVE).catch(() => undefined)
-  await sent.react(REJECT).catch(() => undefined)
 
   let pingMessageId: string | null = null
   const pingText = fillPingText(settings.pingText, settings.pingRoleId, message.author.id)
-  if (settings.pingRoleId && pingText) {
+  if (settings.pingRoleId && pingText && !previous?.claimedById) {
     const ping = await message.channel
       .send({ content: pingText.slice(0, 2000), allowedMentions: { roles: [settings.pingRoleId], users: [] } })
       .catch((err) => {
@@ -621,7 +688,7 @@ export async function handleVerificationMessage(message: Message): Promise<void>
   }
   logEvent(message.guildId, 'info', `Pedido criado para ${message.author.tag} no ticket #${ticket.number} (${files.length} imagem(ns)).`)
 
-  store.addPending({
+  const entry = store.addPending({
     guildId: message.guildId,
     channelId: message.channelId,
     userId: message.author.id,
@@ -632,6 +699,14 @@ export async function handleVerificationMessage(message: Message): Promise<void>
     ticketId: ticket.id,
     imageCount: files.length,
   })
+  if (previous?.claimedById) {
+    store.updatePending(entry.id, {
+      claimedById: previous.claimedById,
+      claimedByTag: previous.claimedByTag,
+      claimedAt: previous.claimedAt,
+      manualRoleIds: previous.manualRoleIds,
+    })
+  }
 }
 
 async function deleteRequestMessages(guild: Guild, entry: VerificationEntry): Promise<void> {
@@ -642,84 +717,301 @@ async function deleteRequestMessages(guild: Guild, entry: VerificationEntry): Pr
 }
 
 // ==========================================================================
-// ✅ / ❌ de um gestor
+// Botões da gestão: Assumir · Finalizar · Cancelar · Painel staff
 // ==========================================================================
 
-export async function handleVerificationReaction(
-  reaction: MessageReaction | PartialMessageReaction,
-  user: User | PartialUser,
-  client: Client,
-): Promise<void> {
-  if (user.id === client.user?.id) return
-  const emoji = reaction.emoji.name
-  if (emoji !== APPROVE && emoji !== REJECT) return
-  const entry = store.findPendingByMessage(reaction.message.id)
-  if (!entry || processing.has(entry.id)) return
-
-  const guild = reaction.message.guild ?? (await client.guilds.fetch(entry.guildId).catch(() => null))
+async function handleStaffButton(interaction: ButtonInteraction): Promise<void> {
+  const guild = interaction.guild
   if (!guild) return
-  const settings = store.getVerificationSettings(guild.id)
-  const moderator = await guild.members.fetch(user.id).catch(() => null)
-  if (!moderator || moderator.user.bot) return
-  if (!isApprover(moderator, settings)) {
-    logEvent(guild.id, 'info', `Reação ${emoji} de ${moderator.user.tag} removida — não tem cargo de aprovação.`)
-    await reaction.users.remove(user.id).catch(() => undefined)
+  const entry = store.findPendingByMessage(interaction.message.id)
+  if (!entry) {
+    await interaction.reply({ content: 'ℹ️ Esta verificação já foi finalizada ou cancelada.', ephemeral: true })
     return
   }
+  const settings = store.getVerificationSettings(guild.id)
+  const member = await guild.members.fetch(interaction.user.id).catch(() => null)
+  if (!member || !isApprover(member, settings)) {
+    await interaction.reply({ content: '❌ Só a gestão pode usar estes botões.', ephemeral: true })
+    return
+  }
+  const isAdmin = member.permissions.has(PermissionFlagsBits.Administrator)
+  const claimedByOther = entry.claimedById && entry.claimedById !== member.id
 
+  switch (interaction.customId) {
+    case CLAIM_ID: {
+      if (claimedByOther) {
+        await interaction.reply({ content: `🙋 Esta verificação já foi assumida por <@${entry.claimedById}>.`, ephemeral: true, allowedMentions: { parse: [] } })
+        return
+      }
+      const claimed = entry.claimedById ? entry : await claim(interaction, entry, member, settings)
+      if (claimed) await showStaffPanel(interaction, claimed, member, settings)
+      return
+    }
+    case PANEL_ID: {
+      if (claimedByOther && !isAdmin) {
+        await interaction.reply({ content: `🛠️ Só <@${entry.claimedById}> (quem assumiu) ou um administrador podem abrir o painel.`, ephemeral: true, allowedMentions: { parse: [] } })
+        return
+      }
+      const claimed = entry.claimedById ? entry : await claim(interaction, entry, member, settings)
+      if (claimed) await showStaffPanel(interaction, claimed, member, settings)
+      return
+    }
+    case FINISH_ID: {
+      if (claimedByOther && !isAdmin) {
+        await interaction.reply({ content: `✅ Só <@${entry.claimedById}> (quem assumiu) ou um administrador podem finalizar.`, ephemeral: true, allowedMentions: { parse: [] } })
+        return
+      }
+      await interaction.deferReply({ ephemeral: true })
+      const ok = await finishVerification(guild, entry, member, true)
+      await interaction.editReply({ content: ok ? '✅ Verificação finalizada — log enviado e o ticket vai ser fechado.' : 'ℹ️ Esta verificação já tinha sido decidida.' })
+      return
+    }
+    case CANCEL_ID: {
+      if (claimedByOther && !isAdmin) {
+        await interaction.reply({ content: `✖️ Só <@${entry.claimedById}> (quem assumiu) ou um administrador podem cancelar.`, ephemeral: true, allowedMentions: { parse: [] } })
+        return
+      }
+      const modalId = `verif:cancelmodal:${interaction.id}`
+      await interaction.showModal(
+        new ModalBuilder()
+          .setCustomId(modalId)
+          .setTitle('Cancelar verificação')
+          .addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder()
+                .setCustomId('motivo')
+                .setLabel('Motivo (opcional — vai para o log)')
+                .setStyle(TextInputStyle.Paragraph)
+                .setRequired(false)
+                .setMaxLength(500)
+                .setPlaceholder('Ex.: print ilegível, cargos não correspondem…'),
+            ),
+          ),
+      )
+      const submit = await interaction.awaitModalSubmit({ time: 5 * 60_000, filter: (i) => i.customId === modalId }).catch(() => null)
+      if (!submit) return
+      await submit.deferReply({ ephemeral: true })
+      const ok = await finishVerification(guild, entry, member, false, submit.fields.getTextInputValue('motivo').trim() || undefined)
+      await submit.editReply({ content: ok ? '✖️ Verificação cancelada — log enviado e o ticket vai ser fechado.' : 'ℹ️ Esta verificação já tinha sido decidida.' })
+      return
+    }
+  }
+}
+
+/** Marca o pedido como assumido e atualiza o embed da foto (estado + responsável). */
+async function claim(interaction: ButtonInteraction, entry: VerificationEntry, member: GuildMember, settings: VerificationSettings): Promise<VerificationEntry | null> {
+  const updated = store.updatePending(entry.id, { claimedById: member.id, claimedByTag: member.user.tag, claimedAt: new Date().toISOString() })
+  if (!updated) return null
+  logEvent(entry.guildId, 'info', `${member.user.tag} assumiu a verificação de ${entry.userTag}.`)
+  const guild = interaction.guild!
+  const target = await guild.members.fetch(entry.userId).catch(() => null)
+  const imageNames = [...interaction.message.attachments.values()].map((a) => a.name)
+  await interaction.message
+    .edit({
+      embeds: requestEmbeds(
+        guild,
+        {
+          userId: entry.userId,
+          name: target?.displayName ?? entry.userTag,
+          avatar: target?.user.displayAvatarURL({ size: 256 }) ?? entry.userAvatar ?? '',
+          createdAt: target?.user.createdAt ?? null,
+          joinedAt: target?.joinedAt ?? null,
+          claimedById: member.id,
+        },
+        imageNames,
+      ),
+      components: staffButtons(settings, member.displayName),
+    })
+    .catch((err) => logEvent(entry.guildId, 'warn', `Não consegui atualizar o embed ao assumir: ${errText(err)}`))
+  // A marcação já não é precisa — alguém pegou no pedido.
+  if (entry.pingMessageId && interaction.channel?.isTextBased()) await interaction.channel.messages.delete(entry.pingMessageId).catch(() => undefined)
+  return updated
+}
+
+/** Cargos que este gestor pode dar: abaixo do cargo do bot e (se não for admin) abaixo do cargo mais alto dele. */
+function assignableRole(guild: Guild, roleId: string, moderator: GuildMember): { ok: boolean; name: string } {
+  const role = guild.roles.cache.get(roleId)
+  if (!role) return { ok: false, name: roleId }
+  const me = guild.members.me
+  const botOk = !role.managed && role.id !== guild.id && (!me || role.position < me.roles.highest.position)
+  const modOk = moderator.permissions.has(PermissionFlagsBits.Administrator) || role.position < moderator.roles.highest.position
+  return { ok: botOk && modOk, name: role.name }
+}
+
+/** Mensagem só para o gestor: escolher os cargos a dar ao membro do ticket (aplicados na hora). */
+async function showStaffPanel(interaction: ButtonInteraction, entry: VerificationEntry, moderator: GuildMember, settings: VerificationSettings): Promise<void> {
+  const guild = interaction.guild!
+  let current = store.findPendingById(entry.id) ?? entry
+
+  const render = (note?: string) => {
+    const manual = current.manualRoleIds ?? []
+    const auto = settings.addRoleIds.map((id) => `<@&${id}>`)
+    const removing = settings.removeRoleIds.map((id) => `<@&${id}>`)
+    const embed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle('🛠️ Painel staff')
+      .setDescription(
+        [
+          `Verificação de <@${entry.userId}> — só tu vês esta mensagem.`,
+          '',
+          '**1.** Escolhe abaixo os cargos a dar ao membro (são dados na hora; tirar da lista remove-os).',
+          `**2.** Clica em **${settings.finishLabel || 'Finalizar'}** para fechar e mandar o log.`,
+        ].join('\n'),
+      )
+      .addFields(
+        { name: 'Cargos escolhidos', value: manual.length ? manual.map((id) => `<@&${id}>`).join(' ') : '*nenhum ainda*', inline: false },
+        { name: 'Ao finalizar, também', value: [auto.length ? `➕ ${auto.join(' ')}` : null, removing.length ? `➖ ${removing.join(' ')}` : null].filter(Boolean).join('\n') || '—', inline: false },
+      )
+    if (note) embed.setFooter({ text: note.slice(0, 2000) })
+    const select = new RoleSelectMenuBuilder()
+      .setCustomId(`verif:roles:${entry.id}`)
+      .setPlaceholder('Escolhe os cargos do membro…')
+      .setMinValues(0)
+      .setMaxValues(MAX_MANUAL_ROLES)
+    if (manual.length) select.setDefaultRoles(manual.slice(0, MAX_MANUAL_ROLES))
+    const finish = new ButtonBuilder().setCustomId(`verif:pfinish:${entry.id}`).setLabel(settings.finishLabel || 'Finalizar').setEmoji('✅').setStyle(ButtonStyle.Success)
+    return {
+      embeds: [embed],
+      components: [new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(select), new ActionRowBuilder<ButtonBuilder>().addComponents(finish)],
+      allowedMentions: { parse: [] as [] },
+    }
+  }
+
+  const reply = await interaction.reply({ ...render(), ephemeral: true, withResponse: true })
+  const panel = reply.resource?.message
+  if (!panel) return
+
+  activePanels.add(panel.id)
+  const collector = panel.createMessageComponentCollector({ time: PANEL_TTL_MS })
+  collector.on('end', () => activePanels.delete(panel.id))
+  collector.on('collect', async (i) => {
+    try {
+      if (i.isRoleSelectMenu()) {
+        const pending = store.findPendingById(entry.id)
+        if (!pending) {
+          await i.update({ content: 'ℹ️ Esta verificação já foi decidida.', embeds: [], components: [] })
+          return
+        }
+        const target = await guild.members.fetch(entry.userId).catch(() => null)
+        if (!target) {
+          await i.update(render('❌ O membro já não está no servidor.'))
+          return
+        }
+        const before = new Set(pending.manualRoleIds ?? [])
+        const wanted = i.values.filter((id) => assignableRole(guild, id, moderator).ok)
+        const refused = i.values.filter((id) => !assignableRole(guild, id, moderator).ok).map((id) => `@${assignableRole(guild, id, moderator).name}`)
+        const toAdd = wanted.filter((id) => !before.has(id))
+        const toRemove = [...before].filter((id) => !wanted.includes(id))
+        const failed: string[] = []
+        for (const id of toAdd) await target.roles.add(id, `Verificação — dado por ${moderator.user.tag}`).catch(() => failed.push(`@${guild.roles.cache.get(id)?.name ?? id}`))
+        for (const id of toRemove) await target.roles.remove(id, `Verificação — retirado por ${moderator.user.tag}`).catch(() => failed.push(`@${guild.roles.cache.get(id)?.name ?? id}`))
+        current = store.updatePending(entry.id, { manualRoleIds: wanted }) ?? pending
+        if (toAdd.length || toRemove.length) logEvent(guild.id, 'info', `${moderator.user.tag} atualizou os cargos de ${entry.userTag} (+${toAdd.length} −${toRemove.length}).`)
+        const notes = [
+          refused.length ? `Não podes dar: ${refused.join(', ')} (acima do teu cargo ou do do bot).` : null,
+          failed.length ? `Falhou: ${failed.join(', ')}.` : null,
+          !refused.length && !failed.length ? '✅ Cargos atualizados.' : null,
+        ].filter(Boolean)
+        await i.update(render(notes.join(' ')))
+        return
+      }
+      if (i.isButton() && i.customId === `verif:pfinish:${entry.id}`) {
+        await i.deferUpdate()
+        const ok = await finishVerification(guild, store.findPendingById(entry.id) ?? current, moderator, true)
+        await i.editReply({ content: ok ? '✅ Verificação finalizada — log enviado e o ticket vai ser fechado.' : 'ℹ️ Esta verificação já tinha sido decidida.', embeds: [], components: [] })
+        collector.stop()
+      }
+    } catch (err) {
+      logEvent(guild.id, 'error', `Erro no painel staff: ${errText(err)}`)
+    }
+  })
+}
+
+async function finishFromStalePanel(interaction: ButtonInteraction, entryId: string): Promise<void> {
+  const guild = interaction.guild
+  if (!guild) return
+  const entry = store.findPendingById(entryId)
+  const settings = store.getVerificationSettings(guild.id)
+  const member = await guild.members.fetch(interaction.user.id).catch(() => null)
+  if (!entry || !member || !isApprover(member, settings)) {
+    await interaction.reply({ content: 'ℹ️ Esta verificação já foi decidida.', ephemeral: true })
+    return
+  }
+  await interaction.deferUpdate()
+  const ok = await finishVerification(guild, entry, member, true)
+  await interaction.editReply({ content: ok ? '✅ Verificação finalizada — log enviado e o ticket vai ser fechado.' : 'ℹ️ Esta verificação já tinha sido decidida.', embeds: [], components: [] })
+}
+
+/**
+ * Fecha a verificação: finalizar dá os cargos automáticos (e tira os configurados); cancelar retira os
+ * cargos que o gestor tinha dado no painel. Depois: log com a foto, aviso no ticket e o canal é apagado.
+ */
+async function finishVerification(guild: Guild, entry: VerificationEntry, moderator: GuildMember, finished: boolean, reason?: string): Promise<boolean> {
+  if (processing.has(entry.id)) return false
   processing.add(entry.id)
   try {
-    const approved = emoji === APPROVE
+    const fresh = store.findPendingById(entry.id)
+    if (!fresh) return false
+    const settings = store.getVerificationSettings(guild.id)
+    const roleName = (id: string) => guild.roles.cache.get(id)?.name ?? id
     const added: string[] = []
     const removed: string[] = []
-    if (approved) {
-      const target = await guild.members.fetch(entry.userId).catch(() => null)
-      if (target) {
-        for (const id of settings.addRoleIds) {
-          if (target.roles.cache.has(id)) continue
-          await target.roles
-            .add(id, `Verificação aprovada por ${moderator.user.tag}`)
-            .then(() => added.push(guild.roles.cache.get(id)?.name ?? id))
-            .catch((err) => logEvent(guild.id, 'error', `Falha a dar @${guild.roles.cache.get(id)?.name ?? id}: ${errText(err)}`))
-        }
-        for (const id of settings.removeRoleIds) {
-          if (!target.roles.cache.has(id)) continue
-          await target.roles
-            .remove(id, `Verificação aprovada por ${moderator.user.tag}`)
-            .then(() => removed.push(guild.roles.cache.get(id)?.name ?? id))
-            .catch((err) => logEvent(guild.id, 'error', `Falha a tirar @${guild.roles.cache.get(id)?.name ?? id}: ${errText(err)}`))
-        }
+    const target = await guild.members.fetch(fresh.userId).catch(() => null)
+
+    if (target && finished) {
+      added.push(...(fresh.manualRoleIds ?? []).filter((id) => target.roles.cache.has(id)).map(roleName))
+      for (const id of settings.addRoleIds) {
+        if (target.roles.cache.has(id)) continue
+        await target.roles
+          .add(id, `Verificação finalizada por ${moderator.user.tag}`)
+          .then(() => added.push(roleName(id)))
+          .catch((err) => logEvent(guild.id, 'error', `Falha a dar @${roleName(id)}: ${errText(err)}`))
+      }
+      for (const id of settings.removeRoleIds) {
+        if (!target.roles.cache.has(id)) continue
+        await target.roles
+          .remove(id, `Verificação finalizada por ${moderator.user.tag}`)
+          .then(() => removed.push(roleName(id)))
+          .catch((err) => logEvent(guild.id, 'error', `Falha a tirar @${roleName(id)}: ${errText(err)}`))
+      }
+    } else if (target && !finished) {
+      for (const id of fresh.manualRoleIds ?? []) {
+        if (!target.roles.cache.has(id)) continue
+        await target.roles
+          .remove(id, `Verificação cancelada por ${moderator.user.tag}`)
+          .then(() => removed.push(roleName(id)))
+          .catch(() => undefined)
       }
     }
 
     // Guarda as imagens antes de apagar o embed — é a única cópia da foto, e vai para o log.
-    const logFiles = settings.logChannelId ? await collectImages(reaction.message).catch(() => []) : []
+    const channel = await guild.channels.fetch(fresh.channelId).catch(() => null)
+    const embedMessage = channel?.isTextBased() ? await channel.messages.fetch(fresh.embedMessageId).catch(() => null) : null
+    const logFiles = settings.logChannelId && embedMessage ? await collectImages(embedMessage).catch(() => []) : []
 
-    const decided = store.decide(entry.id, approved ? 'approved' : 'rejected', { id: moderator.id, tag: moderator.user.tag }, { added, removed })
-    await deleteRequestMessages(guild, entry)
-    if (decided) logEvent(guild.id, 'info', `${entry.userTag} ${approved ? 'aprovado ✅' : 'recusado ❌'} por ${moderator.user.tag}.`)
-    if (decided && settings.logChannelId) {
-      await postLog(guild, settings.logChannelId, decided, logFiles).catch((err) => logEvent(guild.id, 'error', `Falha a mandar o log: ${errText(err)}`))
-    }
+    const decided = store.decide(fresh.id, finished ? 'approved' : 'rejected', { id: moderator.id, tag: moderator.user.tag }, { added, removed }, reason)
+    if (!decided) return false
+    await deleteRequestMessages(guild, fresh)
+    logEvent(guild.id, 'info', `${fresh.userTag} ${finished ? 'finalizado ✅' : 'cancelado ✖️'} por ${moderator.user.tag}.`)
 
-    // Dentro de um ticket: avisa o resultado e apaga o canal passados uns segundos.
-    const ticket = entry.ticketId ? store.closeTicket(entry.ticketId, approved ? 'approved' : 'rejected', moderator.user.tag) : null
-    if (ticket) {
-      const channel = await guild.channels.fetch(ticket.channelId).catch(() => null)
-      if (channel?.isTextBased()) {
-        const text = (settings.closeMessage || store.DEFAULT_CLOSE_MESSAGE)
-          .split('{estado}')
-          .join(approved ? 'aprovada ✅' : 'recusada ❌')
-          .split('{membro}')
-          .join(`<@${entry.userId}>`)
-          .split('{moderador}')
-          .join(`<@${moderator.id}>`)
-          .split('{segundos}')
-          .join(String(store.CLOSE_DELAY_SECONDS))
-        await channel.send({ content: text.slice(0, 2000), allowedMentions: { users: [entry.userId] } }).catch(() => undefined)
-      }
-      scheduleChannelDelete(guild, ticket.channelId, store.CLOSE_DELAY_SECONDS * 1000, `Verificação ${approved ? 'aprovada' : 'recusada'} por ${moderator.user.tag}`)
+    const ticket = fresh.ticketId ? store.closeTicket(fresh.ticketId, finished ? 'approved' : 'rejected', moderator.user.tag) : null
+    if (settings.logChannelId) {
+      await postLog(guild, settings.logChannelId, decided, logFiles, ticket).catch((err) => logEvent(guild.id, 'error', `Falha a mandar o log: ${errText(err)}`))
     }
+    if (ticket && channel?.isTextBased()) {
+      const text = (settings.closeMessage || store.DEFAULT_CLOSE_MESSAGE)
+        .split('{estado}')
+        .join(finished ? 'finalizada ✅' : 'cancelada ✖️')
+        .split('{membro}')
+        .join(`<@${fresh.userId}>`)
+        .split('{moderador}')
+        .join(`<@${moderator.id}>`)
+        .split('{segundos}')
+        .join(String(store.CLOSE_DELAY_SECONDS))
+      await channel.send({ content: `${text}${reason ? `\n**Motivo:** ${reason}` : ''}`.slice(0, 2000), allowedMentions: { users: [fresh.userId] } }).catch(() => undefined)
+      scheduleChannelDelete(guild, ticket.channelId, store.CLOSE_DELAY_SECONDS * 1000, `Verificação ${finished ? 'finalizada' : 'cancelada'} por ${moderator.user.tag}`)
+    }
+    return true
   } finally {
     processing.delete(entry.id)
   }
@@ -730,23 +1022,35 @@ async function collectImages(message: Message | PartialMessage): Promise<Attachm
   return Promise.all([...full.attachments.values()].filter(isImage).map((a) => download(a.url, a.name)))
 }
 
-async function postLog(guild: Guild, channelId: string, entry: VerificationEntry, files: AttachmentBuilder[]): Promise<void> {
+function formatSpan(ms: number): string {
+  const min = Math.max(0, Math.round(ms / 60_000))
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  return h < 24 ? `${h}h ${min % 60}min` : `${Math.floor(h / 24)}d ${h % 24}h`
+}
+
+async function postLog(guild: Guild, channelId: string, entry: VerificationEntry, files: AttachmentBuilder[], ticket: VerificationTicket | null): Promise<void> {
   const channel = await guild.channels.fetch(channelId).catch(() => null)
   if (!channel || !channel.isTextBased()) return
-  const approved = entry.status === 'approved'
+  const finished = entry.status === 'approved'
+  const opened = ticket ? new Date(ticket.createdAt).getTime() : new Date(entry.createdAt).getTime()
   const embed = buildEmbedFromDraft(getTemplate(guild.id, 'verificationLog'), {
     membro: `<@${entry.userId}>`,
     nome: entry.userTag,
     avatar: entry.userAvatar ?? '',
     id: entry.userId,
-    estado: approved ? 'aprovada ✅' : 'recusada ❌',
+    estado: finished ? 'finalizada ✅' : 'cancelada ✖️',
     moderador: entry.moderatorId ? `<@${entry.moderatorId}>` : '—',
+    responsavel: entry.claimedById ? `<@${entry.claimedById}>` : '—',
     cargosDados: entry.rolesAdded?.length ? entry.rolesAdded.map((n) => `@${n}`).join(', ') : '—',
     cargosTirados: entry.rolesRemoved?.length ? entry.rolesRemoved.map((n) => `@${n}`).join(', ') : '—',
+    motivo: entry.cancelReason || '—',
+    ticket: ticket ? String(ticket.number) : '—',
+    duracao: formatSpan(Date.now() - opened),
     servidor: guild.name,
   })
-  // Com o template de fábrica, recusas ficam a vermelho; um template personalizado manda sempre na cor.
-  if (!approved && !isCustomized(guild.id, 'verificationLog')) embed.setColor(0xed4245)
+  // Com o template de fábrica, cancelamentos ficam a vermelho; um template personalizado manda sempre na cor.
+  if (!finished && !isCustomized(guild.id, 'verificationLog')) embed.setColor(0xed4245)
   if (files[0]) embed.setImage(`attachment://${files[0].name}`)
   await channel.send({ embeds: [embed], files: files.slice(0, 1), allowedMentions: { parse: [] } })
 }
