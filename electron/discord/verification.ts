@@ -145,6 +145,9 @@ export async function getVerificationDiagnostics(client: Client | null, guildId:
     checks.push({ label: `Categoria ${category.name}`, ok: missing.length === 0, detail: `Faltam: ${missing.join(', ')}` })
   }
 
+  if (settings.spamProtection) {
+    checks.push({ label: 'Modo castigo', ok: me.permissions.has(PermissionFlagsBits.ModerateMembers), detail: 'Falta a permissão Castigar membros (Moderate Members) ao bot.' })
+  }
   checks.push({
     label: 'Cargo a marcar',
     ok: !settings.pingRoleId || Boolean(await guild.roles.fetch(settings.pingRoleId).catch(() => null)),
@@ -188,6 +191,11 @@ export async function applyVerificationSettings(guild: Guild, input: Verificatio
     staffPanelStyle: validStyle(input.staffPanelStyle, 'secondary'),
     closeDelaySeconds: clampInt(input.closeDelaySeconds, 1, 300, 5),
     warningSeconds: clampInt(input.warningSeconds, 3, 120, 10),
+    ticketSlowmodeSeconds: clampInt(input.ticketSlowmodeSeconds, 0, 21_600, 0),
+    spamProtection: Boolean(input.spamProtection),
+    spamMaxMessages: clampInt(input.spamMaxMessages, 2, 50, 5),
+    spamWindowSeconds: clampInt(input.spamWindowSeconds, 2, 300, 10),
+    spamTimeoutMinutes: clampInt(input.spamTimeoutMinutes, 1, 40_320, 5),
     claimedButtonLabel: (input.claimedButtonLabel ?? '').trim().slice(0, 80) || 'Assumido por {gestor}',
     ticketLinkLabel: (input.ticketLinkLabel ?? '').trim().slice(0, 80) || 'Ir para o ticket',
     ticketLinkEmoji: (input.ticketLinkEmoji ?? '').trim(),
@@ -275,9 +283,20 @@ export async function applyVerificationSettings(guild: Guild, input: Verificatio
     next.panelMessageId = null
   }
 
+  if (next.spamProtection && !me.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+    throw new Error('Para o modo castigo, o bot precisa da permissão Castigar membros (Moderate Members).')
+  }
+
   store.saveVerificationSettings(guild.id, next)
   if (next.channelId) {
     next.panelMessageId = await postVerificationPanel(guild)
+  }
+  // O modo lento mudou: aplica-o também aos tickets que já estão abertos.
+  if (next.ticketSlowmodeSeconds !== previous.ticketSlowmodeSeconds) {
+    for (const t of store.listTickets(guild.id).filter((t) => t.status === 'open')) {
+      const ch = await guild.channels.fetch(t.channelId).catch(() => null)
+      if (ch && ch.type === ChannelType.GuildText) await ch.setRateLimitPerUser(next.ticketSlowmodeSeconds, 'Modo lento da verificação').catch(() => undefined)
+    }
   }
   return store.getVerificationSettings(guild.id)
 }
@@ -406,6 +425,65 @@ async function download(url: string, name: string): Promise<AttachmentBuilder> {
   const res = await fetch(url)
   if (!res.ok) throw new Error(`Não consegui descarregar a imagem (HTTP ${res.status}).`)
   return new AttachmentBuilder(Buffer.from(await res.arrayBuffer()), { name })
+}
+
+// ==========================================================================
+// Modo castigo (anti-spam no ticket)
+// ==========================================================================
+
+/** Hora das últimas mensagens de cada membro em cada ticket. */
+const recentMessages = new Map<string, number[]>()
+
+/**
+ * Conta as mensagens do dono do ticket: passou do limite → apaga a mensagem, dá castigo (timeout) e
+ * avisa no ticket com o embed personalizável. Devolve true se castigou (a mensagem já foi tratada).
+ */
+async function punishSpam(message: Message<true>, settings: VerificationSettings): Promise<boolean> {
+  const key = `${message.channelId}:${message.author.id}`
+  const max = clampInt(settings.spamMaxMessages, 2, 50, 5)
+  const windowMs = clampInt(settings.spamWindowSeconds, 2, 300, 10) * 1000
+  const now = Date.now()
+  const times = (recentMessages.get(key) ?? []).filter((t) => now - t < windowMs)
+  times.push(now)
+  recentMessages.set(key, times)
+  if (times.length < max) return false
+  recentMessages.delete(key)
+
+  const minutes = clampInt(settings.spamTimeoutMinutes, 1, 40_320, 5)
+  const member = message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null))
+  await message.delete().catch(() => undefined)
+  if (!member) return true
+  if (!member.moderatable) {
+    logEvent(message.guildId, 'warn', `${message.author.tag} fez spam no ticket, mas o bot não o consegue castigar (cargo acima do do bot, ou falta a permissão Castigar membros).`)
+    return true
+  }
+  try {
+    await member.timeout(minutes * 60_000, `Spam no ticket de verificação (${max} mensagens em ${windowMs / 1000} s)`)
+  } catch (err) {
+    logEvent(message.guildId, 'error', `Não consegui castigar ${message.author.tag}: ${errText(err)}`)
+    return true
+  }
+  logEvent(message.guildId, 'info', `${message.author.tag} levou castigo de ${minutes} min por spam no ticket.`)
+
+  const embed = buildEmbedFromDraft(
+    getTemplate(message.guildId, 'verificationSpamTimeout'),
+    {
+      membro: `<@${message.author.id}>`,
+      nome: member.displayName,
+      minutos: String(minutes),
+      mensagens: String(max),
+      segundos: String(windowMs / 1000),
+      servidor: message.guild.name,
+    },
+    { separators: 'keep' },
+  )
+  const fallback = `🔇 <@${message.author.id}> ficou de castigo por ${minutes} minutos por spam.`
+  const allowedMentions = { users: [message.author.id] }
+  await (embedHasContent(embed)
+    ? message.channel.send({ flags: MessageFlags.IsComponentsV2, components: [embedToContainer(embed)], allowedMentions })
+    : Promise.reject(new Error('vazio'))
+  ).catch(() => message.channel.send({ content: fallback, allowedMentions }).catch(() => undefined))
+  return true
 }
 
 /** Aviso vivo em cada ticket — várias mensagens seguidas não enchem o canal de avisos repetidos. */
@@ -586,6 +664,7 @@ async function openTicket(interaction: ButtonInteraction): Promise<void> {
         parent: settings.ticketCategoryId,
         permissionOverwrites: overwrites,
         topic: `Verificação de ${user.tag} (${user.id})`,
+        rateLimitPerUser: clampInt(settings.ticketSlowmodeSeconds, 0, 21_600, 0) || undefined,
         reason: `Ticket de verificação de ${user.tag}`,
       })
     } catch (err) {
@@ -861,6 +940,7 @@ export async function handleVerificationMessage(message: Message): Promise<void>
   if (!ticket) return
   if (message.author.id !== ticket.userId) return // a gestão pode conversar à vontade no ticket
   const settings = store.getVerificationSettings(message.guildId)
+  if (settings.spamProtection && (await punishSpam(message, settings))) return
 
   // Sem a intent MessageContent a Discord não manda os anexos — sem isto, TODAS as fotos pareciam
   // "mensagens sem imagem" e eram apagadas.

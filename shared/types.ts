@@ -304,6 +304,7 @@ export type EmbedTemplateKind =
   | 'verificationStaffPanel'
   | 'verificationWarnText'
   | 'verificationWarnTooBig'
+  | 'verificationSpamTimeout'
   | 'logMessageDelete'
   | 'logMessageEdit'
   | 'logPoints'
@@ -336,6 +337,7 @@ export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'verificationStaffPanel',
   'verificationWarnText',
   'verificationWarnTooBig',
+  'verificationSpamTimeout',
   'logMessageDelete',
   'logMessageEdit',
   'logPoints',
@@ -673,6 +675,13 @@ export interface VerificationSettings {
   closeDelaySeconds: number
   /** Segundos até o aviso no ticket (texto em vez de print, imagem grande) desaparecer. */
   warningSeconds: number
+  /** Modo lento do canal de ticket, em segundos (0 = desligado). A gestão não é afetada. */
+  ticketSlowmodeSeconds: number
+  /** Modo castigo: quem mandar `spamMaxMessages` mensagens em `spamWindowSeconds` no ticket leva timeout. */
+  spamProtection: boolean
+  spamMaxMessages: number
+  spamWindowSeconds: number
+  spamTimeoutMinutes: number
   /** Painel staff (só o gestor vê): botão Finalizar próprio e textos das respostas. */
   staffPanelFinishLabel: string
   staffPanelFinishEmoji: string
@@ -768,6 +777,7 @@ export const VERIFICATION_REPLY_PLACEHOLDERS = ['{membro}', '{canal}', '{numero}
 export const VERIFICATION_CLOSE_PLACEHOLDERS = ['{membro}', '{moderador}', '{mencao}', '{responsavel}', '{estado}', '{motivo}', '{segundos}', '{numero}', '{servidor}'] as const
 export const VERIFICATION_STAFF_PANEL_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{numero}', '{gestor}', '{cargosEscolhidos}', '{cargosDar}', '{cargosTirar}', '{aoFinalizar}', '{finalizar}', '{nota}', '{servidor}'] as const
 export const VERIFICATION_WARN_PLACEHOLDERS = ['{membro}', '{nome}', '{segundos}', '{tamanho}', '{servidor}'] as const
+export const VERIFICATION_SPAM_PLACEHOLDERS = ['{membro}', '{nome}', '{minutos}', '{mensagens}', '{segundos}', '{servidor}'] as const
 export const TICKET_NAME_PLACEHOLDERS = ['{usuario}', '{id}', '{numero}'] as const
 export const VERIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{criada}', '{entrou}', '{responsavel}', '{estado}', '{servidor}'] as const
 export const VERIFICATION_LOG_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{estado}', '{moderador}', '{responsavel}', '{cargosDados}', '{cargosTirados}', '{motivo}', '{ticket}', '{duracao}', '{servidor}'] as const

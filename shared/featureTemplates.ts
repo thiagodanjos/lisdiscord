@@ -23,6 +23,11 @@ function draft(partial: Partial<EmbedDraft>): EmbedDraft {
 /** Textos e botão de fábrica do painel staff da verificação (só o gestor vê). */
 export const STAFF_PANEL_DEFAULTS = {
   warningSeconds: 10,
+  ticketSlowmodeSeconds: 0,
+  spamProtection: false,
+  spamMaxMessages: 5,
+  spamWindowSeconds: 10,
+  spamTimeoutMinutes: 5,
   staffPanelFinishLabel: 'Finalizar',
   staffPanelFinishEmoji: '✅',
   staffPanelFinishStyle: 'success',
@@ -152,6 +157,12 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     description: '❌ {membro}, a imagem é demasiado grande (máx. {tamanho}). Tira um print mais pequeno e envia outra vez.',
     color: '#ED4245',
     footer: 'Esta mensagem desaparece em {segundos} segundos.',
+    timestamp: false,
+  }),
+  verificationSpamTimeout: draft({
+    title: '🔇 Castigo por spam',
+    description: '{membro} mandou **{mensagens} mensagens em {segundos} segundos** e ficou de castigo por **{minutos} minutos**.\n\nManda só o print do teu perfil com os cargos e aguarda um verificador.',
+    color: '#ED4245',
     timestamp: false,
   }),
   verificationStaffPanel: draft({

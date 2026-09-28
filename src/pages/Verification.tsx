@@ -35,6 +35,7 @@ import {
   VERIFICATION_TICKET_PLACEHOLDERS,
   VERIFICATION_STAFF_PANEL_PLACEHOLDERS,
   VERIFICATION_WARN_PLACEHOLDERS,
+  VERIFICATION_SPAM_PLACEHOLDERS,
   type BotEmoji,
   type ChannelPickerEntry,
   type EmbedTemplateKind,
@@ -114,6 +115,21 @@ const STAFF_BUTTONS = [
   { title: 'Painel staff', label: 'staffPanelLabel', emoji: 'staffPanelEmoji', style: 'staffPanelStyle', fallback: 'Painel staff' },
 ] as const
 
+const SLOWMODE_OPTIONS = [
+  [0, 'Desligado'],
+  [5, '5 segundos'],
+  [10, '10 segundos'],
+  [15, '15 segundos'],
+  [30, '30 segundos'],
+  [60, '1 minuto'],
+  [120, '2 minutos'],
+  [300, '5 minutos'],
+  [600, '10 minutos'],
+  [900, '15 minutos'],
+  [1800, '30 minutos'],
+  [3600, '1 hora'],
+] as const
+
 const STAFF_PANEL_TEXTS = [
   { key: 'staffPanelSelectPlaceholder', label: 'Texto do seletor de cargos', hint: '' },
   { key: 'staffPanelNoRoles', label: '{cargosEscolhidos} sem nenhum cargo', hint: '' },
@@ -139,7 +155,8 @@ const TEMPLATE_INFO: Record<
   | 'verificationStaffCancelled'
   | 'verificationStaffPanel'
   | 'verificationWarnText'
-  | 'verificationWarnTooBig',
+  | 'verificationWarnTooBig'
+  | 'verificationSpamTimeout',
   { title: string; hint: string; tokens: readonly string[]; imageNote?: string }
 > = {
   verificationPanel: {
@@ -191,6 +208,11 @@ const TEMPLATE_INFO: Record<
     title: 'Aviso no ticket — imagem grande',
     hint: 'Aparece quando a imagem passa o limite de upload do bot ({tamanho}). Desaparece sozinho passados {segundos} segundos.',
     tokens: VERIFICATION_WARN_PLACEHOLDERS,
+  },
+  verificationSpamTimeout: {
+    title: 'Aviso de castigo por spam',
+    hint: 'Aparece no ticket quando o membro leva castigo por mandar mensagens demais. {mensagens} em {segundos} segundos = o limite; {minutos} = duração do castigo.',
+    tokens: VERIFICATION_SPAM_PLACEHOLDERS,
   },
   verificationStaffPanel: {
     title: 'Personalizar o painel staff',
@@ -433,7 +455,11 @@ export default function Verification() {
     responsavel: draft.responsibleNone || 'ninguém',
     mencao: editing?.startsWith('verificationClosed') || editing?.startsWith('verificationStaff') ? '@gestor' : '@membro',
     gestor: '@gestor',
-    segundos: String(editing?.startsWith('verificationWarn') ? draft.warningSeconds || 10 : draft.closeDelaySeconds || 5),
+    segundos: String(
+      editing === 'verificationSpamTimeout' ? draft.spamWindowSeconds || 10 : editing?.startsWith('verificationWarn') ? draft.warningSeconds || 10 : draft.closeDelaySeconds || 5,
+    ),
+    minutos: String(draft.spamTimeoutMinutes || 5),
+    mensagens: String(draft.spamMaxMessages || 5),
     tamanho: '10 MB',
     moderador: '@gestor',
     motivo: editing?.includes('Cancelled') ? 'print ilegível' : '—',
@@ -723,6 +749,63 @@ export default function Verification() {
             </div>
           </div>
           <Hint>Os avisos saem em formato caixa, personalizáveis como as outras mensagens. Se o membro mandar várias mensagens seguidas, fica só um aviso.</Hint>
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-black/20 p-3">
+          <div>
+            <Label>Anti-spam no ticket</Label>
+            <Hint>Só vale para o membro dono do ticket — a gestão escreve à vontade.</Hint>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <Label>Modo lento do ticket</Label>
+              <select
+                value={draft.ticketSlowmodeSeconds}
+                onChange={(e) => set('ticketSlowmodeSeconds', Number(e.target.value))}
+                className={`mt-1.5 w-44 ${inputClass}`}
+              >
+                {SLOWMODE_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="max-w-md pb-2 text-[11px] text-faint">
+              O ticket já é criado com modo lento (e os que estão abertos passam a ter ao guardar). Quem tem Gerir mensagens/canais não é afetado.
+            </p>
+          </div>
+          <Toggle
+            checked={draft.spamProtection}
+            onChange={(v) => set('spamProtection', v)}
+            label="Modo castigo: quem fizer spam no ticket leva castigo (timeout) automaticamente"
+          />
+          {draft.spamProtection && (
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <Label>Mensagens</Label>
+                <input type="number" min={2} max={50} value={draft.spamMaxMessages} onChange={(e) => set('spamMaxMessages', Number(e.target.value))} className={`mt-1.5 w-24 ${inputClass}`} />
+              </div>
+              <div>
+                <Label>Em (segundos)</Label>
+                <input type="number" min={2} max={300} value={draft.spamWindowSeconds} onChange={(e) => set('spamWindowSeconds', Number(e.target.value))} className={`mt-1.5 w-24 ${inputClass}`} />
+              </div>
+              <div>
+                <Label>Castigo (minutos)</Label>
+                <input type="number" min={1} max={40320} value={draft.spamTimeoutMinutes} onChange={(e) => set('spamTimeoutMinutes', Number(e.target.value))} className={`mt-1.5 w-28 ${inputClass}`} />
+              </div>
+              <Button variant="dark" onClick={() => setEditing('verificationSpamTimeout')} disabled={!guildId}>
+                <Palette size={14} />
+                Aviso de castigo
+              </Button>
+            </div>
+          )}
+          {draft.spamProtection && (
+            <Hint>
+              Com estes valores: {draft.spamMaxMessages} mensagens em {draft.spamWindowSeconds} s → castigo de {draft.spamTimeoutMinutes} min. O bot precisa da permissão{' '}
+              <span className="text-muted">Castigar membros</span> e de ter o cargo acima do membro (administradores não podem ser castigados).
+            </Hint>
+          )}
         </div>
       </Card>
 
