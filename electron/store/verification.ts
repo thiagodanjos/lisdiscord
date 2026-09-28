@@ -39,6 +39,8 @@ export function defaultVerificationSettings(): VerificationSettings {
     finishStyle: 'success',
     cancelStyle: 'danger',
     staffPanelStyle: 'secondary',
+    ticketLinkLabel: 'Ir para o ticket',
+    ticketLinkEmoji: '🎫',
     pingRoleId: null,
     pingRoleName: null,
     pingText: DEFAULT_PING_TEXT,

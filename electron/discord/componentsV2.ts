@@ -11,6 +11,7 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from 'discord.js'
+import { SEPARATOR_SPLIT } from '../../shared/embedSeparator'
 
 // Mensagens no formato "Components V2" da Discord: em vez de um embed com os botões por baixo, uma
 // caixa (container) com a barra de cor, o texto, uma linha divisória e os botões LÁ DENTRO. O conteúdo
@@ -41,6 +42,16 @@ export function embedToContainer(embed: EmbedBuilder, rows: ActionRowBuilder<But
     return out
   }
 
+  const divider = () => container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+  /** Adiciona texto, trocando cada `{barra}` por uma divisória verdadeira. */
+  const addText = (text: string) => {
+    text.split(SEPARATOR_SPLIT).forEach((chunk, i) => {
+      if (i > 0) divider()
+      const content = take(chunk.trim())
+      if (content) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content))
+    })
+  }
+
   const head: string[] = []
   const author = clean(d.author?.name)
   if (author) head.push(`-# ${author}`)
@@ -48,7 +59,8 @@ export function embedToContainer(embed: EmbedBuilder, rows: ActionRowBuilder<But
   if (title) head.push(`### ${d.url ? `[${title}](${d.url})` : title}`)
   const description = clean(d.description)
   if (description) head.push(description)
-  const headText = take(head.join('\n')) || INVISIBLE
+  const [firstChunk, ...restChunks] = head.join('\n').split(SEPARATOR_SPLIT)
+  const headText = take(firstChunk.trim()) || INVISIBLE
 
   if (d.thumbnail?.url) {
     container.addSectionComponents(
@@ -59,12 +71,15 @@ export function embedToContainer(embed: EmbedBuilder, rows: ActionRowBuilder<But
   } else {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(headText))
   }
+  for (const chunk of restChunks) {
+    divider()
+    const content = take(chunk.trim())
+    if (content) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content))
+  }
 
   const fields = (d.fields ?? []).filter((f) => clean(f.name) && clean(f.value))
   if (fields.length > 0) {
-    const text = fields.map((f) => (f.value.includes('\n') ? `**${f.name}**\n${f.value}` : `**${f.name}:** ${f.value}`)).join('\n')
-    const content = take(text)
-    if (content) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content))
+    addText(fields.map((f) => (f.value.includes('\n') ? `**${f.name}**\n${f.value}` : `**${f.name}:** ${f.value}`)).join('\n'))
   }
 
   if (d.image?.url) {
@@ -78,7 +93,7 @@ export function embedToContainer(embed: EmbedBuilder, rows: ActionRowBuilder<But
   }
 
   if (rows.length > 0) {
-    container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+    divider()
     container.addActionRowComponents(...rows)
   }
   return container

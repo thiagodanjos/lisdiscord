@@ -1,5 +1,6 @@
 import { EmbedBuilder } from 'discord.js'
 import type { EmbedDraft } from '../../shared/types'
+import { flattenSeparators, SEPARATOR_TOKEN } from '../../shared/embedSeparator'
 
 /**
  * Constrói um embed a partir de um `EmbedDraft` — a mesma estrutura usada pela página Mensagens,
@@ -7,14 +8,22 @@ import type { EmbedDraft } from '../../shared/types'
  * substitui tokens como `{lista}` ou `{membro}` em todos os textos antes de aplicar os limites da
  * API da Discord.
  */
-export function buildEmbedFromDraft(draft: EmbedDraft, placeholders: Record<string, string> = {}): EmbedBuilder {
+export function buildEmbedFromDraft(
+  draft: EmbedDraft,
+  placeholders: Record<string, string> = {},
+  options: { separators?: 'line' | 'keep' } = {},
+): EmbedBuilder {
   const embed = new EmbedBuilder()
-  const text = (value: string | undefined, max: number) => substitute(value ?? '', placeholders).slice(0, max).trim()
+  // `{barra}`: em mensagens "caixa" (V2) fica como está e vira a divisória verdadeira em
+  // embedToContainer; em embeds normais vira uma linha fina.
+  const separators = (value: string) => (options.separators === 'keep' ? value : flattenSeparators(value))
+  const text = (value: string | undefined, max: number) => separators(substitute(value ?? '', placeholders)).slice(0, max).trim()
+  const plain = (value: string | undefined, max: number) => text(value, max).split(SEPARATOR_TOKEN).join('').trim()
 
-  const title = text(draft.title, 256)
+  const title = plain(draft.title, 256)
   const description = text(draft.description, 4096)
-  const footer = text(draft.footer, 2048)
-  const authorName = text(draft.authorName, 256)
+  const footer = plain(draft.footer, 2048)
+  const authorName = plain(draft.authorName, 256)
   const url = safeUrl(substitute(draft.url ?? '', placeholders))
   const footerIcon = safeUrl(substitute(draft.footerIconUrl ?? '', placeholders))
   const authorIcon = safeUrl(substitute(draft.authorIconUrl ?? '', placeholders))
@@ -34,7 +43,7 @@ export function buildEmbedFromDraft(draft: EmbedDraft, placeholders: Record<stri
   if (draft.timestamp) embed.setTimestamp(new Date())
 
   const fields = draft.fields
-    .map((f) => ({ name: text(f.name, 256), value: text(f.value, 1024), inline: f.inline }))
+    .map((f) => ({ name: plain(f.name, 256), value: text(f.value, 1024), inline: f.inline }))
     .filter((f) => f.name && f.value)
     .slice(0, 25)
   if (fields.length > 0) embed.addFields(fields)

@@ -87,6 +87,24 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     ],
     footer: 'Ticket #{numero} · só tu e a gestão veem este canal',
   }),
+  verificationTicketCreated: draft({
+    title: '✅ Ticket criado',
+    description: 'O teu ticket foi criado: {canal}\n{barra}\nEnvia lá o **print do teu perfil** com os cargos e aguarda um verificador.',
+    color: '#22E584',
+    timestamp: false,
+  }),
+  verificationTicketExisting: draft({
+    title: '📋 Já tens um ticket aberto',
+    description: 'Continua a tua verificação no teu ticket: {canal}',
+    color: '#5865F2',
+    timestamp: false,
+  }),
+  verificationTicketLimit: draft({
+    title: '⏳ Limite de tickets',
+    description: 'Só podes abrir **{max} ticket(s)** a cada {janela}.\n{barra}\nTenta outra vez {tempo}.',
+    color: '#F0B232',
+    timestamp: false,
+  }),
   logMessageDelete: draft({
     title: '🗑️ Mensagem apagada',
     description: '**Autor:** {autor}\n**Canal:** {canal}\n**Apagada por:** {apagadaPor}\n**Enviada:** {enviadaEm}\n\n**Conteúdo:**\n{conteudo}',

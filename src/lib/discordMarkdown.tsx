@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 
 /**
  * Um mini-parser da formatação Markdown que a Discord entende em descrições e valores de campos de
@@ -17,8 +17,42 @@ function tokenPattern(): RegExp {
   return /(\*\*\*(.+?)\*\*\*)|(\*\*(.+?)\*\*)|(__(.+?)__)|(~~(.+?)~~)|(\*(.+?)\*)|(\[(.+?)\]\((https?:\/\/[^\s)]+)\))|(<a?:(\w+):(\d+)>)/g
 }
 
+/**
+ * Além da formatação em linha, trata as linhas especiais que a Discord mostra de forma diferente:
+ * `{barra}` (barra divisória da app), `# / ## / ###` (títulos) e `-# ` (texto pequeno e cinzento).
+ */
 export function renderDiscordMarkdown(text: string): ReactNode {
-  return parse(text, 0)
+  if (!/^[ \t]*\{barra\}[ \t]*$|^#{1,3} |^-# /m.test(text)) return parse(text, 0)
+  const out: ReactNode[] = []
+  let buffer: string[] = []
+  let key = 0
+  const flush = () => {
+    if (buffer.length === 0) return
+    out.push(<Fragment key={key++}>{parse(buffer.join('\n'), key * 100_000)}</Fragment>)
+    buffer = []
+  }
+  for (const line of text.split('\n')) {
+    if (/^[ \t]*\{barra\}[ \t]*$/.test(line)) {
+      flush()
+      out.push(<span key={key++} className="my-2 block h-px bg-white/15" />)
+      continue
+    }
+    const heading = line.match(/^(#{1,3}) (.+)$/)
+    const subtext = line.match(/^-# (.+)$/)
+    if (heading || subtext) {
+      flush()
+      const size = heading ? (heading[1].length === 1 ? 'text-xl' : heading[1].length === 2 ? 'text-lg' : 'text-base') : ''
+      out.push(
+        <span key={key++} className={heading ? `block font-bold text-text ${size}` : 'block text-[11px] text-faint'}>
+          {parse((heading ? heading[2] : subtext![1]) ?? '', key * 100_000)}
+        </span>,
+      )
+      continue
+    }
+    buffer.push(line)
+  }
+  flush()
+  return out
 }
 
 function parse(text: string, keyBase: number): ReactNode[] {

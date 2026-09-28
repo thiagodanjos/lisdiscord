@@ -185,6 +185,8 @@ export async function applyVerificationSettings(guild: Guild, input: Verificatio
     finishStyle: validStyle(input.finishStyle, 'success'),
     cancelStyle: validStyle(input.cancelStyle, 'danger'),
     staffPanelStyle: validStyle(input.staffPanelStyle, 'secondary'),
+    ticketLinkLabel: (input.ticketLinkLabel ?? '').trim().slice(0, 80) || 'Ir para o ticket',
+    ticketLinkEmoji: (input.ticketLinkEmoji ?? '').trim(),
     buttonStyle: validStyle(input.buttonStyle, 'success'),
     buttonEmoji: (input.buttonEmoji ?? '').trim(),
     maxTicketsPerWindow: clampInt(input.maxTicketsPerWindow, 1, 20, 2),
@@ -306,7 +308,7 @@ export async function postVerificationPanel(guild: Guild): Promise<string | null
   const channel = await guild.channels.fetch(settings.channelId).catch(() => null)
   if (!channel || !channel.isTextBased()) return null
 
-  let embed = buildEmbedFromDraft(getTemplate(guild.id, 'verificationPanel'), { servidor: guild.name })
+  let embed = buildEmbedFromDraft(getTemplate(guild.id, 'verificationPanel'), { servidor: guild.name }, { separators: 'keep' })
   if (!embedHasContent(embed)) embed = embed.setDescription('Clica no botão abaixo para te verificares.')
 
   // Formato V2: o botão fica DENTRO da caixa do painel. Uma mensagem antiga (embed normal) não pode
@@ -438,7 +440,12 @@ async function openTicket(interaction: ButtonInteraction): Promise<void> {
   if (existing) {
     const channel = await guild.channels.fetch(existing.channelId).catch(() => null)
     if (channel) {
-      await interaction.reply({ content: `📋 Já tens um ticket aberto: <#${existing.channelId}>`, ephemeral: true })
+      await sendTicketReply(interaction, 'verificationTicketExisting', settings, {
+        membro: `<@${user.id}>`,
+        canal: `<#${existing.channelId}>`,
+        numero: String(existing.number),
+        servidor: guild.name,
+      }, existing.channelId, `📋 Já tens um ticket aberto: <#${existing.channelId}>`)
       return
     }
     store.closeTicket(existing.id, 'closed', 'canal apagado')
@@ -452,10 +459,15 @@ async function openTicket(interaction: ButtonInteraction): Promise<void> {
       const oldest = recent.map((t) => new Date(t.createdAt).getTime()).sort((a, b) => a - b)[0]
       const retryAt = new Date(oldest + windowMs)
       logEvent(guild.id, 'info', `${user.tag} tentou abrir um ticket mas atingiu o limite (${settings.maxTicketsPerWindow}).`)
-      await interaction.reply({
-        content: `⏳ Só podes abrir **${settings.maxTicketsPerWindow} ticket(s)** a cada ${formatWindow(settings.ticketWindowMinutes)}. Tenta outra vez ${time(retryAt, TimestampStyles.RelativeTime)}.`,
-        ephemeral: true,
-      })
+      const janela = formatWindow(settings.ticketWindowMinutes)
+      const tempo = time(retryAt, TimestampStyles.RelativeTime)
+      await sendTicketReply(interaction, 'verificationTicketLimit', settings, {
+        membro: `<@${user.id}>`,
+        max: String(settings.maxTicketsPerWindow),
+        janela,
+        tempo,
+        servidor: guild.name,
+      }, null, `⏳ Só podes abrir **${settings.maxTicketsPerWindow} ticket(s)** a cada ${janela}. Tenta outra vez ${tempo}.`)
       return
     }
   }
@@ -550,9 +562,61 @@ async function openTicket(interaction: ButtonInteraction): Promise<void> {
     }
 
     logEvent(guild.id, 'info', `Ticket #${number} aberto por ${user.tag} (#${channel.name}).`)
-    await interaction.editReply({ content: `✅ O teu ticket foi criado: <#${channel.id}> — envia lá o print do teu perfil com os cargos.` })
+    await sendTicketReply(interaction, 'verificationTicketCreated', settings, {
+      membro: `<@${user.id}>`,
+      canal: `<#${channel.id}>`,
+      numero: String(number),
+      servidor: guild.name,
+    }, channel.id, `✅ O teu ticket foi criado: <#${channel.id}> — envia lá o print do teu perfil com os cargos.`)
   } finally {
     opening.delete(`${guild.id}:${user.id}`)
+  }
+}
+
+/**
+ * Resposta (só para quem clicou) ao botão Verificar — embed personalizável na app, em formato caixa
+ * (com as barras {barra}) e com um botão de link para ir direto ao ticket. Se a Discord recusar o
+ * formato (ou um emoji inválido), manda o texto simples de reserva.
+ */
+async function sendTicketReply(
+  interaction: ButtonInteraction,
+  kind: 'verificationTicketCreated' | 'verificationTicketExisting' | 'verificationTicketLimit',
+  settings: VerificationSettings,
+  placeholders: Record<string, string>,
+  ticketChannelId: string | null,
+  fallback: string,
+): Promise<void> {
+  const guildId = interaction.guildId!
+  const build = (withEmoji: boolean) => {
+    let embed = buildEmbedFromDraft(getTemplate(guildId, kind), placeholders, { separators: 'keep' })
+    if (!embedHasContent(embed)) embed = embed.setDescription(fallback)
+    const rows: ActionRowBuilder<ButtonBuilder>[] = []
+    if (ticketChannelId) {
+      const link = new ButtonBuilder()
+        .setStyle(ButtonStyle.Link)
+        .setURL(`https://discord.com/channels/${guildId}/${ticketChannelId}`)
+        .setLabel((settings.ticketLinkLabel || 'Ir para o ticket').slice(0, 80))
+      const emoji = withEmoji ? parseButtonEmoji(settings.ticketLinkEmoji) : null
+      if (emoji) link.setEmoji(emoji)
+      rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(link))
+    }
+    return { flags: MessageFlags.IsComponentsV2 as const, components: [embedToContainer(embed, rows)], allowedMentions: { parse: [] as [] } }
+  }
+  const send = (payload: ReturnType<typeof build>) =>
+    interaction.deferred || interaction.replied
+      ? interaction.editReply(payload)
+      : interaction.reply({ ...payload, flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral })
+  try {
+    await send(build(true))
+  } catch {
+    try {
+      await send(build(false))
+    } catch (err) {
+      logEvent(guildId, 'warn', `Não consegui mandar a resposta personalizada (${errText(err)}) — mandei o texto simples.`)
+      const plain = { content: fallback, allowedMentions: { parse: [] as [] } }
+      if (interaction.deferred || interaction.replied) await interaction.editReply(plain).catch(() => undefined)
+      else await interaction.reply({ ...plain, ephemeral: true }).catch(() => undefined)
+    }
   }
 }
 
@@ -645,7 +709,7 @@ function ticketEmbed(
     estado: info.claimedById ? '🟡 Em análise' : info.hasPhoto ? '📸 Foto enviada — à espera de um verificador' : '⏳ À espera dos prints',
     cargo: settings.pingRoleId ? `<@&${settings.pingRoleId}>` : '',
     servidor: guild.name,
-  })
+  }, { separators: 'keep' })
   return embedHasContent(embed) ? embed : embed.setDescription('Envia aqui o print do teu perfil com os cargos.')
 }
 

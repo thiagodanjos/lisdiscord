@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Bold, Italic, Link2, Strikethrough, Underline } from 'lucide-react'
+import { Bold, Italic, Link2, SeparatorHorizontal, Strikethrough, Underline } from 'lucide-react'
 import { EmojiPickerButton } from './EmojiPickerButton'
 import { insertAtSelection, wrapSelection, type TextSelection } from '../lib/textEditing'
 import type { BotEmoji } from '../../shared/types'
@@ -114,6 +114,9 @@ export function RichTextField({
               </>
             )}
           </div>
+          <ToolButton title="Barra divisória — linha {barra} (divisória verdadeira nas mensagens em caixa, linha fina nos embeds normais)" onClick={() => apply(insertSeparator)}>
+            <SeparatorHorizontal size={13} />
+          </ToolButton>
           <EmojiPickerButton emojis={emojis} onPick={(tag) => apply((v, s) => insertAtSelection(v, s, tag))} />
         </div>
       </div>
@@ -141,4 +144,15 @@ function ToolButton({ title, onClick, children }: { title: string; onClick: () =
       {children}
     </button>
   )
+}
+
+/** Insere `{barra}` numa linha própria no cursor (acrescenta as quebras de linha que faltarem). */
+function insertSeparator(value: string, sel: TextSelection): { value: string; selection: TextSelection } {
+  const before = value.slice(0, sel.start)
+  const after = value.slice(sel.end)
+  const lead = before === '' || before.endsWith('\n') ? '' : '\n'
+  const trail = after.startsWith('\n') ? '' : '\n'
+  const insert = `${lead}{barra}${trail}`
+  const cursor = before.length + insert.length
+  return { value: before + insert + after, selection: { start: cursor, end: cursor } }
 }

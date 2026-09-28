@@ -294,6 +294,9 @@ export type EmbedTemplateKind =
   | 'verificationLog'
   | 'verificationPanel'
   | 'verificationTicket'
+  | 'verificationTicketCreated'
+  | 'verificationTicketExisting'
+  | 'verificationTicketLimit'
   | 'logMessageDelete'
   | 'logMessageEdit'
   | 'logPoints'
@@ -315,6 +318,9 @@ export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'verificationLog',
   'verificationPanel',
   'verificationTicket',
+  'verificationTicketCreated',
+  'verificationTicketExisting',
+  'verificationTicketLimit',
   'logMessageDelete',
   'logMessageEdit',
   'logPoints',
@@ -636,6 +642,9 @@ export interface VerificationSettings {
   finishStyle: VerificationButtonStyle
   cancelStyle: VerificationButtonStyle
   staffPanelStyle: VerificationButtonStyle
+  /** Botão de link "Ir para o ticket" nas respostas do botão Verificar (links são sempre cinzentos). */
+  ticketLinkLabel: string
+  ticketLinkEmoji: string
   /** Cargos que podem aprovar/recusar e que veem os tickets (além de quem tem Administrador). */
   approverRoleIds: string[]
   /** Cargos dados ao membro quando é aprovado (opcional). */
@@ -708,6 +717,7 @@ export interface VerificationDiagnostics {
 
 export const VERIFICATION_PANEL_PLACEHOLDERS = ['{servidor}'] as const
 export const VERIFICATION_TICKET_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{numero}', '{responsavel}', '{estado}', '{cargo}', '{servidor}'] as const
+export const VERIFICATION_REPLY_PLACEHOLDERS = ['{membro}', '{canal}', '{numero}', '{max}', '{janela}', '{tempo}', '{servidor}'] as const
 export const TICKET_NAME_PLACEHOLDERS = ['{usuario}', '{id}', '{numero}'] as const
 export const VERIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{criada}', '{entrou}', '{responsavel}', '{estado}', '{servidor}'] as const
 export const VERIFICATION_LOG_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{estado}', '{moderador}', '{responsavel}', '{cargosDados}', '{cargosTirados}', '{motivo}', '{ticket}', '{duracao}', '{servidor}'] as const

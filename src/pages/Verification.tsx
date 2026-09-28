@@ -24,6 +24,7 @@ import { TemplateEditorModal } from '../components/TemplateEditorModal'
 import { DiscordButtonEditor, DiscordButtonPreview } from '../components/DiscordButtonEditor'
 import {
   TICKET_NAME_PLACEHOLDERS,
+  VERIFICATION_REPLY_PLACEHOLDERS,
   VERIFICATION_LOG_PLACEHOLDERS,
   VERIFICATION_PANEL_PLACEHOLDERS,
   VERIFICATION_PLACEHOLDERS,
@@ -69,6 +70,8 @@ const EMPTY_SETTINGS: VerificationSettings = {
   finishStyle: 'success',
   cancelStyle: 'danger',
   staffPanelStyle: 'secondary',
+  ticketLinkLabel: 'Ir para o ticket',
+  ticketLinkEmoji: '🎫',
   pingRoleId: null,
   pingRoleName: null,
   pingText: '{cargo}',
@@ -88,7 +91,13 @@ const STAFF_BUTTONS = [
 ] as const
 
 const TEMPLATE_INFO: Record<
-  'verificationPanel' | 'verificationTicket' | 'verificationRequest' | 'verificationLog',
+  | 'verificationPanel'
+  | 'verificationTicket'
+  | 'verificationRequest'
+  | 'verificationLog'
+  | 'verificationTicketCreated'
+  | 'verificationTicketExisting'
+  | 'verificationTicketLimit',
   { title: string; hint: string; tokens: readonly string[]; imageNote?: string }
 > = {
   verificationPanel: {
@@ -100,6 +109,21 @@ const TEMPLATE_INFO: Record<
     title: 'Personalizar embed do ticket (com os botões)',
     hint: 'Mensagem de abertura de cada ticket. No Discord aparece como uma caixa com os botões da gestão lá dentro (Assumir · Finalizar · Cancelar · Painel staff), por baixo de uma linha divisória. {responsavel} e {estado} atualizam sozinhos; {numero} é o número do ticket.',
     tokens: VERIFICATION_TICKET_PLACEHOLDERS,
+  },
+  verificationTicketCreated: {
+    title: 'Personalizar resposta "ticket criado"',
+    hint: 'Mensagem que só quem clicou em Verificar vê, com o botão "Ir para o ticket". Aparece em formato caixa — usa a barra divisória ({barra}) à vontade.',
+    tokens: VERIFICATION_REPLY_PLACEHOLDERS,
+  },
+  verificationTicketExisting: {
+    title: 'Personalizar resposta "já tens um ticket"',
+    hint: 'Quando alguém clica em Verificar mas já tem um ticket aberto. Também leva o botão "Ir para o ticket".',
+    tokens: VERIFICATION_REPLY_PLACEHOLDERS,
+  },
+  verificationTicketLimit: {
+    title: 'Personalizar resposta "limite de tickets"',
+    hint: 'Quando o membro já abriu o máximo de tickets na janela de tempo. {max} = máximo, {janela} = “1 hora”, {tempo} = quando pode voltar a tentar.',
+    tokens: VERIFICATION_REPLY_PLACEHOLDERS,
   },
   verificationRequest: {
     title: 'Personalizar embed da foto',
@@ -314,6 +338,10 @@ export default function Verification() {
     avatar: '',
     id: '123456789012345678',
     numero: String(nextNumber),
+    canal: '#verificacao-membro',
+    max: String(draft.maxTicketsPerWindow),
+    janela: draft.ticketWindowMinutes === 60 ? '1 hora' : `${draft.ticketWindowMinutes} minutos`,
+    tempo: 'daqui a 42 minutos',
     cargo: pingRole ? `@${pingRole.name}` : '',
     criada: '12/03/2023',
     entrou: 'há 2 dias',
@@ -508,6 +536,36 @@ export default function Verification() {
               sozinho.
             </Hint>
           </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <Label>Respostas a quem clica em Verificar (só essa pessoa vê)</Label>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="dark" onClick={() => setEditing('verificationTicketCreated')} disabled={!guildId}>
+                <Palette size={14} />
+                “Ticket criado”
+              </Button>
+              <Button variant="dark" onClick={() => setEditing('verificationTicketExisting')} disabled={!guildId}>
+                <Palette size={14} />
+                “Já tens um ticket”
+              </Button>
+              <Button variant="dark" onClick={() => setEditing('verificationTicketLimit')} disabled={!guildId}>
+                <Palette size={14} />
+                “Limite de tickets”
+              </Button>
+            </div>
+            <Hint>Saem em formato caixa, com a barra divisória verdadeira onde puseres {'{barra}'}.</Hint>
+          </div>
+          <DiscordButtonEditor
+            title="Botão “Ir para o ticket” (nas respostas)"
+            label={draft.ticketLinkLabel}
+            emoji={draft.ticketLinkEmoji}
+            style="secondary"
+            fallbackLabel="Ir para o ticket"
+            emojis={emojis}
+            linkButton
+            onChange={(p) => setDraft((d) => ({ ...d, ...(p.label !== undefined && { ticketLinkLabel: p.label }), ...(p.emoji !== undefined && { ticketLinkEmoji: p.emoji }) }))}
+          />
         </div>
         <Toggle
           checked={draft.deleteNonImage}

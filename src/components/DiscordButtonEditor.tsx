@@ -12,7 +12,11 @@ const BUTTON_STYLE_CLASS: Record<VerificationButtonStyle, string> = {
   danger: 'bg-[#da373c] hover:bg-[#a12828]',
 }
 
-const STYLES: { value: VerificationButtonStyle; label: string; swatch: string }[] = [
+const STYLES: {
+  value: VerificationButtonStyle
+  label: string
+  swatch: string
+}[] = [
   { value: 'primary', label: 'Azul', swatch: '#5865f2' },
   { value: 'success', label: 'Verde', swatch: '#248046' },
   { value: 'secondary', label: 'Cinzento', swatch: '#4e5058' },
@@ -66,6 +70,7 @@ export function DiscordButtonEditor({
   fallbackLabel,
   emojis,
   onChange,
+  linkButton,
 }: {
   title: string
   label: string
@@ -74,6 +79,8 @@ export function DiscordButtonEditor({
   fallbackLabel: string
   emojis: BotEmoji[]
   onChange: (patch: { label?: string; emoji?: string; style?: VerificationButtonStyle }) => void
+  /** Botão de link (abre um canal/URL): a Discord desenha-os sempre a cinzento, sem escolha de cor. */
+  linkButton?: boolean
 }) {
   const isCustom = CUSTOM_EMOJI.test(emoji.trim())
   return (
@@ -114,21 +121,26 @@ export function DiscordButtonEditor({
         )}
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {STYLES.map((s) => (
-          <button
-            key={s.value}
-            type="button"
-            onClick={() => onChange({ style: s.value })}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-              style === s.value ? 'border-accent bg-accent-soft text-text' : 'border-border text-muted hover:text-text'
-            }`}
-          >
-            <span className="size-2.5 rounded-full" style={{ background: s.swatch }} />
-            {s.label}
-          </button>
-        ))}
-      </div>
+      {linkButton ? (
+        <p className="text-[11px] text-faint">Botões de link (abrem o ticket) são sempre cinzentos na Discord.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {STYLES.map((s) => (
+            <button
+              key={s.value}
+              type="button"
+              onClick={() => onChange({ style: s.value })}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                style === s.value ? 'border-accent bg-accent-soft text-text' : 'border-border text-muted hover:text-text'
+              }`}
+            >
+              <span className="size-2.5 rounded-full" style={{ background: s.swatch }} />
+              {s.label}
+            </button>
+          ))}
+          <p className="w-full text-[10px] text-faint">A Discord só permite estas 4 cores nos botões — para dar a tua cor, usa um emoji do bot colorido.</p>
+        </div>
+      )}
     </div>
   )
 }
