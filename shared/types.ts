@@ -297,6 +297,10 @@ export type EmbedTemplateKind =
   | 'verificationTicketCreated'
   | 'verificationTicketExisting'
   | 'verificationTicketLimit'
+  | 'verificationClosedFinished'
+  | 'verificationClosedCancelled'
+  | 'verificationStaffFinished'
+  | 'verificationStaffCancelled'
   | 'logMessageDelete'
   | 'logMessageEdit'
   | 'logPoints'
@@ -321,6 +325,10 @@ export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'verificationTicketCreated',
   'verificationTicketExisting',
   'verificationTicketLimit',
+  'verificationClosedFinished',
+  'verificationClosedCancelled',
+  'verificationStaffFinished',
+  'verificationStaffCancelled',
   'logMessageDelete',
   'logMessageEdit',
   'logPoints',
@@ -731,6 +739,7 @@ export interface VerificationDiagnostics {
 export const VERIFICATION_PANEL_PLACEHOLDERS = ['{servidor}'] as const
 export const VERIFICATION_TICKET_PLACEHOLDERS = ['{membro}', '{mencao}', '{nome}', '{avatar}', '{id}', '{numero}', '{responsavel}', '{gestor}', '{estado}', '{cargo}', '{servidor}'] as const
 export const VERIFICATION_REPLY_PLACEHOLDERS = ['{membro}', '{canal}', '{numero}', '{max}', '{janela}', '{tempo}', '{servidor}'] as const
+export const VERIFICATION_CLOSE_PLACEHOLDERS = ['{membro}', '{moderador}', '{mencao}', '{responsavel}', '{estado}', '{motivo}', '{segundos}', '{numero}', '{servidor}'] as const
 export const TICKET_NAME_PLACEHOLDERS = ['{usuario}', '{id}', '{numero}'] as const
 export const VERIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{criada}', '{entrou}', '{responsavel}', '{estado}', '{servidor}'] as const
 export const VERIFICATION_LOG_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{estado}', '{moderador}', '{responsavel}', '{cargosDados}', '{cargosTirados}', '{motivo}', '{ticket}', '{duracao}', '{servidor}'] as const

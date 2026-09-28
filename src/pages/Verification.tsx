@@ -27,6 +27,7 @@ import { DiscordButtonEditor, DiscordButtonPreview } from '../components/Discord
 import {
   TICKET_NAME_PLACEHOLDERS,
   VERIFICATION_REPLY_PLACEHOLDERS,
+  VERIFICATION_CLOSE_PLACEHOLDERS,
   VERIFICATION_LOG_PLACEHOLDERS,
   VERIFICATION_PANEL_PLACEHOLDERS,
   VERIFICATION_PLACEHOLDERS,
@@ -116,7 +117,11 @@ const TEMPLATE_INFO: Record<
   | 'verificationLog'
   | 'verificationTicketCreated'
   | 'verificationTicketExisting'
-  | 'verificationTicketLimit',
+  | 'verificationTicketLimit'
+  | 'verificationClosedFinished'
+  | 'verificationClosedCancelled'
+  | 'verificationStaffFinished'
+  | 'verificationStaffCancelled',
   { title: string; hint: string; tokens: readonly string[]; imageNote?: string }
 > = {
   verificationPanel: {
@@ -143,6 +148,26 @@ const TEMPLATE_INFO: Record<
     title: 'Personalizar resposta "limite de tickets"',
     hint: 'Quando o membro já abriu o máximo de tickets na janela de tempo. {max} = máximo, {janela} = “1 hora”, {tempo} = quando pode voltar a tentar.',
     tokens: VERIFICATION_REPLY_PLACEHOLDERS,
+  },
+  verificationClosedFinished: {
+    title: 'Mensagem no ticket — finalizado',
+    hint: 'Aparece no ticket (todos veem) quando um gestor clica em Finalizar, antes de o canal ser apagado. {moderador}/{mencao} = quem finalizou; {segundos} = quanto falta para fechar.',
+    tokens: VERIFICATION_CLOSE_PLACEHOLDERS,
+  },
+  verificationClosedCancelled: {
+    title: 'Mensagem no ticket — cancelado',
+    hint: 'Aparece no ticket quando a verificação é cancelada. {motivo} = o motivo escrito ao cancelar.',
+    tokens: VERIFICATION_CLOSE_PLACEHOLDERS,
+  },
+  verificationStaffFinished: {
+    title: 'Resposta ao gestor — finalizado',
+    hint: 'Só o gestor que clicou em Finalizar vê esta mensagem.',
+    tokens: VERIFICATION_CLOSE_PLACEHOLDERS,
+  },
+  verificationStaffCancelled: {
+    title: 'Resposta ao gestor — cancelado',
+    hint: 'Só quem cancelou vê esta mensagem.',
+    tokens: VERIFICATION_CLOSE_PLACEHOLDERS,
   },
   verificationRequest: {
     title: 'Personalizar embed da foto',
@@ -364,12 +389,20 @@ export default function Verification() {
     cargo: pingRole ? `@${pingRole.name}` : '',
     criada: '12/03/2023',
     entrou: 'há 2 dias',
-    estado: editing === 'verificationLog' ? 'finalizada ✅' : draft.stateWaitingPrint || '⏳ aguardando print',
+    estado:
+      editing === 'verificationLog'
+        ? 'finalizada ✅'
+        : editing === 'verificationClosedFinished' || editing === 'verificationStaffFinished'
+          ? draft.stateVerified || '✅ verificado'
+          : editing === 'verificationClosedCancelled' || editing === 'verificationStaffCancelled'
+            ? draft.stateCancelled || '✖️ cancelado'
+            : draft.stateWaitingPrint || '⏳ aguardando print',
     responsavel: draft.responsibleNone || 'ninguém',
-    mencao: '@membro',
+    mencao: editing?.startsWith('verificationClosed') || editing?.startsWith('verificationStaff') ? '@gestor' : '@membro',
     gestor: '@gestor',
+    segundos: String(draft.closeDelaySeconds || 5),
     moderador: '@gestor',
-    motivo: '—',
+    motivo: editing?.includes('Cancelled') ? 'print ilegível' : '—',
     ticket: String(nextNumber),
     duracao: '12 min',
     cargosDados: roles.filter((r) => draft.addRoleIds.includes(r.id)).map((r) => `@${r.name}`).join(', ') || '—',
@@ -550,26 +583,39 @@ export default function Verification() {
             </p>
           </div>
           <div>
-            <Label>Mensagem quando a verificação é decidida</Label>
-            <div className="mt-1.5 flex gap-2">
-              <div className="min-w-0 flex-1">
-                <EmojiTextInput value={draft.closeMessage} onChange={(v) => set('closeMessage', v)} emojis={emojis} maxLength={500} />
-              </div>
-              <div className="w-28 shrink-0">
-                <input
-                  type="number"
-                  min={1}
-                  max={300}
-                  value={draft.closeDelaySeconds}
-                  onChange={(e) => set('closeDelaySeconds', Number(e.target.value))}
-                  title="Segundos até o ticket ser apagado"
-                  className={inputClass}
-                />
-              </div>
+            <Label>Mensagens ao fechar o ticket</Label>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <Button variant="dark" onClick={() => setEditing('verificationClosedFinished')} disabled={!guildId}>
+                <Palette size={14} />
+                No ticket: finalizado
+              </Button>
+              <Button variant="dark" onClick={() => setEditing('verificationClosedCancelled')} disabled={!guildId}>
+                <Palette size={14} />
+                No ticket: cancelado
+              </Button>
+              <Button variant="dark" onClick={() => setEditing('verificationStaffFinished')} disabled={!guildId}>
+                <Palette size={14} />
+                Ao gestor: finalizado
+              </Button>
+              <Button variant="dark" onClick={() => setEditing('verificationStaffCancelled')} disabled={!guildId}>
+                <Palette size={14} />
+                Ao gestor: cancelado
+              </Button>
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs text-muted">Apagar o ticket</span>
+              <input
+                type="number"
+                min={1}
+                max={300}
+                value={draft.closeDelaySeconds}
+                onChange={(e) => set('closeDelaySeconds', Number(e.target.value))}
+                className={`w-20 ${inputClass}`}
+              />
+              <span className="text-xs text-muted">segundos depois de finalizar/cancelar</span>
             </div>
             <Hint>
-              Tokens: <code>{'{estado}'}</code> <code>{'{membro}'}</code> <code>{'{moderador}'}</code> <code>{'{segundos}'}</code> · o ticket é apagado{' '}
-              <b className="text-muted">{draft.closeDelaySeconds || 5} s</b> depois (número à direita).
+              “No ticket” todos veem; “Ao gestor” só quem clicou vê. Tudo em formato caixa, com {'{barra}'} e emojis do bot à vontade.
             </Hint>
           </div>
         </div>

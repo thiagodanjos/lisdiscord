@@ -106,6 +106,26 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     color: '#F0B232',
     timestamp: false,
   }),
+  verificationClosedFinished: draft({
+    description: '↪ Seu ticket foi finalizado por: {moderador}\n\n🔴 Ticket será encerrado em {segundos} segundos.',
+    color: '#22E584',
+    timestamp: false,
+  }),
+  verificationClosedCancelled: draft({
+    description: '↪ Seu ticket foi cancelado por: {moderador}\n**Motivo:** {motivo}\n\n🔴 Ticket será encerrado em {segundos} segundos.',
+    color: '#ED4245',
+    timestamp: false,
+  }),
+  verificationStaffFinished: draft({
+    description: '✅ Verificação de {membro} finalizada — log enviado e o ticket fecha em {segundos} segundos.',
+    color: '#22E584',
+    timestamp: false,
+  }),
+  verificationStaffCancelled: draft({
+    description: '✖️ Verificação de {membro} cancelada — log enviado e o ticket fecha em {segundos} segundos.',
+    color: '#ED4245',
+    timestamp: false,
+  }),
   logMessageDelete: draft({
     title: '🗑️ Mensagem apagada',
     description: '**Autor:** {autor}\n**Canal:** {canal}\n**Apagada por:** {apagadaPor}\n**Enviada:** {enviadaEm}\n\n**Conteúdo:**\n{conteudo}',

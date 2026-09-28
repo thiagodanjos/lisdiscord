@@ -993,7 +993,7 @@ async function handleStaffButton(interaction: ButtonInteraction): Promise<void> 
       }
       await interaction.deferReply({ ephemeral: true })
       const ok = await finishVerification(guild, entry, member, true)
-      await interaction.editReply({ content: ok ? '✅ Verificação finalizada — log enviado e o ticket vai ser fechado.' : 'ℹ️ Esta verificação já tinha sido decidida.' })
+      await replyStaffDone(interaction, guild, entry, member.id, true, ok, true)
       return
     }
     case CANCEL_ID: {
@@ -1021,8 +1021,9 @@ async function handleStaffButton(interaction: ButtonInteraction): Promise<void> 
       const submit = await interaction.awaitModalSubmit({ time: 5 * 60_000, filter: (i) => i.customId === modalId }).catch(() => null)
       if (!submit) return
       await submit.deferReply({ ephemeral: true })
-      const ok = await finishVerification(guild, entry, member, false, submit.fields.getTextInputValue('motivo').trim() || undefined)
-      await submit.editReply({ content: ok ? '✖️ Verificação cancelada — log enviado e o ticket vai ser fechado.' : 'ℹ️ Esta verificação já tinha sido decidida.' })
+      const reasonText = submit.fields.getTextInputValue('motivo').trim() || undefined
+      const ok = await finishVerification(guild, entry, member, false, reasonText)
+      await replyStaffDone(submit, guild, entry, member.id, false, ok, true, reasonText)
       return
     }
   }
@@ -1166,7 +1167,7 @@ async function showStaffPanel(interaction: ButtonInteraction, entry: Verificatio
       if (i.isButton() && i.customId === `verif:pfinish:${entry.id}`) {
         await i.deferUpdate()
         const ok = await finishVerification(guild, store.findPendingById(entry.id) ?? current, moderator, true)
-        await i.editReply({ content: ok ? '✅ Verificação finalizada — log enviado e o ticket vai ser fechado.' : 'ℹ️ Esta verificação já tinha sido decidida.', embeds: [], components: [] })
+        await replyStaffDone(i, guild, entry, moderator.id, true, ok, false)
         collector.stop()
       }
     } catch (err) {
@@ -1187,7 +1188,7 @@ async function finishFromStalePanel(interaction: ButtonInteraction, entryId: str
   }
   await interaction.deferUpdate()
   const ok = await finishVerification(guild, entry, member, true)
-  await interaction.editReply({ content: ok ? '✅ Verificação finalizada — log enviado e o ticket vai ser fechado.' : 'ℹ️ Esta verificação já tinha sido decidida.', embeds: [], components: [] })
+  await replyStaffDone(interaction, guild, entry, member.id, true, ok, false)
 }
 
 /**
@@ -1268,22 +1269,84 @@ async function finishVerification(guild: Guild, entry: VerificationEntry, modera
     }
     const closeDelay = clampInt(settings.closeDelaySeconds, 1, 300, 5)
     if (ticket && channel?.isTextBased()) {
-      const text = (settings.closeMessage || store.DEFAULT_CLOSE_MESSAGE)
-        .split('{estado}')
-        .join(stateText(settings, finished ? 'verified' : 'cancelled'))
-        .split('{membro}')
-        .join(`<@${fresh.userId}>`)
-        .split('{moderador}')
-        .join(`<@${moderator.id}>`)
-        .split('{segundos}')
-        .join(String(closeDelay))
-      await channel.send({ content: `${text}${reason ? `\n**Motivo:** ${reason}` : ''}`.slice(0, 2000), allowedMentions: { users: [fresh.userId] } }).catch(() => undefined)
+      // Mensagem no ticket (todos veem) — embed em caixa personalizável na app.
+      const placeholders = closePlaceholders(guild, settings, decided, moderator.id, finished, reason)
+      await channel
+        .send({
+          flags: MessageFlags.IsComponentsV2,
+          components: [closeContainer(guild.id, finished ? 'verificationClosedFinished' : 'verificationClosedCancelled', placeholders)],
+          allowedMentions: { users: [fresh.userId] },
+        })
+        .catch(() =>
+          channel.send({
+            content: `${finished ? 'Ticket finalizado' : 'Ticket cancelado'} por <@${moderator.id}>. Este canal vai ser apagado em ${closeDelay} segundos.`,
+            allowedMentions: { users: [fresh.userId] },
+          }),
+        )
+        .catch(() => undefined)
       scheduleChannelDelete(guild, ticket.channelId, closeDelay * 1000, `Verificação ${finished ? 'finalizada' : 'cancelada'} por ${moderator.user.tag}`)
     }
     return true
   } finally {
     processing.delete(entry.id)
   }
+}
+
+/** Tokens das mensagens de fecho (no ticket e a resposta ao gestor). {mencao} = quem fechou. */
+function closePlaceholders(guild: Guild, settings: VerificationSettings, entry: VerificationEntry, moderatorId: string, finished: boolean, reason?: string): Record<string, string> {
+  const ticket = entry.ticketId ? store.listTickets(guild.id).find((t) => t.id === entry.ticketId) : undefined
+  return {
+    membro: `<@${entry.userId}>`,
+    moderador: `<@${moderatorId}>`,
+    mencao: `<@${moderatorId}>`,
+    responsavel: responsibleText(settings, entry.claimedById, entry.claimedByTag),
+    gestor: `<@${entry.claimedById ?? moderatorId}>`,
+    estado: stateText(settings, finished ? 'verified' : 'cancelled'),
+    motivo: reason || entry.cancelReason || '—',
+    segundos: String(clampInt(settings.closeDelaySeconds, 1, 300, 5)),
+    numero: ticket ? String(ticket.number) : '—',
+    servidor: guild.name,
+  }
+}
+
+type CloseKind = 'verificationClosedFinished' | 'verificationClosedCancelled' | 'verificationStaffFinished' | 'verificationStaffCancelled'
+
+function closeEmbed(guildId: string, kind: CloseKind, placeholders: Record<string, string>, separators: 'keep' | 'line'): EmbedBuilder {
+  const embed = buildEmbedFromDraft(getTemplate(guildId, kind), placeholders, { separators })
+  return embedHasContent(embed) ? embed : embed.setDescription(kind.includes('Finished') ? '✅ Verificação finalizada.' : '✖️ Verificação cancelada.')
+}
+
+function closeContainer(guildId: string, kind: CloseKind, placeholders: Record<string, string>) {
+  return embedToContainer(closeEmbed(guildId, kind, placeholders, 'keep'))
+}
+
+/**
+ * Resposta ao gestor (só ele vê) depois de finalizar/cancelar — embed personalizável. `v2` para
+ * respostas novas (formato caixa); o painel staff já é uma mensagem normal, por isso leva embed.
+ */
+async function replyStaffDone(
+  target: { editReply: (options: never) => Promise<unknown> },
+  guild: Guild,
+  entry: VerificationEntry,
+  moderatorId: string,
+  finished: boolean,
+  ok: boolean,
+  v2: boolean,
+  reason?: string,
+): Promise<void> {
+  const edit = target.editReply as (options: object) => Promise<unknown>
+  if (!ok) {
+    await edit({ content: 'ℹ️ Esta verificação já tinha sido decidida.', embeds: [], components: [] }).catch(() => undefined)
+    return
+  }
+  const settings = store.getVerificationSettings(guild.id)
+  const kind: CloseKind = finished ? 'verificationStaffFinished' : 'verificationStaffCancelled'
+  const placeholders = closePlaceholders(guild, settings, entry, moderatorId, finished, reason)
+  const fallback = finished ? '✅ Verificação finalizada — log enviado e o ticket vai ser fechado.' : '✖️ Verificação cancelada — log enviado e o ticket vai ser fechado.'
+  const payload = v2
+    ? { flags: MessageFlags.IsComponentsV2, components: [closeContainer(guild.id, kind, placeholders)], allowedMentions: { parse: [] } }
+    : { content: '', embeds: [closeEmbed(guild.id, kind, placeholders, 'line')], components: [], allowedMentions: { parse: [] } }
+  await edit(payload).catch(() => edit({ content: fallback, embeds: [], components: [] }).catch(() => undefined))
 }
 
 async function collectImages(message: Message | PartialMessage): Promise<AttachmentBuilder[]> {
