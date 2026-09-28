@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import type { Guild } from 'discord.js'
-import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings } from '../shared/types'
+import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovListOp, type MovListSettings, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings } from '../shared/types'
 import { discordManager } from '../electron/discord/client'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
 import { applyJustificationChannel, postJustificationMessage } from '../electron/discord/justifications'
@@ -31,6 +31,7 @@ import * as movNoticesStore from '../electron/store/movNotices'
 import * as verificationStore from '../electron/store/verification'
 import { createNotice } from '../electron/discord/movNotices'
 import { applyVerificationSettings, getVerificationDiagnostics, postVerificationPanel } from '../electron/discord/verification'
+import { applyMovListOp, applyMovListSettings, getMovListState, postMovList } from '../electron/discord/movList'
 import { applyServerLogSettings } from '../electron/discord/serverLogs'
 import * as serverLogsStore from '../electron/store/serverLogs'
 import { listGuildCategories } from '../electron/discord/memberProfile'
@@ -39,6 +40,10 @@ import { listGuildCategories } from '../electron/discord/memberProfile'
 async function refreshEmbedTemplateTarget(guild: Guild, kind: EmbedTemplateKind): Promise<void> {
   if (kind === 'verificationPanel') {
     await postVerificationPanel(guild).catch(() => undefined)
+    return
+  }
+  if (kind === 'movList') {
+    await postMovList(guild).catch(() => undefined)
     return
   }
   if (kind === 'pontosBoard') {
@@ -162,7 +167,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'notices') ||
     (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'verification' && parts[4] === 'settings') ||
     (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'categories') ||
-    (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'logs' && parts[4] === 'settings')
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'logs' && parts[4] === 'settings') ||
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'movlist')
 
   if (needsConnection && !discordManager.isConnected()) {
     sendJson(res, 503, { error: 'O bot não está ligado à Discord neste momento.' })
@@ -496,6 +502,36 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
       }
       const guild = await discordManager.getClient().guilds.fetch(parts[2])
       sendJson(res, 200, await applyVerificationSettings(guild, body.settings))
+      return
+    }
+
+    // GET /api/guilds/:guildId/movlist
+    if (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'movlist') {
+      sendJson(res, 200, getMovListState(parts[2]))
+      return
+    }
+
+    // POST /api/guilds/:guildId/movlist/settings  { settings: MovListSettings }
+    if (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'movlist' && parts[4] === 'settings') {
+      const body = (await readJsonBody(req)) as { settings?: MovListSettings }
+      if (!body.settings) {
+        sendJson(res, 400, { error: 'Falta o campo "settings".' })
+        return
+      }
+      await applyMovListSettings(await discordManager.getClient().guilds.fetch(parts[2]), body.settings)
+      sendJson(res, 200, getMovListState(parts[2]))
+      return
+    }
+
+    // POST /api/guilds/:guildId/movlist/members  { op: MovListOp, actor?: string }
+    if (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'movlist' && parts[4] === 'members') {
+      const body = (await readJsonBody(req)) as { op?: MovListOp; actor?: string }
+      if (!body.op || typeof body.op.kind !== 'string') {
+        sendJson(res, 400, { error: 'Falta o campo "op".' })
+        return
+      }
+      const actor = typeof body.actor === 'string' && body.actor.trim() ? body.actor.trim().slice(0, 64) : 'App'
+      sendJson(res, 200, await applyMovListOp(await discordManager.getClient().guilds.fetch(parts[2]), body.op, actor))
       return
     }
 

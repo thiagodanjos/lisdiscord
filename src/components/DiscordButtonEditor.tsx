@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { X } from 'lucide-react'
 import { EmojiPickerButton } from './EmojiPickerButton'
 import type { BotEmoji, VerificationButtonStyle } from '../../shared/types'
@@ -24,6 +25,33 @@ const STYLES: {
 ]
 
 const CUSTOM_EMOJI = /^<(a?):(\w{2,32}):(\w+)>$/
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const m = hex.trim().replace('#', '').match(/^([0-9a-f]{3}|[0-9a-f]{6})$/i)
+  if (!m) return null
+  const full = m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1]
+  const n = Number.parseInt(full, 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+/** A Discord só desenha 4 cores de botão — escolhe a mais parecida com o hexadecimal dado. */
+function nearestButtonStyle(hex: string): VerificationButtonStyle | null {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return null
+  let best: VerificationButtonStyle = 'secondary'
+  let bestDist = Infinity
+  for (const s of STYLES) {
+    const [r, g, b] = hexToRgb(s.swatch)!
+    // Distância "redmean" — mais perto do que o olho vê do que a distância RGB simples.
+    const rm = (rgb[0] + r) / 2
+    const dist = (2 + rm / 256) * (rgb[0] - r) ** 2 + 4 * (rgb[1] - g) ** 2 + (2 + (255 - rm) / 256) * (rgb[2] - b) ** 2
+    if (dist < bestDist) {
+      bestDist = dist
+      best = s.value
+    }
+  }
+  return best
+}
 
 /** Mostra um emoji de botão: imagem se for do bot (`<:nome:id>`), texto se for um emoji normal. */
 export function ButtonEmoji({ value, emojis, size = 18 }: { value: string; emojis: BotEmoji[]; size?: number }) {
@@ -83,6 +111,8 @@ export function DiscordButtonEditor({
   linkButton?: boolean
 }) {
   const isCustom = CUSTOM_EMOJI.test(emoji.trim())
+  const [hex, setHex] = useState('')
+  const hexStyle = nearestButtonStyle(hex)
   return (
     <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-black/20 p-3">
       <p className="text-[10px] font-bold tracking-[0.14em] text-faint uppercase">{title}</p>
@@ -138,7 +168,25 @@ export function DiscordButtonEditor({
               {s.label}
             </button>
           ))}
-          <p className="w-full text-[10px] text-faint">A Discord só permite estas 4 cores nos botões — para dar a tua cor, usa um emoji do bot colorido.</p>
+          <div className="flex w-full items-center gap-1.5">
+            <span className="size-6 shrink-0 rounded border border-border" style={{ background: hexStyle ? `#${hex.trim().replace('#', '')}` : 'transparent' }} />
+            <input
+              value={hex}
+              onChange={(e) => {
+                setHex(e.target.value)
+                const next = nearestButtonStyle(e.target.value)
+                if (next) onChange({ style: next })
+              }}
+              maxLength={7}
+              placeholder="Hexadecimal, ex.: #FF66AA"
+              className="w-40 rounded-lg border border-border bg-black/30 px-2.5 py-1 font-mono text-xs text-text placeholder:text-faint focus:border-accent focus:outline-none"
+            />
+            {hexStyle && <span className="text-[10px] text-muted">→ fica {STYLES.find((st) => st.value === hexStyle)?.label.toLowerCase()} (a mais parecida)</span>}
+          </div>
+          <p className="w-full text-[10px] text-faint">
+            A Discord só desenha estas 4 cores nos botões (nenhum bot consegue outra) — o hexadecimal escolhe a mais parecida. Para a tua cor exata, usa um emoji do
+            bot colorido no botão e a cor hex na barra do embed.
+          </p>
         </div>
       )}
     </div>

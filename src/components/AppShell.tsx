@@ -1,4 +1,5 @@
 import {
+  ListOrdered,
   BadgeCheck,
   ChevronDown,
   ChevronRight,
@@ -89,6 +90,7 @@ const NAV: NavSection[] = [
     id: 'equipa',
     label: 'Equipa',
     items: [
+      { to: '/listagem-mov', label: 'Listagem Mov Call', icon: ListOrdered },
       { to: '/verificacao', label: 'Verificação', icon: BadgeCheck },
       { to: '/justificativas', label: 'Justificativas', icon: MessageSquareWarning },
       { to: '/metas', label: 'Metas', icon: Target },

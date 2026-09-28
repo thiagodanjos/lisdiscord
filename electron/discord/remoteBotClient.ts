@@ -135,6 +135,11 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
     getServerLogSettings: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/logs/settings`),
     setServerLogSettings: <T>(guildId: string, settings: unknown) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/logs/settings`, { method: 'POST', body: { settings } }),
+    getMovList: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movlist`),
+    setMovListSettings: <T>(guildId: string, settings: unknown) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movlist/settings`, { method: 'POST', body: { settings } }),
+    updateMovListMembers: <T>(guildId: string, op: unknown, actor: string) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movlist/members`, { method: 'POST', body: { op, actor } }),
     getVerificationDiagnostics: <T>(guildId: string) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification/diagnostics`),
 

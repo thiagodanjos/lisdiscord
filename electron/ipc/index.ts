@@ -24,6 +24,9 @@ import type {
   JustificationSettings,
   MovNotice,
   MovNoticeInput,
+  MovListOp,
+  MovListSettings,
+  MovListState,
   ServerLogSettings,
   VerificationDiagnostics,
   VerificationTicket,
@@ -85,6 +88,7 @@ import * as movNoticesStore from '../store/movNotices'
 import * as verificationStore from '../store/verification'
 import { createNotice } from '../discord/movNotices'
 import { applyVerificationSettings, getVerificationDiagnostics, postVerificationPanel } from '../discord/verification'
+import { applyMovListOp, applyMovListSettings, getMovListState, postMovList } from '../discord/movList'
 import { applyServerLogSettings } from '../discord/serverLogs'
 import * as serverLogsStore from '../store/serverLogs'
 import { listGuildCategories } from '../discord/memberProfile'
@@ -489,6 +493,23 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle(IPC.setRemoteServerLogSettings, async (_e, guildId: string, settings: ServerLogSettings): Promise<ServerLogSettings> =>
     remoteApi(requireRemoteCredentials()).setServerLogSettings(guildId, settings),
   )
+  // ---- Listagem de Mov Call ----
+  ipcMain.handle(IPC.getMovList, async (_e, guildId: string): Promise<MovListState> => getMovListState(guildId))
+  ipcMain.handle(IPC.setMovListSettings, async (_e, guildId: string, settings: MovListSettings): Promise<MovListState> => {
+    await applyMovListSettings(await discordManager.getClient().guilds.fetch(guildId), settings)
+    return getMovListState(guildId)
+  })
+  ipcMain.handle(IPC.updateMovListMembers, async (_e, guildId: string, op: MovListOp): Promise<MovListState> =>
+    applyMovListOp(await discordManager.getClient().guilds.fetch(guildId), op, auth.getAuthState().user?.username ?? 'App'),
+  )
+  ipcMain.handle(IPC.getRemoteMovList, async (_e, guildId: string): Promise<MovListState> => remoteApi(requireRemoteCredentials()).getMovList(guildId))
+  ipcMain.handle(IPC.setRemoteMovListSettings, async (_e, guildId: string, settings: MovListSettings): Promise<MovListState> =>
+    remoteApi(requireRemoteCredentials()).setMovListSettings(guildId, settings),
+  )
+  ipcMain.handle(IPC.updateRemoteMovListMembers, async (_e, guildId: string, op: MovListOp): Promise<MovListState> =>
+    remoteApi(requireRemoteCredentials()).updateMovListMembers(guildId, op, auth.getAuthState().user?.username ?? 'App'),
+  )
+
   ipcMain.handle(IPC.listRemoteVerifications, async (_e, guildId: string): Promise<VerificationEntry[]> =>
     remoteApi(requireRemoteCredentials()).listVerifications(guildId),
   )
@@ -685,6 +706,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
 async function refreshEmbedTemplateTarget(guild: Guild, kind: EmbedTemplateKind): Promise<void> {
   if (kind === 'verificationPanel') {
     await postVerificationPanel(guild).catch(() => undefined)
+    return
+  }
+  if (kind === 'movList') {
+    await postMovList(guild).catch(() => undefined)
     return
   }
   if (kind === 'pontosBoard') {

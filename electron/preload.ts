@@ -162,6 +162,12 @@ const bridge: LisDiscordBridge = {
   setServerLogSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setServerLogSettings, guildId, settings),
   getRemoteServerLogSettings: (guildId) => ipcRenderer.invoke(IPC.getRemoteServerLogSettings, guildId),
   setRemoteServerLogSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setRemoteServerLogSettings, guildId, settings),
+  getMovList: (guildId) => ipcRenderer.invoke(IPC.getMovList, guildId),
+  setMovListSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setMovListSettings, guildId, settings),
+  updateMovListMembers: (guildId, op) => ipcRenderer.invoke(IPC.updateMovListMembers, guildId, op),
+  getRemoteMovList: (guildId) => ipcRenderer.invoke(IPC.getRemoteMovList, guildId),
+  setRemoteMovListSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setRemoteMovListSettings, guildId, settings),
+  updateRemoteMovListMembers: (guildId, op) => ipcRenderer.invoke(IPC.updateRemoteMovListMembers, guildId, op),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

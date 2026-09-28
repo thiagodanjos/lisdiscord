@@ -34,8 +34,11 @@ import type {
   VerificationSettings,
   VerificationTicket,
   ServerLogSettings,
+  MovListMember,
+  MovListSettings,
 } from '../../shared/types'
 import { DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
+import { defaultMovListSettings } from '../../shared/movList'
 
 const DEMO_GAMES = [
   { id: 'dado' as const, name: 'Dado', command: '/dado', description: 'Lança um dado (padrão 6 lados, configurável).' },
@@ -571,6 +574,15 @@ const verificationTicketsData: VerificationTicket[] = [
 ]
 
 let serverLogSettingsData: Record<string, ServerLogSettings> = {}
+
+let movListSettingsData: Record<string, MovListSettings> = {}
+let movListMembersData: Record<string, MovListMember[]> = {
+  g1: [
+    { userId: '1526787849175830569', username: 'carioca', displayName: 'carioca maconha flamenguista', addedAt: daysAgo(3), addedByTag: 'demo' },
+    { userId: '339473345181646848', username: 'thiago', displayName: 'Thiago', addedAt: daysAgo(2), addedByTag: 'demo' },
+    { userId: '411223344556677889', username: 'ana.dev', displayName: 'Ana', addedAt: daysAgo(1), addedByTag: 'demo' },
+  ],
+}
 
 const verificationsData: VerificationEntry[] = [
   { id: 'vf1', guildId: 'g1', channelId: 'c4', userId: 'u13', userTag: 'joao99#0420', userAvatar: null, embedMessageId: 'm1', pingMessageId: 'm2', imageCount: 1, createdAt: daysAgo(0), status: 'pending' },
@@ -1416,5 +1428,60 @@ export const demoBridge: LisDiscordBridge = {
   },
   async getRemoteVerificationDiagnostics(guildId) {
     return demoBridge.getVerificationDiagnostics(guildId)
+  },
+
+  async getMovList(guildId) {
+    await delay()
+    return { settings: { ...defaultMovListSettings(), ...movListSettingsData[guildId] }, members: movListMembersData[guildId] ?? [] }
+  },
+  async setMovListSettings(guildId, settings) {
+    await delay()
+    const name = (id: string | null) => makeChannels().find((c) => c.id === id)?.name ?? null
+    movListSettingsData = {
+      ...movListSettingsData,
+      [guildId]: { ...settings, channelName: name(settings.channelId), logChannelName: name(settings.logChannelId), messageId: settings.channelId ? 'demo-msg' : null },
+    }
+    return demoBridge.getMovList(guildId)
+  },
+  async updateMovListMembers(guildId, op) {
+    await delay()
+    let list = [...(movListMembersData[guildId] ?? [])]
+    let message: string | undefined
+    const toMember = (id: string): MovListMember => {
+      const m = membersData.find((x) => x.id === id)
+      const name = m?.tag.split('#')[0] ?? id
+      return { userId: id, username: name, displayName: name, addedAt: new Date().toISOString(), addedByTag: 'demo' }
+    }
+    if (op.kind === 'add' || op.kind === 'importRole') {
+      const ids = op.kind === 'add' ? op.userIds : membersData.filter((m) => !m.isBot).map((m) => m.id)
+      const fresh = ids.filter((id) => !list.some((m) => m.userId === id))
+      list = [...list, ...fresh.map(toMember)]
+      message = `${fresh.length} adicionado(s), ${ids.length - fresh.length} já estava(m) na lista. Total: ${list.length}.`
+    } else if (op.kind === 'remove') {
+      const before = list.length
+      list = list.filter((m) => !op.userIds.includes(m.userId))
+      message = `${before - list.length} removido(s). Total: ${list.length}.`
+    } else if (op.kind === 'move') {
+      const from = list.findIndex((m) => m.userId === op.userId)
+      if (from >= 0) {
+        const to = Math.min(list.length - 1, Math.max(0, from + op.delta))
+        const [item] = list.splice(from, 1)
+        list.splice(to, 0, item)
+      }
+    } else if (op.kind === 'clear') {
+      message = `Listagem limpa (${list.length} removidos).`
+      list = []
+    }
+    movListMembersData = { ...movListMembersData, [guildId]: list }
+    return { ...(await demoBridge.getMovList(guildId)), message }
+  },
+  async getRemoteMovList(guildId) {
+    return demoBridge.getMovList(guildId)
+  },
+  async setRemoteMovListSettings(guildId, settings) {
+    return demoBridge.setMovListSettings(guildId, settings)
+  },
+  async updateRemoteMovListMembers(guildId, op) {
+    return demoBridge.updateMovListMembers(guildId, op)
   },
 }

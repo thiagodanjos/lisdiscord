@@ -157,6 +157,13 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     color: '#22D3EE',
     fields: [{ name: 'Nota', value: '{nota}', inline: false }],
   }),
+  movList: draft({
+    title: '',
+    description: '**Listagem:**\n\n{listagem}',
+    color: '#F43F7E',
+    footer: 'Total: {total} membros · página {pagina}/{paginas}',
+    timestamp: false,
+  }),
 } satisfies Record<string, EmbedDraft>
 
 export interface VerifyProfileInput {

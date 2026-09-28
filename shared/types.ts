@@ -305,6 +305,7 @@ export type EmbedTemplateKind =
   | 'logMessageEdit'
   | 'logPoints'
   | 'logHours'
+  | 'movList'
 
 export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'pontosBoard',
@@ -333,6 +334,7 @@ export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'logMessageEdit',
   'logPoints',
   'logHours',
+  'movList',
 ]
 
 /** Tokens disponíveis nas mensagens que o bot manda quando alguém se justifica (ou pede remoção). */
@@ -745,6 +747,99 @@ export const VERIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id
 export const VERIFICATION_LOG_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{estado}', '{moderador}', '{responsavel}', '{cargosDados}', '{cargosTirados}', '{motivo}', '{ticket}', '{duracao}', '{servidor}'] as const
 export const VERIFY_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{pontos}', '{horas}', '{cargos}', '{cumpridos}', '{total}', '{servidor}'] as const
 export const VERIFY_LINE_PLACEHOLDERS = ['{cargo}', '{cargoNome}', '{pontos}', '{metaPontos}', '{horas}', '{metaHoras}', '{faltamPontos}', '{faltamHoras}'] as const
+
+// ==========================================================================
+// Listagem de Mov Call
+// ==========================================================================
+
+/** Um membro na listagem de Mov Call — a ordem da lista é a ordem de entrada (dá o número). */
+export interface MovListMember {
+  userId: string
+  /** Nome de utilizador (@usuario). */
+  username: string
+  /** Nome mostrado no servidor (apelido), guardado para a app e para o "Copiar listagem". */
+  displayName: string
+  addedAt: string
+  addedByTag: string | null
+}
+
+export interface MovListSettings {
+  /** Canal onde fica a mensagem da listagem (com os botões). */
+  channelId: string | null
+  channelName: string | null
+  messageId: string | null
+  /** Linha de cada membro — {numero}, {mencao}, {id}, {nome}, {usuario}. */
+  lineFormat: string
+  /** Linha em branco entre membros (como no exemplo: 1. …⏎⏎2. …). */
+  blankLineBetween: boolean
+  /** Texto quando a lista está vazia. */
+  emptyText: string
+  /** Membros por página na mensagem (mais do que isto → botões ◀ ▶). */
+  perPage: number
+  /** Botões da mensagem. */
+  addLabel: string
+  addEmoji: string
+  addStyle: VerificationButtonStyle
+  removeLabel: string
+  removeEmoji: string
+  removeStyle: VerificationButtonStyle
+  copyLabel: string
+  copyEmoji: string
+  copyStyle: VerificationButtonStyle
+  prevLabel: string
+  prevEmoji: string
+  nextLabel: string
+  nextEmoji: string
+  pageStyle: VerificationButtonStyle
+  /** Botões secundários dentro das janelas de adicionar/remover. */
+  byIdLabel: string
+  byIdEmoji: string
+  byIdStyle: VerificationButtonStyle
+  /** Quem pode adicionar/remover (além de Administrador / Gerir servidor). */
+  managerRoleIds: string[]
+  /** "Copiar listagem" para todos (senão só quem gere). */
+  copyForEveryone: boolean
+  /** Linha de cada membro no texto copiado — mesmos tokens da linha. */
+  copyFormat: string
+  /** Cabeçalho do texto copiado — {total}, {data}, {servidor}. */
+  copyHeader: string
+  /** Mostrar o texto copiado num bloco de código (fácil de selecionar). */
+  copyAsCodeBlock: boolean
+  /** Textos das janelas e respostas (só quem clicou vê). */
+  addPrompt: string
+  removePrompt: string
+  selectPlaceholder: string
+  replyAdded: string
+  replyRemoved: string
+  replyAlready: string
+  replyNothing: string
+  replyNoPermission: string
+  /** Canal de log de quem mexeu na listagem (opcional). */
+  logChannelId: string | null
+  logChannelName: string | null
+  logAdded: string
+  logRemoved: string
+}
+
+/** O que a app mexe na lista de membros. */
+export type MovListOp =
+  | { kind: 'add'; userIds: string[] }
+  | { kind: 'remove'; userIds: string[] }
+  | { kind: 'move'; userId: string; delta: number }
+  | { kind: 'importRole'; roleId: string }
+  | { kind: 'clear' }
+
+export interface MovListState {
+  settings: MovListSettings
+  members: MovListMember[]
+  /** Resumo da última operação (ex.: "3 adicionados, 1 já estava"). */
+  message?: string
+}
+
+export const MOV_LIST_PLACEHOLDERS = ['{listagem}', '{total}', '{pagina}', '{paginas}', '{atualizado}', '{servidor}'] as const
+export const MOV_LIST_LINE_PLACEHOLDERS = ['{numero}', '{mencao}', '{id}', '{nome}', '{usuario}'] as const
+export const MOV_LIST_REPLY_PLACEHOLDERS = ['{membros}', '{quantidade}', '{total}', '{autor}'] as const
+export const MOV_LIST_COPY_HEADER_PLACEHOLDERS = ['{total}', '{data}', '{servidor}'] as const
 
 // ==========================================================================
 // Canais de log do servidor (mensagens apagadas/editadas, pontos, horas)

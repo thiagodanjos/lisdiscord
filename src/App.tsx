@@ -27,6 +27,7 @@ import Emojis from './pages/Emojis'
 import Goals from './pages/Goals'
 import Promotions from './pages/Promotions'
 import MovNotices from './pages/MovNotices'
+import MovList from './pages/MovList'
 import Verification from './pages/Verification'
 import ServerLogs from './pages/ServerLogs'
 import SettingsPage from './pages/Settings'
@@ -140,6 +141,7 @@ export default function App() {
         <Route path="/upamentos" element={<Promotions />} />
         <Route path="/metas" element={<Goals />} />
         <Route path="/avisos-mov" element={<MovNotices />} />
+        <Route path="/listagem-mov" element={<MovList />} />
         <Route path="/verificacao" element={<Verification />} />
         <Route path="/canais-log" element={<ServerLogs />} />
         <Route path="/definicoes" element={<SettingsPage status={status} onStatusChange={setStatus} user={auth?.user ?? null} onLogout={logout} />} />

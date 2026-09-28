@@ -53,6 +53,8 @@ export const paths = {
   verificationSettingsFile: path.join(root, 'verification-settings.json'),
   verificationsFile: path.join(root, 'verifications.json'),
   verificationTicketsFile: path.join(root, 'verification-tickets.json'),
+  movListSettingsFile: path.join(root, 'mov-list-settings.json'),
+  movListMembersFile: path.join(root, 'mov-list-members.json'),
   serverLogSettingsFile: path.join(root, 'server-log-settings.json'),
   databaseFile: path.join(root, 'lisdiscord.sqlite'),
 }

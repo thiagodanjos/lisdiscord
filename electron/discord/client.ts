@@ -8,6 +8,7 @@ import { applyBranding } from './branding'
 import { startReminderLoop } from './utilityCommands'
 import { commandsHash, isUpToDate, markSynced } from '../store/commandSync'
 import { handleAvisoMovButtons, startMovNoticeLoop } from './movNotices'
+import { handleMovListInteraction } from './movList'
 import {
   handleVerificationButtons,
   handleVerificationChannelDelete,
@@ -105,6 +106,12 @@ class DiscordManager {
         await handleAvisoMovButtons(interaction).catch((err) => {
           if (isAlreadyAcknowledgedError(err)) return
           console.error('Erro a processar botão de aviso:', err)
+        })
+      }
+      if (interaction.isButton() || interaction.isAnySelectMenu()) {
+        await handleMovListInteraction(interaction).catch((err) => {
+          if (isAlreadyAcknowledgedError(err)) return
+          console.error('Erro a processar a listagem de Mov Call:', err)
         })
       }
     })

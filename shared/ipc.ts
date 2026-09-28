@@ -25,6 +25,9 @@ import type {
   MemberSearchResult,
   MovNotice,
   MovNoticeInput,
+  MovListOp,
+  MovListSettings,
+  MovListState,
   ModerationLogEntry,
   MovPointsBoardConfig,
   MovPointsEntry,
@@ -193,6 +196,12 @@ export const IPC = {
   setServerLogSettings: 'serverLogs:set',
   getRemoteServerLogSettings: 'remoteBot:serverLogs:get',
   setRemoteServerLogSettings: 'remoteBot:serverLogs:set',
+  getMovList: 'movList:get',
+  setMovListSettings: 'movList:settings:set',
+  updateMovListMembers: 'movList:members:update',
+  getRemoteMovList: 'remoteBot:movList:get',
+  setRemoteMovListSettings: 'remoteBot:movList:settings:set',
+  updateRemoteMovListMembers: 'remoteBot:movList:members:update',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -345,4 +354,11 @@ export interface LisDiscordBridge {
   setServerLogSettings(guildId: string, settings: ServerLogSettings): Promise<ServerLogSettings>
   getRemoteServerLogSettings(guildId: string): Promise<ServerLogSettings>
   setRemoteServerLogSettings(guildId: string, settings: ServerLogSettings): Promise<ServerLogSettings>
+
+  getMovList(guildId: string): Promise<MovListState>
+  setMovListSettings(guildId: string, settings: MovListSettings): Promise<MovListState>
+  updateMovListMembers(guildId: string, op: MovListOp): Promise<MovListState>
+  getRemoteMovList(guildId: string): Promise<MovListState>
+  setRemoteMovListSettings(guildId: string, settings: MovListSettings): Promise<MovListState>
+  updateRemoteMovListMembers(guildId: string, op: MovListOp): Promise<MovListState>
 }
