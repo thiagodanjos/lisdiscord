@@ -50,7 +50,6 @@ const CLOSE_BUTTON_PREFIX = 'verif:close:'
 const MAX_IMAGES = 4
 /** Limite de upload de um bot num servidor sem boosts. */
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
-const WARNING_TTL_MS = 10_000
 const MANUAL_CLOSE_DELAY_MS = 5_000
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i
 
@@ -188,6 +187,7 @@ export async function applyVerificationSettings(guild: Guild, input: Verificatio
     cancelStyle: validStyle(input.cancelStyle, 'danger'),
     staffPanelStyle: validStyle(input.staffPanelStyle, 'secondary'),
     closeDelaySeconds: clampInt(input.closeDelaySeconds, 1, 300, 5),
+    warningSeconds: clampInt(input.warningSeconds, 3, 120, 10),
     claimedButtonLabel: (input.claimedButtonLabel ?? '').trim().slice(0, 80) || 'Assumido por {gestor}',
     ticketLinkLabel: (input.ticketLinkLabel ?? '').trim().slice(0, 80) || 'Ir para o ticket',
     ticketLinkEmoji: (input.ticketLinkEmoji ?? '').trim(),
@@ -408,9 +408,59 @@ async function download(url: string, name: string): Promise<AttachmentBuilder> {
   return new AttachmentBuilder(Buffer.from(await res.arrayBuffer()), { name })
 }
 
-async function tempWarning(message: Message<true>, text: string): Promise<void> {
-  const warn = await message.channel.send({ content: text, allowedMentions: { users: [message.author.id] } }).catch(() => null)
-  if (warn) setTimeout(() => void warn.delete().catch(() => undefined), WARNING_TTL_MS)
+/** Aviso vivo em cada ticket — várias mensagens seguidas não enchem o canal de avisos repetidos. */
+const liveWarnings = new Map<string, { message: Message; kind: WarnKind; timer: ReturnType<typeof setTimeout> }>()
+const sendingWarning = new Set<string>()
+type WarnKind = 'verificationWarnText' | 'verificationWarnTooBig'
+
+/** Aviso temporário no ticket, em formato caixa e personalizável na app; desaparece sozinho. */
+async function tempWarning(message: Message<true>, kind: WarnKind, fallback: string): Promise<void> {
+  const settings = store.getVerificationSettings(message.guildId)
+  const seconds = clampInt(settings.warningSeconds, 3, 120, 10)
+  const key = message.channelId
+  const schedule = (warn: Message) =>
+    setTimeout(() => {
+      liveWarnings.delete(key)
+      void warn.delete().catch(() => undefined)
+    }, seconds * 1000)
+
+  if (sendingWarning.has(key)) return // outro aviso a ser enviado agora mesmo (mensagens seguidas)
+  const live = liveWarnings.get(key)
+  if (live && live.kind === kind) {
+    // O mesmo aviso ainda está no ecrã: só reinicia o tempo.
+    clearTimeout(live.timer)
+    live.timer = schedule(live.message)
+    return
+  }
+  if (live) {
+    clearTimeout(live.timer)
+    liveWarnings.delete(key)
+    void live.message.delete().catch(() => undefined)
+  }
+
+  const embed = buildEmbedFromDraft(
+    getTemplate(message.guildId, kind),
+    {
+      membro: `<@${message.author.id}>`,
+      nome: message.member?.displayName ?? message.author.username,
+      segundos: String(seconds),
+      tamanho: `${Math.round(MAX_IMAGE_BYTES / 1024 / 1024)} MB`,
+      servidor: message.guild.name,
+    },
+    { separators: 'keep' },
+  )
+  const allowedMentions = { users: [message.author.id] }
+  sendingWarning.add(key)
+  const warn = await sendWarning().finally(() => sendingWarning.delete(key))
+  if (warn) liveWarnings.set(key, { message: warn, kind, timer: schedule(warn) })
+
+  async function sendWarning() {
+    return embedHasContent(embed)
+    ? await message.channel
+        .send({ flags: MessageFlags.IsComponentsV2, components: [embedToContainer(embed)], allowedMentions })
+        .catch(() => message.channel.send({ content: fallback, allowedMentions }).catch(() => null))
+    : await message.channel.send({ content: fallback, allowedMentions }).catch(() => null)
+  }
 }
 
 // ==========================================================================
@@ -824,7 +874,7 @@ export async function handleVerificationMessage(message: Message): Promise<void>
     logEvent(message.guildId, 'info', `Texto de ${message.author.tag} no ticket${settings.deleteNonImage ? ' — apagado com aviso' : ' — ignorado'}.`)
     if (settings.deleteNonImage) {
       await message.delete().catch(() => undefined)
-      await tempWarning(message, `📸 ${message.author}, aqui envia só o **print do teu perfil com os cargos** (como imagem).`)
+      await tempWarning(message, 'verificationWarnText', `📸 ${message.author}, aqui envia só o **print do teu perfil com os cargos** (como imagem).`)
     }
     return
   }
@@ -832,7 +882,7 @@ export async function handleVerificationMessage(message: Message): Promise<void>
   const usable = images.filter((a) => a.size <= MAX_IMAGE_BYTES).slice(0, MAX_IMAGES)
   if (usable.length === 0) {
     logEvent(message.guildId, 'warn', `Imagem de ${message.author.tag} com mais de 10 MB — não processada.`)
-    await tempWarning(message, `❌ ${message.author}, a imagem é demasiado grande (máx. 10 MB). Tira um print mais pequeno e envia outra vez.`)
+    await tempWarning(message, 'verificationWarnTooBig', `❌ ${message.author}, a imagem é demasiado grande (máx. 10 MB). Tira um print mais pequeno e envia outra vez.`)
     return
   }
 

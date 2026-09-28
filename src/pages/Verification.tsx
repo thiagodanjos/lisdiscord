@@ -34,6 +34,7 @@ import {
   VERIFICATION_PLACEHOLDERS,
   VERIFICATION_TICKET_PLACEHOLDERS,
   VERIFICATION_STAFF_PANEL_PLACEHOLDERS,
+  VERIFICATION_WARN_PLACEHOLDERS,
   type BotEmoji,
   type ChannelPickerEntry,
   type EmbedTemplateKind,
@@ -136,7 +137,9 @@ const TEMPLATE_INFO: Record<
   | 'verificationClosedCancelled'
   | 'verificationStaffFinished'
   | 'verificationStaffCancelled'
-  | 'verificationStaffPanel',
+  | 'verificationStaffPanel'
+  | 'verificationWarnText'
+  | 'verificationWarnTooBig',
   { title: string; hint: string; tokens: readonly string[]; imageNote?: string }
 > = {
   verificationPanel: {
@@ -178,6 +181,16 @@ const TEMPLATE_INFO: Record<
     title: 'Resposta ao gestor — finalizado',
     hint: 'Só o gestor que clicou em Finalizar vê esta mensagem.',
     tokens: VERIFICATION_CLOSE_PLACEHOLDERS,
+  },
+  verificationWarnText: {
+    title: 'Aviso no ticket — mandou texto',
+    hint: 'Aparece quando o membro escreve no ticket em vez de mandar o print (a mensagem dele é apagada). Desaparece sozinho passados {segundos} segundos; várias mensagens seguidas mostram só um aviso.',
+    tokens: VERIFICATION_WARN_PLACEHOLDERS,
+  },
+  verificationWarnTooBig: {
+    title: 'Aviso no ticket — imagem grande',
+    hint: 'Aparece quando a imagem passa o limite de upload do bot ({tamanho}). Desaparece sozinho passados {segundos} segundos.',
+    tokens: VERIFICATION_WARN_PLACEHOLDERS,
   },
   verificationStaffPanel: {
     title: 'Personalizar o painel staff',
@@ -420,7 +433,8 @@ export default function Verification() {
     responsavel: draft.responsibleNone || 'ninguém',
     mencao: editing?.startsWith('verificationClosed') || editing?.startsWith('verificationStaff') ? '@gestor' : '@membro',
     gestor: '@gestor',
-    segundos: String(draft.closeDelaySeconds || 5),
+    segundos: String(editing?.startsWith('verificationWarn') ? draft.warningSeconds || 10 : draft.closeDelaySeconds || 5),
+    tamanho: '10 MB',
     moderador: '@gestor',
     motivo: editing?.includes('Cancelled') ? 'print ilegível' : '—',
     ticket: String(nextNumber),
@@ -681,11 +695,35 @@ export default function Verification() {
             onChange={(p) => setDraft((d) => ({ ...d, ...(p.label !== undefined && { ticketLinkLabel: p.label }), ...(p.emoji !== undefined && { ticketLinkEmoji: p.emoji }) }))}
           />
         </div>
-        <Toggle
-          checked={draft.deleteNonImage}
-          onChange={(v) => set('deleteNonImage', v)}
-          label="Apagar o texto que o membro mandar no ticket (com um aviso que desaparece) — só fotos contam; a gestão pode escrever à vontade"
-        />
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-black/20 p-3">
+          <Toggle
+            checked={draft.deleteNonImage}
+            onChange={(v) => set('deleteNonImage', v)}
+            label="Apagar o texto que o membro mandar no ticket (com um aviso que desaparece) — só fotos contam; a gestão pode escrever à vontade"
+          />
+          <div className="flex flex-wrap items-end gap-2">
+            <Button variant="dark" onClick={() => setEditing('verificationWarnText')} disabled={!guildId}>
+              <Palette size={14} />
+              Aviso: mandou texto
+            </Button>
+            <Button variant="dark" onClick={() => setEditing('verificationWarnTooBig')} disabled={!guildId}>
+              <Palette size={14} />
+              Aviso: imagem grande
+            </Button>
+            <div>
+              <Label>Desaparece em (segundos)</Label>
+              <input
+                type="number"
+                min={3}
+                max={120}
+                value={draft.warningSeconds}
+                onChange={(e) => set('warningSeconds', Number(e.target.value))}
+                className={`mt-1.5 w-28 ${inputClass}`}
+              />
+            </div>
+          </div>
+          <Hint>Os avisos saem em formato caixa, personalizáveis como as outras mensagens. Se o membro mandar várias mensagens seguidas, fica só um aviso.</Hint>
+        </div>
       </Card>
 
       {/* 2b. Estados */}

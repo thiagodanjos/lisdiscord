@@ -22,6 +22,7 @@ function draft(partial: Partial<EmbedDraft>): EmbedDraft {
 
 /** Textos e botão de fábrica do painel staff da verificação (só o gestor vê). */
 export const STAFF_PANEL_DEFAULTS = {
+  warningSeconds: 10,
   staffPanelFinishLabel: 'Finalizar',
   staffPanelFinishEmoji: '✅',
   staffPanelFinishStyle: 'success',
@@ -139,6 +140,18 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
   verificationStaffCancelled: draft({
     description: '✖️ Verificação de {membro} cancelada — log enviado e o ticket fecha em {segundos} segundos.',
     color: '#ED4245',
+    timestamp: false,
+  }),
+  verificationWarnText: draft({
+    description: '📸 {membro}, aqui envia só o **print do teu perfil com os cargos** (como imagem).',
+    color: '#F0B232',
+    footer: 'Esta mensagem desaparece em {segundos} segundos.',
+    timestamp: false,
+  }),
+  verificationWarnTooBig: draft({
+    description: '❌ {membro}, a imagem é demasiado grande (máx. {tamanho}). Tira um print mais pequeno e envia outra vez.',
+    color: '#ED4245',
+    footer: 'Esta mensagem desaparece em {segundos} segundos.',
     timestamp: false,
   }),
   verificationStaffPanel: draft({
