@@ -1,4 +1,4 @@
-import { FEATURE_TEMPLATE_DEFAULTS } from '../../shared/featureTemplates'
+import { FEATURE_TEMPLATE_DEFAULTS, STAFF_PANEL_DEFAULTS } from '../../shared/featureTemplates'
 import type { LisDiscordBridge } from '../../shared/ipc'
 import type {
   BackupData,
@@ -565,6 +565,7 @@ let verificationSettingsData: Record<string, VerificationSettings> = {
     logChannelId: null,
     logChannelName: null,
     deleteNonImage: true,
+    ...STAFF_PANEL_DEFAULTS,
   },
 }
 

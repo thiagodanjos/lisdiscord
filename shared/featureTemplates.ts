@@ -1,4 +1,4 @@
-import type { EmbedDraft, RoleGoal, VerifyLineFormat } from './types'
+import type { EmbedDraft, RoleGoal, VerificationSettings, VerifyLineFormat } from './types'
 import { formatDuration } from './leaderboardFormat'
 
 // Valores de fábrica dos embeds do /verificar, /avisomov e da verificação por foto — partilhados
@@ -19,6 +19,21 @@ function draft(partial: Partial<EmbedDraft>): EmbedDraft {
     ...partial,
   }
 }
+
+/** Textos e botão de fábrica do painel staff da verificação (só o gestor vê). */
+export const STAFF_PANEL_DEFAULTS = {
+  staffPanelFinishLabel: 'Finalizar',
+  staffPanelFinishEmoji: '✅',
+  staffPanelFinishStyle: 'success',
+  staffPanelSelectPlaceholder: 'Escolhe os cargos do membro…',
+  staffPanelNoRoles: '*nenhum ainda*',
+  staffPanelNothingExtra: '—',
+  staffPanelRolesUpdated: '✅ Cargos atualizados.',
+  staffPanelRolesRefused: 'Não podes dar: {cargos} (acima do teu cargo ou do do bot).',
+  staffPanelRolesFailed: 'Falhou: {cargos}.',
+  staffPanelMemberLeft: '❌ O membro já não está no servidor.',
+  staffPanelAlreadyDecided: 'ℹ️ Esta verificação já foi decidida.',
+} satisfies Partial<VerificationSettings>
 
 export const DEFAULT_VERIFY_LINES: VerifyLineFormat = {
   met: '✅ {cargo} — {pontos}/{metaPontos} pontos · {horas}/{metaHoras}h',
@@ -124,6 +139,20 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
   verificationStaffCancelled: draft({
     description: '✖️ Verificação de {membro} cancelada — log enviado e o ticket fecha em {segundos} segundos.',
     color: '#ED4245',
+    timestamp: false,
+  }),
+  verificationStaffPanel: draft({
+    title: '🛠️ Painel staff',
+    description:
+      'Verificação de {membro} — só tu vês esta mensagem.\n\n' +
+      '**1.** Escolhe abaixo os cargos a dar ao membro (são dados na hora; tirar da lista remove-os).\n' +
+      '**2.** Clica em **{finalizar}** para fechar e mandar o log.',
+    color: '#5865F2',
+    fields: [
+      { name: 'Cargos escolhidos', value: '{cargosEscolhidos}', inline: false },
+      { name: 'Ao finalizar, também', value: '{aoFinalizar}', inline: false },
+    ],
+    footer: '{nota}',
     timestamp: false,
   }),
   logMessageDelete: draft({

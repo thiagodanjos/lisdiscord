@@ -1,6 +1,6 @@
 import {
   type ActionRowBuilder,
-  type ButtonBuilder,
+  type MessageActionRowComponentBuilder,
   ContainerBuilder,
   type EmbedBuilder,
   MediaGalleryBuilder,
@@ -30,7 +30,7 @@ function clean(text: string | undefined): string {
  * Converte um embed (já com os tokens trocados) numa caixa V2: autor e título em cima, descrição,
  * campos, imagem, rodapé em letra pequena e, no fim, uma linha divisória com os botões.
  */
-export function embedToContainer(embed: EmbedBuilder, rows: ActionRowBuilder<ButtonBuilder>[] = []): ContainerBuilder {
+export function embedToContainer(embed: EmbedBuilder, rows: ActionRowBuilder<MessageActionRowComponentBuilder>[] = []): ContainerBuilder {
   const d = embed.data
   const container = new ContainerBuilder()
   if (typeof d.color === 'number') container.setAccentColor(d.color)

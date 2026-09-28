@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { VerificationEntry, VerificationSettings, VerificationTicket } from '../../shared/types'
+import { STAFF_PANEL_DEFAULTS } from '../../shared/featureTemplates'
 import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
@@ -46,6 +47,7 @@ export function defaultVerificationSettings(): VerificationSettings {
     responsibleClaimed: '{gestor}',
     claimedButtonLabel: 'Assumido por {gestor}',
     closeDelaySeconds: 5,
+    ...STAFF_PANEL_DEFAULTS,
     ticketLinkLabel: 'Ir para o ticket',
     ticketLinkEmoji: '🎫',
     pingRoleId: null,

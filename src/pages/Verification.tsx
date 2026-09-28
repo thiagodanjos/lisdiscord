@@ -24,6 +24,7 @@ import { TemplateEditorModal } from '../components/TemplateEditorModal'
 import { EmojiTextInput } from '../components/EmojiTextInput'
 import { renderDiscordMarkdown } from '../lib/discordMarkdown'
 import { DiscordButtonEditor, DiscordButtonPreview } from '../components/DiscordButtonEditor'
+import { STAFF_PANEL_DEFAULTS } from '../../shared/featureTemplates'
 import {
   TICKET_NAME_PLACEHOLDERS,
   VERIFICATION_REPLY_PLACEHOLDERS,
@@ -32,6 +33,7 @@ import {
   VERIFICATION_PANEL_PLACEHOLDERS,
   VERIFICATION_PLACEHOLDERS,
   VERIFICATION_TICKET_PLACEHOLDERS,
+  VERIFICATION_STAFF_PANEL_PLACEHOLDERS,
   type BotEmoji,
   type ChannelPickerEntry,
   type EmbedTemplateKind,
@@ -93,6 +95,7 @@ const EMPTY_SETTINGS: VerificationSettings = {
   logChannelId: null,
   logChannelName: null,
   deleteNonImage: true,
+  ...STAFF_PANEL_DEFAULTS,
 }
 
 const STATE_FIELDS = [
@@ -110,6 +113,17 @@ const STAFF_BUTTONS = [
   { title: 'Painel staff', label: 'staffPanelLabel', emoji: 'staffPanelEmoji', style: 'staffPanelStyle', fallback: 'Painel staff' },
 ] as const
 
+const STAFF_PANEL_TEXTS = [
+  { key: 'staffPanelSelectPlaceholder', label: 'Texto do seletor de cargos', hint: '' },
+  { key: 'staffPanelNoRoles', label: '{cargosEscolhidos} sem nenhum cargo', hint: '' },
+  { key: 'staffPanelNothingExtra', label: '{aoFinalizar} / {cargosDar} / {cargosTirar} vazios', hint: '' },
+  { key: 'staffPanelRolesUpdated', label: 'Nota: cargos atualizados', hint: 'Aparece em {nota} (por omissão, no rodapé).' },
+  { key: 'staffPanelRolesRefused', label: 'Nota: cargo acima do gestor/bot', hint: '{cargos} = os cargos recusados' },
+  { key: 'staffPanelRolesFailed', label: 'Nota: falhou a dar/tirar', hint: '{cargos} = os cargos que falharam' },
+  { key: 'staffPanelMemberLeft', label: 'Nota: o membro saiu do servidor', hint: '' },
+  { key: 'staffPanelAlreadyDecided', label: 'Verificação já decidida', hint: 'Quando alguém mexe num painel de uma verificação já fechada.' },
+] as const
+
 const TEMPLATE_INFO: Record<
   | 'verificationPanel'
   | 'verificationTicket'
@@ -121,7 +135,8 @@ const TEMPLATE_INFO: Record<
   | 'verificationClosedFinished'
   | 'verificationClosedCancelled'
   | 'verificationStaffFinished'
-  | 'verificationStaffCancelled',
+  | 'verificationStaffCancelled'
+  | 'verificationStaffPanel',
   { title: string; hint: string; tokens: readonly string[]; imageNote?: string }
 > = {
   verificationPanel: {
@@ -163,6 +178,11 @@ const TEMPLATE_INFO: Record<
     title: 'Resposta ao gestor — finalizado',
     hint: 'Só o gestor que clicou em Finalizar vê esta mensagem.',
     tokens: VERIFICATION_CLOSE_PLACEHOLDERS,
+  },
+  verificationStaffPanel: {
+    title: 'Personalizar o painel staff',
+    hint: 'Janela que só o gestor vê ao clicar em Assumir ou Painel staff, com o seletor de cargos e o botão Finalizar lá dentro (em formato caixa). {cargosEscolhidos} = cargos já dados no painel; {aoFinalizar} (ou {cargosDar} / {cargosTirar} separados) = cargos automáticos; {finalizar} = texto do botão; {nota} = a mensagem depois de mexer nos cargos (ex.: "✅ Cargos atualizados.").',
+    tokens: VERIFICATION_STAFF_PANEL_PLACEHOLDERS,
   },
   verificationStaffCancelled: {
     title: 'Resposta ao gestor — cancelado',
@@ -408,6 +428,18 @@ export default function Verification() {
     cargosDados: roles.filter((r) => draft.addRoleIds.includes(r.id)).map((r) => `@${r.name}`).join(', ') || '—',
     cargosTirados: roles.filter((r) => draft.removeRoleIds.includes(r.id)).map((r) => `@${r.name}`).join(', ') || '—',
     servidor: guildName,
+    cargosEscolhidos: draft.staffPanelNoRoles || '*nenhum ainda*',
+    cargosDar: roles.filter((r) => draft.addRoleIds.includes(r.id)).map((r) => `@${r.name}`).join(' ') || draft.staffPanelNothingExtra || '—',
+    cargosTirar: roles.filter((r) => draft.removeRoleIds.includes(r.id)).map((r) => `@${r.name}`).join(' ') || draft.staffPanelNothingExtra || '—',
+    aoFinalizar:
+      [
+        draft.addRoleIds.length ? `➕ ${roles.filter((r) => draft.addRoleIds.includes(r.id)).map((r) => `@${r.name}`).join(' ')}` : null,
+        draft.removeRoleIds.length ? `➖ ${roles.filter((r) => draft.removeRoleIds.includes(r.id)).map((r) => `@${r.name}`).join(' ')}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n') || draft.staffPanelNothingExtra || '—',
+    finalizar: draft.staffPanelFinishLabel || 'Finalizar',
+    nota: draft.staffPanelRolesUpdated || '✅ Cargos atualizados.',
   }
 
   return (
@@ -813,6 +845,48 @@ export default function Verification() {
             também os cargos automáticos abaixo, manda o log e fecha o ticket. <b>Cancelar</b> pede um motivo opcional, retira os cargos dados no painel e fecha o
             ticket. <b>Painel staff</b> reabre o painel. O próprio membro também pode usar <b>Cancelar</b> para fechar o ticket dele.
           </Hint>
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-black/20 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <Label>Painel staff (só o gestor vê)</Label>
+              <Hint>Abre ao clicar em Assumir ou Painel staff: embed, seletor de cargos, botão Finalizar e as notas — tudo personalizável.</Hint>
+            </div>
+            <Button variant="dark" onClick={() => setEditing('verificationStaffPanel')} disabled={!guildId}>
+              <Palette size={14} />
+              Personalizar embed do painel staff
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <DiscordButtonEditor
+              title="Botão Finalizar (no painel)"
+              label={draft.staffPanelFinishLabel}
+              emoji={draft.staffPanelFinishEmoji}
+              style={draft.staffPanelFinishStyle}
+              fallbackLabel="Finalizar"
+              emojis={emojis}
+              onChange={(p) =>
+                setDraft((d) => ({
+                  ...d,
+                  ...(p.label !== undefined && { staffPanelFinishLabel: p.label }),
+                  ...(p.emoji !== undefined && { staffPanelFinishEmoji: p.emoji }),
+                  ...(p.style && { staffPanelFinishStyle: p.style }),
+                }))
+              }
+            />
+            <div className="flex flex-col gap-2.5">
+              {STAFF_PANEL_TEXTS.map((f) => (
+                <div key={f.key}>
+                  <Label>{f.label}</Label>
+                  <div className="mt-1">
+                    <EmojiTextInput value={draft[f.key]} onChange={(v) => set(f.key, v)} emojis={emojis} maxLength={f.key === 'staffPanelSelectPlaceholder' ? 150 : 500} placeholder={STAFF_PANEL_DEFAULTS[f.key]} />
+                  </div>
+                  {f.hint && <Hint>{f.hint}</Hint>}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div>

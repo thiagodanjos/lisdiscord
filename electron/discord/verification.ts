@@ -6,6 +6,7 @@ import {
   ButtonStyle,
   ChannelType,
   type Client,
+  ContainerBuilder,
   EmbedBuilder,
   GatewayIntentBits,
   type Guild,
@@ -19,6 +20,7 @@ import {
   type PartialMessage,
   PermissionFlagsBits,
   RoleSelectMenuBuilder,
+  TextDisplayBuilder,
   TextInputBuilder,
   TextInputStyle,
   time,
@@ -189,6 +191,17 @@ export async function applyVerificationSettings(guild: Guild, input: Verificatio
     claimedButtonLabel: (input.claimedButtonLabel ?? '').trim().slice(0, 80) || 'Assumido por {gestor}',
     ticketLinkLabel: (input.ticketLinkLabel ?? '').trim().slice(0, 80) || 'Ir para o ticket',
     ticketLinkEmoji: (input.ticketLinkEmoji ?? '').trim(),
+    staffPanelFinishLabel: (input.staffPanelFinishLabel ?? '').trim().slice(0, 80) || 'Finalizar',
+    staffPanelFinishEmoji: (input.staffPanelFinishEmoji ?? '').trim(),
+    staffPanelFinishStyle: validStyle(input.staffPanelFinishStyle, 'success'),
+    staffPanelSelectPlaceholder: (input.staffPanelSelectPlaceholder ?? '').trim().slice(0, 150) || 'Escolhe os cargos do membro…',
+    staffPanelNoRoles: (input.staffPanelNoRoles ?? '').trim().slice(0, 500) || '*nenhum ainda*',
+    staffPanelNothingExtra: (input.staffPanelNothingExtra ?? '').trim().slice(0, 500) || '—',
+    staffPanelRolesUpdated: (input.staffPanelRolesUpdated ?? '').trim().slice(0, 500) || '✅ Cargos atualizados.',
+    staffPanelRolesRefused: (input.staffPanelRolesRefused ?? '').trim().slice(0, 500) || 'Não podes dar: {cargos} (acima do teu cargo ou do do bot).',
+    staffPanelRolesFailed: (input.staffPanelRolesFailed ?? '').trim().slice(0, 500) || 'Falhou: {cargos}.',
+    staffPanelMemberLeft: (input.staffPanelMemberLeft ?? '').trim().slice(0, 500) || '❌ O membro já não está no servidor.',
+    staffPanelAlreadyDecided: (input.staffPanelAlreadyDecided ?? '').trim().slice(0, 500) || 'ℹ️ Esta verificação já foi decidida.',
     buttonStyle: validStyle(input.buttonStyle, 'success'),
     buttonEmoji: (input.buttonEmoji ?? '').trim(),
     maxTicketsPerWindow: clampInt(input.maxTicketsPerWindow, 1, 20, 2),
@@ -1088,45 +1101,74 @@ function assignableRole(guild: Guild, roleId: string, moderator: GuildMember): {
 }
 
 /** Mensagem só para o gestor: escolher os cargos a dar ao membro do ticket (aplicados na hora). */
+/** Mensagem V2 só com texto (as mensagens V2 não aceitam `content`). */
+function v2Notice(text: string) {
+  return {
+    flags: MessageFlags.IsComponentsV2 as const,
+    components: [new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(text.slice(0, 3900) || '​'))],
+    allowedMentions: { parse: [] as [] },
+  }
+}
+
+function fillCargos(template: string, roles: string[]): string {
+  return template.split('{cargos}').join(roles.join(', '))
+}
+
 async function showStaffPanel(interaction: ButtonInteraction, entry: VerificationEntry, moderator: GuildMember, settings: VerificationSettings): Promise<void> {
   const guild = interaction.guild!
   let current = store.findPendingById(entry.id) ?? entry
+  const ticket = entry.ticketId ? store.listTickets(guild.id).find((t) => t.id === entry.ticketId) ?? null : null
 
-  const render = (note?: string) => {
+  // Tudo vem da app: o embed "Painel staff" (template), o botão Finalizar do painel e os textos das notas.
+  const render = (note = '', withEmoji = true) => {
     const manual = current.manualRoleIds ?? []
-    const auto = settings.addRoleIds.map((id) => `<@&${id}>`)
-    const removing = settings.removeRoleIds.map((id) => `<@&${id}>`)
-    const embed = new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle('🛠️ Painel staff')
-      .setDescription(
-        [
-          `Verificação de <@${entry.userId}> — só tu vês esta mensagem.`,
-          '',
-          '**1.** Escolhe abaixo os cargos a dar ao membro (são dados na hora; tirar da lista remove-os).',
-          `**2.** Clica em **${settings.finishLabel || 'Finalizar'}** para fechar e mandar o log.`,
-        ].join('\n'),
-      )
-      .addFields(
-        { name: 'Cargos escolhidos', value: manual.length ? manual.map((id) => `<@&${id}>`).join(' ') : '*nenhum ainda*', inline: false },
-        { name: 'Ao finalizar, também', value: [auto.length ? `➕ ${auto.join(' ')}` : null, removing.length ? `➖ ${removing.join(' ')}` : null].filter(Boolean).join('\n') || '—', inline: false },
-      )
-    if (note) embed.setFooter({ text: note.slice(0, 2000) })
+    const mention = (ids: string[]) => ids.map((id) => `<@&${id}>`).join(' ')
+    const nothing = settings.staffPanelNothingExtra || '—'
+    const toAdd = settings.addRoleIds.length ? mention(settings.addRoleIds) : ''
+    const toRemove = settings.removeRoleIds.length ? mention(settings.removeRoleIds) : ''
+    const finishLabel = settings.staffPanelFinishLabel || settings.finishLabel || 'Finalizar'
+    let embed = buildEmbedFromDraft(
+      getTemplate(guild.id, 'verificationStaffPanel'),
+      {
+        membro: `<@${entry.userId}>`,
+        nome: entry.userTag,
+        avatar: entry.userAvatar ?? '',
+        id: entry.userId,
+        numero: ticket ? String(ticket.number).padStart(3, '0') : '—',
+        gestor: `<@${moderator.id}>`,
+        cargosEscolhidos: manual.length ? mention(manual) : settings.staffPanelNoRoles || '*nenhum ainda*',
+        cargosDar: toAdd || nothing,
+        cargosTirar: toRemove || nothing,
+        aoFinalizar: [toAdd ? `➕ ${toAdd}` : null, toRemove ? `➖ ${toRemove}` : null].filter(Boolean).join('\n') || nothing,
+        finalizar: finishLabel,
+        nota: note,
+        servidor: guild.name,
+      },
+      { separators: 'keep' },
+    )
+    if (!embedHasContent(embed)) embed = embed.setDescription(`Verificação de <@${entry.userId}>.`)
     const select = new RoleSelectMenuBuilder()
       .setCustomId(`verif:roles:${entry.id}`)
-      .setPlaceholder('Escolhe os cargos do membro…')
+      .setPlaceholder((settings.staffPanelSelectPlaceholder || 'Escolhe os cargos do membro…').slice(0, 150))
       .setMinValues(0)
       .setMaxValues(MAX_MANUAL_ROLES)
     if (manual.length) select.setDefaultRoles(manual.slice(0, MAX_MANUAL_ROLES))
-    const finish = styledButton(`verif:pfinish:${entry.id}`, settings.finishLabel || 'Finalizar', settings.finishEmoji, settings.finishStyle ?? 'success', true)
+    const finish = styledButton(`verif:pfinish:${entry.id}`, finishLabel, settings.staffPanelFinishEmoji, settings.staffPanelFinishStyle ?? 'success', withEmoji)
     return {
-      embeds: [embed],
-      components: [new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(select), new ActionRowBuilder<ButtonBuilder>().addComponents(finish)],
+      flags: MessageFlags.IsComponentsV2 as const,
+      components: [
+        embedToContainer(embed, [
+          new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(select),
+          new ActionRowBuilder<ButtonBuilder>().addComponents(finish),
+        ]),
+      ],
       allowedMentions: { parse: [] as [] },
     }
   }
 
-  const reply = await interaction.reply({ ...render(), ephemeral: true, withResponse: true })
+  const reply = await interaction
+    .reply({ ...render(), flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral, withResponse: true })
+    .catch(() => interaction.reply({ ...render('', false), flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral, withResponse: true }))
   const panel = reply.resource?.message
   if (!panel) return
 
@@ -1138,12 +1180,12 @@ async function showStaffPanel(interaction: ButtonInteraction, entry: Verificatio
       if (i.isRoleSelectMenu()) {
         const pending = store.findPendingById(entry.id)
         if (!pending) {
-          await i.update({ content: 'ℹ️ Esta verificação já foi decidida.', embeds: [], components: [] })
+          await i.update(v2Notice(settings.staffPanelAlreadyDecided || 'ℹ️ Esta verificação já foi decidida.'))
           return
         }
         const target = await guild.members.fetch(entry.userId).catch(() => null)
         if (!target) {
-          await i.update(render('❌ O membro já não está no servidor.'))
+          await i.update(render(settings.staffPanelMemberLeft || '❌ O membro já não está no servidor.'))
           return
         }
         const before = new Set(pending.manualRoleIds ?? [])
@@ -1157,17 +1199,17 @@ async function showStaffPanel(interaction: ButtonInteraction, entry: Verificatio
         current = store.updatePending(entry.id, { manualRoleIds: wanted }) ?? pending
         if (toAdd.length || toRemove.length) logEvent(guild.id, 'info', `${moderator.user.tag} atualizou os cargos de ${entry.userTag} (+${toAdd.length} −${toRemove.length}).`)
         const notes = [
-          refused.length ? `Não podes dar: ${refused.join(', ')} (acima do teu cargo ou do do bot).` : null,
-          failed.length ? `Falhou: ${failed.join(', ')}.` : null,
-          !refused.length && !failed.length ? '✅ Cargos atualizados.' : null,
+          refused.length ? fillCargos(settings.staffPanelRolesRefused || 'Não podes dar: {cargos}.', refused) : null,
+          failed.length ? fillCargos(settings.staffPanelRolesFailed || 'Falhou: {cargos}.', failed) : null,
+          !refused.length && !failed.length ? settings.staffPanelRolesUpdated || '✅ Cargos atualizados.' : null,
         ].filter(Boolean)
-        await i.update(render(notes.join(' ')))
+        await i.update(render(notes.join(' '))).catch(() => i.update(render(notes.join(' '), false)))
         return
       }
       if (i.isButton() && i.customId === `verif:pfinish:${entry.id}`) {
         await i.deferUpdate()
         const ok = await finishVerification(guild, store.findPendingById(entry.id) ?? current, moderator, true)
-        await replyStaffDone(i, guild, entry, moderator.id, true, ok, false)
+        await replyStaffDone(i, guild, entry, moderator.id, true, ok, true)
         collector.stop()
       }
     } catch (err) {
@@ -1188,7 +1230,7 @@ async function finishFromStalePanel(interaction: ButtonInteraction, entryId: str
   }
   await interaction.deferUpdate()
   const ok = await finishVerification(guild, entry, member, true)
-  await replyStaffDone(interaction, guild, entry, member.id, true, ok, false)
+  await replyStaffDone(interaction, guild, entry, member.id, true, ok, interaction.message.flags.has(MessageFlags.IsComponentsV2))
 }
 
 /**
@@ -1335,18 +1377,19 @@ async function replyStaffDone(
   reason?: string,
 ): Promise<void> {
   const edit = target.editReply as (options: object) => Promise<unknown>
+  const settings = store.getVerificationSettings(guild.id)
   if (!ok) {
-    await edit({ content: 'ℹ️ Esta verificação já tinha sido decidida.', embeds: [], components: [] }).catch(() => undefined)
+    const text = settings.staffPanelAlreadyDecided || 'ℹ️ Esta verificação já foi decidida.'
+    await edit(v2 ? v2Notice(text) : { content: text, embeds: [], components: [] }).catch(() => undefined)
     return
   }
-  const settings = store.getVerificationSettings(guild.id)
   const kind: CloseKind = finished ? 'verificationStaffFinished' : 'verificationStaffCancelled'
   const placeholders = closePlaceholders(guild, settings, entry, moderatorId, finished, reason)
   const fallback = finished ? '✅ Verificação finalizada — log enviado e o ticket vai ser fechado.' : '✖️ Verificação cancelada — log enviado e o ticket vai ser fechado.'
   const payload = v2
     ? { flags: MessageFlags.IsComponentsV2, components: [closeContainer(guild.id, kind, placeholders)], allowedMentions: { parse: [] } }
     : { content: '', embeds: [closeEmbed(guild.id, kind, placeholders, 'line')], components: [], allowedMentions: { parse: [] } }
-  await edit(payload).catch(() => edit({ content: fallback, embeds: [], components: [] }).catch(() => undefined))
+  await edit(payload).catch(() => edit(v2 ? v2Notice(fallback) : { content: fallback, embeds: [], components: [] }).catch(() => undefined))
 }
 
 async function collectImages(message: Message | PartialMessage): Promise<AttachmentBuilder[]> {

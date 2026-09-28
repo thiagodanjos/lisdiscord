@@ -301,6 +301,7 @@ export type EmbedTemplateKind =
   | 'verificationClosedCancelled'
   | 'verificationStaffFinished'
   | 'verificationStaffCancelled'
+  | 'verificationStaffPanel'
   | 'logMessageDelete'
   | 'logMessageEdit'
   | 'logPoints'
@@ -330,6 +331,7 @@ export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'verificationClosedCancelled',
   'verificationStaffFinished',
   'verificationStaffCancelled',
+  'verificationStaffPanel',
   'logMessageDelete',
   'logMessageEdit',
   'logPoints',
@@ -665,6 +667,22 @@ export interface VerificationSettings {
   claimedButtonLabel: string
   /** Segundos até o ticket ser apagado depois de finalizado/cancelado. */
   closeDelaySeconds: number
+  /** Painel staff (só o gestor vê): botão Finalizar próprio e textos das respostas. */
+  staffPanelFinishLabel: string
+  staffPanelFinishEmoji: string
+  staffPanelFinishStyle: VerificationButtonStyle
+  /** Texto dentro do seletor de cargos. */
+  staffPanelSelectPlaceholder: string
+  /** {cargosEscolhidos} sem nenhum cargo. */
+  staffPanelNoRoles: string
+  /** {cargosDar}/{cargosTirar}/{aoFinalizar} vazios. */
+  staffPanelNothingExtra: string
+  /** Notas ({nota}) depois de mexer nos cargos — {cargos} = os cargos em causa. */
+  staffPanelRolesUpdated: string
+  staffPanelRolesRefused: string
+  staffPanelRolesFailed: string
+  staffPanelMemberLeft: string
+  staffPanelAlreadyDecided: string
   /** Botão de link "Ir para o ticket" nas respostas do botão Verificar (links são sempre cinzentos). */
   ticketLinkLabel: string
   ticketLinkEmoji: string
@@ -742,6 +760,7 @@ export const VERIFICATION_PANEL_PLACEHOLDERS = ['{servidor}'] as const
 export const VERIFICATION_TICKET_PLACEHOLDERS = ['{membro}', '{mencao}', '{nome}', '{avatar}', '{id}', '{numero}', '{responsavel}', '{gestor}', '{estado}', '{cargo}', '{servidor}'] as const
 export const VERIFICATION_REPLY_PLACEHOLDERS = ['{membro}', '{canal}', '{numero}', '{max}', '{janela}', '{tempo}', '{servidor}'] as const
 export const VERIFICATION_CLOSE_PLACEHOLDERS = ['{membro}', '{moderador}', '{mencao}', '{responsavel}', '{estado}', '{motivo}', '{segundos}', '{numero}', '{servidor}'] as const
+export const VERIFICATION_STAFF_PANEL_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{numero}', '{gestor}', '{cargosEscolhidos}', '{cargosDar}', '{cargosTirar}', '{aoFinalizar}', '{finalizar}', '{nota}', '{servidor}'] as const
 export const TICKET_NAME_PLACEHOLDERS = ['{usuario}', '{id}', '{numero}'] as const
 export const VERIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{criada}', '{entrou}', '{responsavel}', '{estado}', '{servidor}'] as const
 export const VERIFICATION_LOG_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{estado}', '{moderador}', '{responsavel}', '{cargosDados}', '{cargosTirados}', '{motivo}', '{ticket}', '{duracao}', '{servidor}'] as const
