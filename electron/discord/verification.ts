@@ -185,6 +185,8 @@ export async function applyVerificationSettings(guild: Guild, input: Verificatio
     finishStyle: validStyle(input.finishStyle, 'success'),
     cancelStyle: validStyle(input.cancelStyle, 'danger'),
     staffPanelStyle: validStyle(input.staffPanelStyle, 'secondary'),
+    closeDelaySeconds: clampInt(input.closeDelaySeconds, 1, 300, 5),
+    claimedButtonLabel: (input.claimedButtonLabel ?? '').trim().slice(0, 80) || 'Assumido por {gestor}',
     ticketLinkLabel: (input.ticketLinkLabel ?? '').trim().slice(0, 80) || 'Ir para o ticket',
     ticketLinkEmoji: (input.ticketLinkEmoji ?? '').trim(),
     buttonStyle: validStyle(input.buttonStyle, 'success'),
@@ -533,9 +535,9 @@ async function openTicket(interaction: ButtonInteraction): Promise<void> {
 
     if (channel.isTextBased()) {
       // A mensagem de abertura já leva os botões da gestão (Assumir · Finalizar · Cancelar · Painel staff).
-      const welcomeInfo = { name: member?.displayName ?? user.username, avatar: user.displayAvatarURL({ size: 256 }) }
+      const welcomeInfo: TicketInfo = { name: member?.displayName ?? user.username, avatar: user.displayAvatarURL({ size: 256 }), state: 'waitingPrint' }
       const sendWelcome = (withEmoji: boolean) =>
-        channel.send({ ...ticketControlPayload(guild, settings, ticket, welcomeInfo, undefined, withEmoji), allowedMentions: { users: [user.id] } })
+        channel.send({ ...ticketControlPayload(guild, settings, ticket, welcomeInfo, withEmoji), allowedMentions: { users: [user.id] } })
       const welcome = await sendWelcome(true)
         .catch((err) => {
           // Um emoji inválido nos botões (ex.: apagado da biblioteca do bot) não pode impedir o ticket.
@@ -671,78 +673,118 @@ const PANEL_TTL_MS = 14 * 60_000
 const activePanels = new Set<string>()
 const MAX_MANUAL_ROLES = 10
 
-/** Botões da gestão — texto, emoji e cor vêm da app; "Assumir" fica desativado depois de alguém assumir. */
-function staffButtons(settings: VerificationSettings, claimedByName?: string, withEmoji = true): ActionRowBuilder<ButtonBuilder>[] {
+/** Fases do ticket — cada uma tem o seu texto de {estado}, personalizável na app. */
+type TicketState = 'waitingPrint' | 'waitingVerifier' | 'verifying' | 'verified' | 'cancelled'
+
+interface TicketInfo {
+  name: string
+  avatar: string
+  claimedById?: string
+  claimerName?: string
+  state: TicketState
+}
+
+export function stateText(settings: VerificationSettings, state: TicketState): string {
+  const d = store.defaultVerificationSettings()
+  const map: Record<TicketState, [string, string]> = {
+    waitingPrint: [settings.stateWaitingPrint, d.stateWaitingPrint],
+    waitingVerifier: [settings.stateWaitingVerifier, d.stateWaitingVerifier],
+    verifying: [settings.stateVerifying, d.stateVerifying],
+    verified: [settings.stateVerified, d.stateVerified],
+    cancelled: [settings.stateCancelled, d.stateCancelled],
+  }
+  const [value, fallback] = map[state]
+  return (value ?? '').trim() || fallback
+}
+
+/** Texto do {responsavel}: "ninguém" ou o formato com {gestor} (menção) / {gestorNome}. */
+export function responsibleText(settings: VerificationSettings, claimedById?: string, claimerName?: string): string {
+  const d = store.defaultVerificationSettings()
+  if (!claimedById) return (settings.responsibleNone ?? '').trim() || d.responsibleNone
+  return ((settings.responsibleClaimed ?? '').trim() || d.responsibleClaimed)
+    .split('{gestorNome}')
+    .join(claimerName ?? 'gestor')
+    .split('{gestor}')
+    .join(`<@${claimedById}>`)
+}
+
+/**
+ * Botões da gestão — texto, emoji e cor vêm da app; "Assumir" fica desativado (com o texto de
+ * "assumido") depois de alguém assumir, e tudo fica desativado quando a verificação termina.
+ */
+function staffButtons(settings: VerificationSettings, claimedByName?: string, withEmoji = true, allDisabled = false): ActionRowBuilder<ButtonBuilder>[] {
+  const claimedLabel = ((settings.claimedButtonLabel ?? '').trim() || 'Assumido por {gestor}').split('{gestor}').join(claimedByName ?? '')
   const claim = styledButton(
     CLAIM_ID,
-    claimedByName ? `Assumido por ${claimedByName}` : settings.claimLabel || 'Assumir',
+    claimedByName ? claimedLabel.trim() || 'Assumido' : settings.claimLabel || 'Assumir',
     settings.claimEmoji,
     settings.claimStyle ?? 'primary',
     withEmoji,
-  ).setDisabled(Boolean(claimedByName))
+  ).setDisabled(Boolean(claimedByName) || allDisabled)
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       claim,
-      styledButton(FINISH_ID, settings.finishLabel || 'Finalizar', settings.finishEmoji, settings.finishStyle ?? 'success', withEmoji),
-      styledButton(CANCEL_ID, settings.cancelLabel || 'Cancelar', settings.cancelEmoji, settings.cancelStyle ?? 'danger', withEmoji),
+      styledButton(FINISH_ID, settings.finishLabel || 'Finalizar', settings.finishEmoji, settings.finishStyle ?? 'success', withEmoji).setDisabled(allDisabled),
+      styledButton(CANCEL_ID, settings.cancelLabel || 'Cancelar', settings.cancelEmoji, settings.cancelStyle ?? 'danger', withEmoji).setDisabled(allDisabled),
     ),
     new ActionRowBuilder<ButtonBuilder>().addComponents(
-      styledButton(PANEL_ID, settings.staffPanelLabel || 'Painel staff', settings.staffPanelEmoji, settings.staffPanelStyle ?? 'secondary', withEmoji),
+      styledButton(PANEL_ID, settings.staffPanelLabel || 'Painel staff', settings.staffPanelEmoji, settings.staffPanelStyle ?? 'secondary', withEmoji).setDisabled(allDisabled),
     ),
   ]
 }
 
-/** Embed de abertura do ticket (com {responsavel}/{estado}) — usado ao abrir e ao assumir. */
-function ticketEmbed(
-  guild: Guild,
-  settings: VerificationSettings,
-  ticket: VerificationTicket,
-  info: { name: string; avatar: string; claimedById?: string; hasPhoto?: boolean },
-): EmbedBuilder {
-  const embed = buildEmbedFromDraft(getTemplate(guild.id, 'verificationTicket'), {
-    membro: `<@${ticket.userId}>`,
-    nome: info.name,
-    avatar: info.avatar,
-    id: ticket.userId,
-    numero: String(ticket.number),
-    responsavel: info.claimedById ? `<@${info.claimedById}>` : '*ninguém ainda*',
-    estado: info.claimedById ? '🟡 Em análise' : info.hasPhoto ? '📸 Foto enviada — à espera de um verificador' : '⏳ À espera dos prints',
-    cargo: settings.pingRoleId ? `<@&${settings.pingRoleId}>` : '',
-    servidor: guild.name,
-  }, { separators: 'keep' })
+/** Embed de abertura do ticket — {estado} e {responsavel} vêm dos textos configurados na app. */
+function ticketEmbed(guild: Guild, settings: VerificationSettings, ticket: VerificationTicket, info: TicketInfo): EmbedBuilder {
+  const embed = buildEmbedFromDraft(
+    getTemplate(guild.id, 'verificationTicket'),
+    {
+      membro: `<@${ticket.userId}>`,
+      mencao: `<@${ticket.userId}>`,
+      nome: info.name,
+      avatar: info.avatar,
+      id: ticket.userId,
+      numero: String(ticket.number),
+      responsavel: responsibleText(settings, info.claimedById, info.claimerName),
+      gestor: info.claimedById ? `<@${info.claimedById}>` : responsibleText(settings),
+      estado: stateText(settings, info.state),
+      cargo: settings.pingRoleId ? `<@&${settings.pingRoleId}>` : '',
+      servidor: guild.name,
+    },
+    { separators: 'keep' },
+  )
   return embedHasContent(embed) ? embed : embed.setDescription('Envia aqui o print do teu perfil com os cargos.')
 }
 
 /** Mensagem de abertura no formato V2: menção ao membro + caixa com o texto e os botões lá dentro. */
-function ticketControlPayload(
-  guild: Guild,
-  settings: VerificationSettings,
-  ticket: VerificationTicket,
-  info: { name: string; avatar: string; claimedById?: string; hasPhoto?: boolean },
-  claimedByName?: string,
-  withEmoji = true,
-) {
+function ticketControlPayload(guild: Guild, settings: VerificationSettings, ticket: VerificationTicket, info: TicketInfo, withEmoji = true) {
+  const ended = info.state === 'verified' || info.state === 'cancelled'
   return {
     flags: MessageFlags.IsComponentsV2 as const,
-    components: [textLine(`<@${ticket.userId}>`), embedToContainer(ticketEmbed(guild, settings, ticket, info), staffButtons(settings, claimedByName, withEmoji))],
+    components: [
+      textLine(`<@${ticket.userId}>`),
+      embedToContainer(ticketEmbed(guild, settings, ticket, info), staffButtons(settings, info.claimedById ? info.claimerName : undefined, withEmoji, ended)),
+    ],
   }
 }
 
 /** Embed(s) da foto a partir do template — usado ao publicar e sempre que o estado muda (assumido). */
 function requestEmbeds(
   guild: Guild,
-  info: { userId: string; name: string; avatar: string; createdAt: Date | null; joinedAt: Date | null; claimedById?: string },
+  info: { userId: string; name: string; avatar: string; createdAt: Date | null; joinedAt: Date | null; claimedById?: string; claimerName?: string },
   imageNames: string[],
 ): EmbedBuilder[] {
+  const settings = store.getVerificationSettings(guild.id)
   const embed = buildEmbedFromDraft(getTemplate(guild.id, 'verificationRequest'), {
+    mencao: `<@${info.userId}>`,
+    gestor: info.claimedById ? `<@${info.claimedById}>` : responsibleText(settings),
     membro: `<@${info.userId}>`,
     nome: info.name,
     avatar: info.avatar,
     id: info.userId,
     criada: info.createdAt ? time(info.createdAt, TimestampStyles.ShortDate) : '—',
     entrou: info.joinedAt ? time(info.joinedAt, TimestampStyles.RelativeTime) : '—',
-    responsavel: info.claimedById ? `<@${info.claimedById}>` : '*ninguém ainda*',
-    estado: info.claimedById ? '🟡 Em análise' : '⏳ À espera de um verificador',
+    responsavel: responsibleText(settings, info.claimedById, info.claimerName),
+    estado: stateText(settings, info.claimedById ? 'verifying' : 'waitingVerifier'),
     servidor: guild.name,
   })
   if (imageNames[0]) embed.setImage(`attachment://${imageNames[0]}`)
@@ -855,14 +897,14 @@ export async function handleVerificationMessage(message: Message): Promise<void>
   const pingMessageId = existing.claimedById ? null : await sendPing(message, settings)
   store.updatePending(existing.id, { photoMessageId: photo.id, pingMessageId, imageCount: files.length })
 
-  // A abertura passa a dizer "Foto enviada" enquanto ninguém assume.
+  // A abertura passa a "aguardando verificador" enquanto ninguém assume.
   if (!existing.claimedById) {
     const control = await channel.messages.fetch(existing.embedMessageId).catch(() => null)
-    const controlInfo = { name: info.name, avatar: info.avatar, hasPhoto: true }
+    const controlInfo: TicketInfo = { name: info.name, avatar: info.avatar, state: 'waitingVerifier' }
     const v2 = control?.flags.has(MessageFlags.IsComponentsV2)
     const payload = (withEmoji: boolean) =>
       v2
-        ? { ...ticketControlPayload(message.guild, settings, ticket, controlInfo, undefined, withEmoji), allowedMentions: { parse: [] as [] } }
+        ? { ...ticketControlPayload(message.guild, settings, ticket, controlInfo, withEmoji), allowedMentions: { parse: [] as [] } }
         : { embeds: [ticketEmbed(message.guild, settings, ticket, controlInfo)] }
     await control
       ?.edit(payload(true))
@@ -1004,12 +1046,14 @@ async function refreshAfterClaim(interaction: ButtonInteraction, entry: Verifica
     createdAt: target?.user.createdAt ?? null,
     joinedAt: target?.joinedAt ?? null,
     claimedById: member.id,
+    claimerName: member.displayName,
+    state: 'verifying' as const,
   }
   const ticket = entry.ticketId ? store.listTickets(guild.id).find((t) => t.id === entry.ticketId) : undefined
   const controlImages = [...interaction.message.attachments.values()].map((a) => a.name)
   const edit =
     ticket && interaction.message.flags.has(MessageFlags.IsComponentsV2)
-      ? { ...ticketControlPayload(guild, settings, ticket, info, member.displayName), allowedMentions: { parse: [] as [] } }
+      ? { ...ticketControlPayload(guild, settings, ticket, info), allowedMentions: { parse: [] as [] } }
       : {
           embeds: controlImages.length > 0 || !ticket ? requestEmbeds(guild, info, controlImages) : [ticketEmbed(guild, settings, ticket, info)],
           components: staffButtons(settings, member.displayName),
@@ -1019,7 +1063,7 @@ async function refreshAfterClaim(interaction: ButtonInteraction, entry: Verifica
     .catch(() =>
       interaction.message.edit(
         ticket && interaction.message.flags.has(MessageFlags.IsComponentsV2)
-          ? { ...ticketControlPayload(guild, settings, ticket, info, member.displayName, false), allowedMentions: { parse: [] as [] } }
+          ? { ...ticketControlPayload(guild, settings, ticket, info, false), allowedMentions: { parse: [] as [] } }
           : { components: staffButtons(settings, member.displayName, false) },
       ),
     )
@@ -1196,25 +1240,45 @@ async function finishVerification(guild: Guild, entry: VerificationEntry, modera
 
     const decided = store.decide(fresh.id, finished ? 'approved' : 'rejected', { id: moderator.id, tag: moderator.user.tag }, { added, removed }, reason)
     if (!decided) return false
-    await deleteRequestMessages(guild, fresh)
+    const control = channel?.isTextBased() ? await channel.messages.fetch(fresh.embedMessageId).catch(() => null) : null
+    const ticketForState = fresh.ticketId ? store.listTickets(guild.id).find((t) => t.id === fresh.ticketId) : undefined
+    if (control && ticketForState && control.flags.has(MessageFlags.IsComponentsV2)) {
+      // Formato novo: a caixa fica a mostrar o estado final ("verificado" / "cancelado") até o ticket fechar.
+      const claimer = fresh.claimedById ? await guild.members.fetch(fresh.claimedById).catch(() => null) : null
+      const finalInfo: TicketInfo = {
+        name: target?.displayName ?? fresh.userTag,
+        avatar: target?.user.displayAvatarURL({ size: 256 }) ?? fresh.userAvatar ?? '',
+        claimedById: fresh.claimedById ?? moderator.id,
+        claimerName: claimer?.displayName ?? (fresh.claimedById ? fresh.claimedByTag : moderator.displayName),
+        state: finished ? 'verified' : 'cancelled',
+      }
+      await control
+        .edit({ ...ticketControlPayload(guild, settings, ticketForState, finalInfo), allowedMentions: { parse: [] } })
+        .catch(() => control.edit({ ...ticketControlPayload(guild, settings, ticketForState, finalInfo, false), allowedMentions: { parse: [] } }))
+        .catch(() => undefined)
+      if (fresh.pingMessageId && channel?.isTextBased()) await channel.messages.delete(fresh.pingMessageId).catch(() => undefined)
+    } else {
+      await deleteRequestMessages(guild, fresh)
+    }
     logEvent(guild.id, 'info', `${fresh.userTag} ${finished ? 'finalizado ✅' : 'cancelado ✖️'} por ${moderator.user.tag}.`)
 
     const ticket = fresh.ticketId ? store.closeTicket(fresh.ticketId, finished ? 'approved' : 'rejected', moderator.user.tag) : null
     if (settings.logChannelId) {
       await postLog(guild, settings.logChannelId, decided, logFiles, ticket).catch((err) => logEvent(guild.id, 'error', `Falha a mandar o log: ${errText(err)}`))
     }
+    const closeDelay = clampInt(settings.closeDelaySeconds, 1, 300, 5)
     if (ticket && channel?.isTextBased()) {
       const text = (settings.closeMessage || store.DEFAULT_CLOSE_MESSAGE)
         .split('{estado}')
-        .join(finished ? 'finalizada ✅' : 'cancelada ✖️')
+        .join(stateText(settings, finished ? 'verified' : 'cancelled'))
         .split('{membro}')
         .join(`<@${fresh.userId}>`)
         .split('{moderador}')
         .join(`<@${moderator.id}>`)
         .split('{segundos}')
-        .join(String(store.CLOSE_DELAY_SECONDS))
+        .join(String(closeDelay))
       await channel.send({ content: `${text}${reason ? `\n**Motivo:** ${reason}` : ''}`.slice(0, 2000), allowedMentions: { users: [fresh.userId] } }).catch(() => undefined)
-      scheduleChannelDelete(guild, ticket.channelId, store.CLOSE_DELAY_SECONDS * 1000, `Verificação ${finished ? 'finalizada' : 'cancelada'} por ${moderator.user.tag}`)
+      scheduleChannelDelete(guild, ticket.channelId, closeDelay * 1000, `Verificação ${finished ? 'finalizada' : 'cancelada'} por ${moderator.user.tag}`)
     }
     return true
   } finally {

@@ -8,9 +8,7 @@ const MAX_HISTORY_PER_GUILD = 200
 
 export const DEFAULT_PING_TEXT = '{cargo}'
 export const DEFAULT_TICKET_NAME = 'verificacao-{usuario}'
-export const DEFAULT_CLOSE_MESSAGE = 'Verificação **{estado}** por {moderador}. Este canal vai ser apagado em {segundos} segundos.'
-/** Quanto tempo o ticket fica aberto depois de um gestor decidir, antes de ser apagado. */
-export const CLOSE_DELAY_SECONDS = 10
+export const DEFAULT_CLOSE_MESSAGE = '**Estado:** {estado} — por {moderador}. Este canal vai ser apagado em {segundos} segundos.'
 const MAX_CLOSED_TICKETS_PER_GUILD = 300
 
 export function defaultVerificationSettings(): VerificationSettings {
@@ -39,6 +37,15 @@ export function defaultVerificationSettings(): VerificationSettings {
     finishStyle: 'success',
     cancelStyle: 'danger',
     staffPanelStyle: 'secondary',
+    stateWaitingPrint: '⏳ aguardando print',
+    stateWaitingVerifier: '🕐 aguardando verificador',
+    stateVerifying: '🔎 verificando',
+    stateVerified: '✅ verificado',
+    stateCancelled: '✖️ cancelado',
+    responsibleNone: 'ninguém',
+    responsibleClaimed: '{gestor}',
+    claimedButtonLabel: 'Assumido por {gestor}',
+    closeDelaySeconds: 5,
     ticketLinkLabel: 'Ir para o ticket',
     ticketLinkEmoji: '🎫',
     pingRoleId: null,

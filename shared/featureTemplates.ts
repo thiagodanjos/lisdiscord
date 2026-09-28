@@ -77,15 +77,16 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     footer: '{servidor}',
   }),
   verificationTicket: draft({
-    title: '🔎 Verificação em andamento',
-    description: 'Olá {membro}! Envia **prints dos teus cargos** dentro da CDO e aguarda um **verificador**.\n\nSó imagens contam — texto é apagado.',
-    color: '#EB459E',
+    title: '',
+    description:
+      'Olá, seja bem-vindo à verificação {membro} 👻\n\n' +
+      '↪ Envia uma print dos teus cargos da CDO e aguarda um **verificador**.\n\n' +
+      '**Assumido por:** {responsavel}\n' +
+      '**Estado:** {estado}',
+    color: '#ED4245',
     thumbnailUrl: '{avatar}',
-    fields: [
-      { name: 'Responsável', value: '{responsavel}', inline: true },
-      { name: 'Estado', value: '{estado}', inline: true },
-    ],
-    footer: 'Ticket #{numero} · só tu e a gestão veem este canal',
+    footer: '',
+    timestamp: false,
   }),
   verificationTicketCreated: draft({
     title: '✅ Ticket criado',

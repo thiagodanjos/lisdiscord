@@ -21,6 +21,8 @@ import { cleanIpcError } from '../lib/errors'
 import { formatDateTime, formatRelativeDate } from '../lib/format'
 import { Avatar, Badge, Button, Card, EmptyState, PageHeader, StatCard, Toggle } from '../components/ui'
 import { TemplateEditorModal } from '../components/TemplateEditorModal'
+import { EmojiTextInput } from '../components/EmojiTextInput'
+import { renderDiscordMarkdown } from '../lib/discordMarkdown'
 import { DiscordButtonEditor, DiscordButtonPreview } from '../components/DiscordButtonEditor'
 import {
   TICKET_NAME_PLACEHOLDERS,
@@ -57,7 +59,7 @@ const EMPTY_SETTINGS: VerificationSettings = {
   ticketNameTemplate: 'verificacao-{usuario}',
   maxTicketsPerWindow: 2,
   ticketWindowMinutes: 60,
-  closeMessage: 'Verificação **{estado}** por {moderador}. Este canal vai ser apagado em {segundos} segundos.',
+  closeMessage: '**Estado:** {estado} — por {moderador}. Este canal vai ser apagado em {segundos} segundos.',
   claimLabel: 'Assumir',
   finishLabel: 'Finalizar',
   cancelLabel: 'Cancelar',
@@ -70,6 +72,15 @@ const EMPTY_SETTINGS: VerificationSettings = {
   finishStyle: 'success',
   cancelStyle: 'danger',
   staffPanelStyle: 'secondary',
+  stateWaitingPrint: '⏳ aguardando print',
+  stateWaitingVerifier: '🕐 aguardando verificador',
+  stateVerifying: '🔎 verificando',
+  stateVerified: '✅ verificado',
+  stateCancelled: '✖️ cancelado',
+  responsibleNone: 'ninguém',
+  responsibleClaimed: '{gestor}',
+  claimedButtonLabel: 'Assumido por {gestor}',
+  closeDelaySeconds: 5,
   ticketLinkLabel: 'Ir para o ticket',
   ticketLinkEmoji: '🎫',
   pingRoleId: null,
@@ -82,6 +93,14 @@ const EMPTY_SETTINGS: VerificationSettings = {
   logChannelName: null,
   deleteNonImage: true,
 }
+
+const STATE_FIELDS = [
+  { key: 'stateWaitingPrint', label: 'Estado: à espera do print', placeholder: '⏳ aguardando print', hint: 'Assim que o ticket abre.', when: 'Ticket aberto' },
+  { key: 'stateWaitingVerifier', label: 'Estado: à espera de um verificador', placeholder: '🕐 aguardando verificador', hint: 'Depois de o membro mandar o print.', when: 'O membro mandou o print' },
+  { key: 'stateVerifying', label: 'Estado: a verificar', placeholder: '🔎 verificando', hint: 'Quando um gestor clica em Assumir.', when: 'Um gestor assumiu' },
+  { key: 'stateVerified', label: 'Estado: verificado', placeholder: '✅ verificado', hint: 'Quando o gestor clica em Finalizar (fica visível até o ticket fechar).', when: 'Finalizado' },
+  { key: 'stateCancelled', label: 'Estado: cancelado', placeholder: '✖️ cancelado', hint: 'Quando a verificação é cancelada.', when: 'Cancelado' },
+] as const
 
 const STAFF_BUTTONS = [
   { title: 'Assumir', label: 'claimLabel', emoji: 'claimEmoji', style: 'claimStyle', fallback: 'Assumir' },
@@ -345,8 +364,10 @@ export default function Verification() {
     cargo: pingRole ? `@${pingRole.name}` : '',
     criada: '12/03/2023',
     entrou: 'há 2 dias',
-    estado: editing === 'verificationLog' ? 'finalizada ✅' : '🟡 Em análise',
-    responsavel: '@gestor',
+    estado: editing === 'verificationLog' ? 'finalizada ✅' : draft.stateWaitingPrint || '⏳ aguardando print',
+    responsavel: draft.responsibleNone || 'ninguém',
+    mencao: '@membro',
+    gestor: '@gestor',
     moderador: '@gestor',
     motivo: '—',
     ticket: String(nextNumber),
@@ -530,10 +551,25 @@ export default function Verification() {
           </div>
           <div>
             <Label>Mensagem quando a verificação é decidida</Label>
-            <input value={draft.closeMessage} onChange={(e) => set('closeMessage', e.target.value)} maxLength={500} className={`mt-1.5 ${inputClass}`} />
+            <div className="mt-1.5 flex gap-2">
+              <div className="min-w-0 flex-1">
+                <EmojiTextInput value={draft.closeMessage} onChange={(v) => set('closeMessage', v)} emojis={emojis} maxLength={500} />
+              </div>
+              <div className="w-28 shrink-0">
+                <input
+                  type="number"
+                  min={1}
+                  max={300}
+                  value={draft.closeDelaySeconds}
+                  onChange={(e) => set('closeDelaySeconds', Number(e.target.value))}
+                  title="Segundos até o ticket ser apagado"
+                  className={inputClass}
+                />
+              </div>
+            </div>
             <Hint>
-              Tokens: <code>{'{estado}'}</code> <code>{'{membro}'}</code> <code>{'{moderador}'}</code> <code>{'{segundos}'}</code> · depois o canal é apagado
-              sozinho.
+              Tokens: <code>{'{estado}'}</code> <code>{'{membro}'}</code> <code>{'{moderador}'}</code> <code>{'{segundos}'}</code> · o ticket é apagado{' '}
+              <b className="text-muted">{draft.closeDelaySeconds || 5} s</b> depois (número à direita).
             </Hint>
           </div>
         </div>
@@ -574,10 +610,74 @@ export default function Verification() {
         />
       </Card>
 
-      {/* 3. Aprovação */}
+      {/* 2b. Estados */}
       <Card className="flex flex-col gap-4">
         <SectionTitle
           n={3}
+          icon={Activity}
+          title="Estados e responsável"
+          subtitle="Os textos que o {estado} e o {responsavel} mostram em cada fase do ticket — com os emojis do teu bot à vontade."
+        />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="flex flex-col gap-3">
+            {STATE_FIELDS.map((f) => (
+              <div key={f.key}>
+                <Label>{f.label}</Label>
+                <div className="mt-1.5">
+                  <EmojiTextInput value={draft[f.key]} onChange={(v) => set(f.key, v)} emojis={emojis} maxLength={200} placeholder={f.placeholder} />
+                </div>
+                <Hint>{f.hint}</Hint>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-col gap-3">
+            <div>
+              <Label>Assumido por — quando ninguém assumiu</Label>
+              <div className="mt-1.5">
+                <EmojiTextInput value={draft.responsibleNone} onChange={(v) => set('responsibleNone', v)} emojis={emojis} maxLength={200} placeholder="ninguém" />
+              </div>
+            </div>
+            <div>
+              <Label>Assumido por — depois de alguém assumir</Label>
+              <div className="mt-1.5">
+                <EmojiTextInput value={draft.responsibleClaimed} onChange={(v) => set('responsibleClaimed', v)} emojis={emojis} maxLength={200} placeholder="{gestor}" />
+              </div>
+              <Hint>
+                <code>{'{gestor}'}</code> = menção a quem assumiu · <code>{'{gestorNome}'}</code> = só o nome
+              </Hint>
+            </div>
+            <div>
+              <Label>Texto do botão Assumir depois de assumido</Label>
+              <input value={draft.claimedButtonLabel} onChange={(e) => set('claimedButtonLabel', e.target.value)} maxLength={80} className={`mt-1.5 ${inputClass}`} />
+              <Hint>
+                <code>{'{gestor}'}</code> = nome de quem assumiu (botões não aceitam menções)
+              </Hint>
+            </div>
+            <div className="rounded-xl border-l-4 border-[#ed4245] bg-black/30 p-3">
+              <p className="text-[10px] font-bold tracking-[0.14em] text-faint uppercase">Como o ticket vai mudando</p>
+              <div className="mt-2 flex flex-col gap-2.5 text-sm text-muted">
+                {STATE_FIELDS.map((f, i) => (
+                  <div key={f.key}>
+                    <p className="text-[10px] text-faint">{f.when}</p>
+                    <p>
+                      <b className="text-text">Assumido por:</b>{' '}
+                      {renderDiscordMarkdown(i < 2 ? draft.responsibleNone || 'ninguém' : (draft.responsibleClaimed || '{gestor}').split('{gestorNome}').join('Gestor').split('{gestor}').join('@Gestor'))}
+                    </p>
+                    <p>
+                      <b className="text-text">Estado:</b> {renderDiscordMarkdown(draft[f.key] || f.placeholder)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* 3. Aprovação */}
+      <Card className="flex flex-col gap-4">
+        <SectionTitle
+          n={4}
           icon={ShieldCheck}
           title="Foto e botões da gestão"
           subtitle="O ticket abre já com os botões da gestão → o membro manda a foto → marcação → um gestor assume, escolhe os cargos num painel só dele e finaliza."

@@ -642,6 +642,19 @@ export interface VerificationSettings {
   finishStyle: VerificationButtonStyle
   cancelStyle: VerificationButtonStyle
   staffPanelStyle: VerificationButtonStyle
+  /** Textos do {estado} em cada fase do ticket (aceitam emojis do bot). */
+  stateWaitingPrint: string
+  stateWaitingVerifier: string
+  stateVerifying: string
+  stateVerified: string
+  stateCancelled: string
+  /** Texto do {responsavel}: sem ninguém / depois de alguém assumir ({gestor} = menção, {gestorNome} = nome). */
+  responsibleNone: string
+  responsibleClaimed: string
+  /** Texto do botão "Assumir" depois de alguém assumir ({gestor} = nome — botões não aceitam menções). */
+  claimedButtonLabel: string
+  /** Segundos até o ticket ser apagado depois de finalizado/cancelado. */
+  closeDelaySeconds: number
   /** Botão de link "Ir para o ticket" nas respostas do botão Verificar (links são sempre cinzentos). */
   ticketLinkLabel: string
   ticketLinkEmoji: string
@@ -716,7 +729,7 @@ export interface VerificationDiagnostics {
 }
 
 export const VERIFICATION_PANEL_PLACEHOLDERS = ['{servidor}'] as const
-export const VERIFICATION_TICKET_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{numero}', '{responsavel}', '{estado}', '{cargo}', '{servidor}'] as const
+export const VERIFICATION_TICKET_PLACEHOLDERS = ['{membro}', '{mencao}', '{nome}', '{avatar}', '{id}', '{numero}', '{responsavel}', '{gestor}', '{estado}', '{cargo}', '{servidor}'] as const
 export const VERIFICATION_REPLY_PLACEHOLDERS = ['{membro}', '{canal}', '{numero}', '{max}', '{janela}', '{tempo}', '{servidor}'] as const
 export const TICKET_NAME_PLACEHOLDERS = ['{usuario}', '{id}', '{numero}'] as const
 export const VERIFICATION_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{id}', '{criada}', '{entrou}', '{responsavel}', '{estado}', '{servidor}'] as const
