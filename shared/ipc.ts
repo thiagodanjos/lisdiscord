@@ -28,6 +28,10 @@ import type {
   MovListOp,
   MovListSettings,
   MovListState,
+  ActivityAction,
+  ActivityInput,
+  CalendarSettings,
+  CalendarState,
   VoiceHoursAction,
   VoiceHoursSettings,
   VoiceHoursState,
@@ -225,6 +229,14 @@ export const IPC = {
   getRemoteWeeklyReport: 'remoteBot:weeklyReport:get',
   setRemoteWeeklyReportSettings: 'remoteBot:weeklyReport:set',
   remoteWeeklyReportAction: 'remoteBot:weeklyReport:action',
+  getCalendar: 'calendar:get',
+  setCalendarSettings: 'calendar:settings:set',
+  saveActivity: 'calendar:activity:save',
+  activityAction: 'calendar:activity:action',
+  getRemoteCalendar: 'remoteBot:calendar:get',
+  setRemoteCalendarSettings: 'remoteBot:calendar:settings:set',
+  saveRemoteActivity: 'remoteBot:calendar:activity:save',
+  remoteActivityAction: 'remoteBot:calendar:activity:action',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -401,4 +413,13 @@ export interface LisDiscordBridge {
   getRemoteWeeklyReport(guildId: string): Promise<WeeklyReportState>
   setRemoteWeeklyReportSettings(guildId: string, settings: WeeklyReportSettings): Promise<WeeklyReportState>
   remoteWeeklyReportAction(guildId: string, action: WeeklyReportAction): Promise<WeeklyReportState>
+
+  getCalendar(guildId: string): Promise<CalendarState>
+  setCalendarSettings(guildId: string, settings: CalendarSettings): Promise<CalendarState>
+  saveActivity(guildId: string, input: ActivityInput): Promise<CalendarState>
+  activityAction(guildId: string, action: ActivityAction): Promise<CalendarState>
+  getRemoteCalendar(guildId: string): Promise<CalendarState>
+  setRemoteCalendarSettings(guildId: string, settings: CalendarSettings): Promise<CalendarState>
+  saveRemoteActivity(guildId: string, input: ActivityInput): Promise<CalendarState>
+  remoteActivityAction(guildId: string, action: ActivityAction): Promise<CalendarState>
 }

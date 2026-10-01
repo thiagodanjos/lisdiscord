@@ -31,6 +31,7 @@ import MovList from './pages/MovList'
 import VoiceHours from './pages/VoiceHours'
 import ProfilePage from './pages/Profile'
 import WeeklyReport from './pages/WeeklyReport'
+import CalendarPage from './pages/Calendar'
 import Verification from './pages/Verification'
 import ServerLogs from './pages/ServerLogs'
 import SettingsPage from './pages/Settings'
@@ -148,6 +149,7 @@ export default function App() {
         <Route path="/horas-automaticas" element={<VoiceHours />} />
         <Route path="/perfil" element={<ProfilePage />} />
         <Route path="/relatorio-semanal" element={<WeeklyReport />} />
+        <Route path="/agenda" element={<CalendarPage />} />
         <Route path="/verificacao" element={<Verification />} />
         <Route path="/canais-log" element={<ServerLogs />} />
         <Route path="/definicoes" element={<SettingsPage status={status} onStatusChange={setStatus} user={auth?.user ?? null} onLogout={logout} />} />

@@ -12,6 +12,7 @@ import { handleMovListInteraction } from './movList'
 import { startVoiceHoursLoop } from './voiceHours'
 import { handleProfileButtons } from './profileCommand'
 import { handleWeeklyReportButtons, startWeeklyReportLoop } from './weeklyReport'
+import { handleActivityAutocomplete, handleActivityButtons, startActivityLoop } from './activities'
 import {
   handleVerificationButtons,
   handleVerificationChannelDelete,
@@ -41,6 +42,7 @@ class DiscordManager {
   private stopNotices: (() => void) | null = null
   private stopVoiceHours: (() => void) | null = null
   private stopWeeklyReport: (() => void) | null = null
+  private stopActivities: (() => void) | null = null
   private stopPointsLog: (() => void) | null = null
   private messageContentEnabled = false
   private guildMembersEnabled = false
@@ -88,6 +90,10 @@ class DiscordManager {
       // (e um deles, sem os dados do outro, dizia coisas como "esta verificação já foi finalizada").
       if (isPassive()) return
 
+      if (interaction.isAutocomplete()) {
+        await handleActivityAutocomplete(interaction).catch((err) => console.error('Erro no autocompletar:', err))
+        return
+      }
       if (interaction.isChatInputCommand()) {
         await handleGameInteraction(interaction).catch((err) => {
           if (isAlreadyAcknowledgedError(err)) return
@@ -117,6 +123,10 @@ class DiscordManager {
         await handleProfileButtons(interaction).catch((err) => {
           if (isAlreadyAcknowledgedError(err)) return
           console.error('Erro a processar botão do perfil:', err)
+        })
+        await handleActivityButtons(interaction).catch((err) => {
+          if (isAlreadyAcknowledgedError(err)) return
+          console.error('Erro a processar botão da agenda:', err)
         })
         await handleWeeklyReportButtons(interaction).catch((err) => {
           if (isAlreadyAcknowledgedError(err)) return
@@ -167,6 +177,7 @@ class DiscordManager {
       this.stopNotices = startMovNoticeLoop(client)
       this.stopVoiceHours = startVoiceHoursLoop(client)
       this.stopWeeklyReport = startWeeklyReportLoop(client)
+      this.stopActivities = startActivityLoop(client)
       this.stopPointsLog = onMovPointsLogged((entry) => {
         if (isPassive()) return
         postMovPointsLog(client, entry).catch((err) => console.error('Erro no log de pontos/horas:', err))
@@ -223,6 +234,8 @@ class DiscordManager {
     this.stopVoiceHours = null
     this.stopWeeklyReport?.()
     this.stopWeeklyReport = null
+    this.stopActivities?.()
+    this.stopActivities = null
     this.stopPointsLog?.()
     this.stopPointsLog = null
     await this.client.destroy().catch(() => undefined)

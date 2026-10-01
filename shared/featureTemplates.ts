@@ -196,6 +196,34 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     footer: '{servidor}',
     timestamp: true,
   }),
+  activityCard: draft({
+    title: '{emoji} {titulo}',
+    description:
+      '{descricao}\n{barra}\n🗓️ **{data}** · ⏰ **{hora} – {fim}** ({relativo})\n📍 **Local:** {local}\n👑 **Responsável:** {responsavel}\n🏷️ **Categoria:** {categoria} · **Estado:** {estado}\n{barra}\n' +
+      '✅ **Participantes ({vagasParticipantes})**\n{participantes}\n\n🛠️ **Organizadores ({vagasOrganizadores})**\n{organizadores}\n\n❌ **Indisponíveis**\n{indisponiveis}',
+    footer: 'Atividade #{numero}',
+    timestamp: false,
+  }),
+  activityBoard: draft({
+    title: '📆 Agenda — próximos {dias} dias',
+    description: '{agenda}',
+    color: '#5865F2',
+    footer: '{total} atividades · atualizado {atualizado}',
+    timestamp: false,
+  }),
+  activityReminder: draft({
+    title: '⏰ {titulo} começa {relativo}',
+    description: '{emoji} **{categoria}** · {inicio}\n📍 {local}\n👑 {responsavel}\n{barra}\n{participantes}\n\n[Ver a atividade]({link})',
+    color: '#F0B232',
+    timestamp: false,
+  }),
+  activityList: draft({
+    title: '📋 Atividades',
+    description: '{filtros}\n{barra}\n{lista}',
+    color: '#5865F2',
+    footer: '{total} atividades',
+    timestamp: false,
+  }),
   verificationStaffPanel: draft({
     title: '🛠️ Painel staff',
     description:

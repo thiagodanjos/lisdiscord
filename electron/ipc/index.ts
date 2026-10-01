@@ -27,6 +27,10 @@ import type {
   MovListOp,
   MovListSettings,
   MovListState,
+  ActivityAction,
+  ActivityInput,
+  CalendarSettings,
+  CalendarState,
   VoiceHoursAction,
   VoiceHoursSettings,
   VoiceHoursState,
@@ -100,6 +104,7 @@ import { applyVoiceHoursAction, applyVoiceHoursSettings, getVoiceHoursState } fr
 import { applyProfileSettings } from '../discord/profileCommand'
 import { applyWeeklyReportAction, applyWeeklyReportSettings, getWeeklyReportState } from '../discord/weeklyReport'
 import { getProfileSettings } from '../store/profileSettings'
+import { applyActivityAction, applyCalendarSettings, getCalendarState, saveActivityFromApp } from '../discord/activities'
 import { applyServerLogSettings } from '../discord/serverLogs'
 import * as serverLogsStore from '../store/serverLogs'
 import { listGuildCategories } from '../discord/memberProfile'
@@ -556,6 +561,23 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   )
   ipcMain.handle(IPC.remoteWeeklyReportAction, async (_e, guildId: string, action: WeeklyReportAction): Promise<WeeklyReportState> =>
     remoteApi(requireRemoteCredentials()).featureAction(guildId, 'weeklyreport', action),
+  )
+
+  // ---- Agenda de atividades ----
+  const appActor = () => auth.getAuthState().user?.username ?? 'App'
+  ipcMain.handle(IPC.getCalendar, async (_e, guildId: string): Promise<CalendarState> => getCalendarState(guildId))
+  ipcMain.handle(IPC.setCalendarSettings, async (_e, guildId: string, settings: CalendarSettings): Promise<CalendarState> => applyCalendarSettings(await guildOf(guildId), settings))
+  ipcMain.handle(IPC.saveActivity, async (_e, guildId: string, input: ActivityInput): Promise<CalendarState> => saveActivityFromApp(await guildOf(guildId), input, appActor()))
+  ipcMain.handle(IPC.activityAction, async (_e, guildId: string, action: ActivityAction): Promise<CalendarState> => applyActivityAction(await guildOf(guildId), action))
+  ipcMain.handle(IPC.getRemoteCalendar, async (_e, guildId: string): Promise<CalendarState> => remoteApi(requireRemoteCredentials()).getCalendar(guildId))
+  ipcMain.handle(IPC.setRemoteCalendarSettings, async (_e, guildId: string, settings: CalendarSettings): Promise<CalendarState> =>
+    remoteApi(requireRemoteCredentials()).calendarPost(guildId, 'settings', { settings }),
+  )
+  ipcMain.handle(IPC.saveRemoteActivity, async (_e, guildId: string, input: ActivityInput): Promise<CalendarState> =>
+    remoteApi(requireRemoteCredentials()).calendarPost(guildId, 'activity', { input, actor: appActor() }),
+  )
+  ipcMain.handle(IPC.remoteActivityAction, async (_e, guildId: string, action: ActivityAction): Promise<CalendarState> =>
+    remoteApi(requireRemoteCredentials()).calendarPost(guildId, 'action', { action }),
   )
 
   ipcMain.handle(IPC.listRemoteVerifications, async (_e, guildId: string): Promise<VerificationEntry[]> =>

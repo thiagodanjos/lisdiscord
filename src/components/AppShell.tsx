@@ -1,5 +1,6 @@
 import {
   ListOrdered,
+  CalendarDays,
   Mic,
   CircleUser,
   CalendarClock,
@@ -94,6 +95,7 @@ const NAV: NavSection[] = [
     id: 'equipa',
     label: 'Equipa',
     items: [
+      { to: '/agenda', label: 'Agenda', icon: CalendarDays },
       { to: '/listagem-mov', label: 'Listagem Mov Call', icon: ListOrdered },
       { to: '/perfil', label: '/perfil', icon: CircleUser },
       { to: '/relatorio-semanal', label: 'Relatório semanal', icon: CalendarClock },

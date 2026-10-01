@@ -58,6 +58,7 @@ export const paths = {
   voiceHoursFile: path.join(root, 'voice-hours.json'),
   profileSettingsFile: path.join(root, 'profile-settings.json'),
   weeklyReportFile: path.join(root, 'weekly-report.json'),
+  calendarFile: path.join(root, 'calendar.json'),
   serverLogSettingsFile: path.join(root, 'server-log-settings.json'),
   databaseFile: path.join(root, 'lisdiscord.sqlite'),
 }

@@ -184,6 +184,14 @@ const bridge: LisDiscordBridge = {
   getRemoteWeeklyReport: (guildId) => ipcRenderer.invoke(IPC.getRemoteWeeklyReport, guildId),
   setRemoteWeeklyReportSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setRemoteWeeklyReportSettings, guildId, settings),
   remoteWeeklyReportAction: (guildId, action) => ipcRenderer.invoke(IPC.remoteWeeklyReportAction, guildId, action),
+  getCalendar: (guildId) => ipcRenderer.invoke(IPC.getCalendar, guildId),
+  setCalendarSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setCalendarSettings, guildId, settings),
+  saveActivity: (guildId, input) => ipcRenderer.invoke(IPC.saveActivity, guildId, input),
+  activityAction: (guildId, action) => ipcRenderer.invoke(IPC.activityAction, guildId, action),
+  getRemoteCalendar: (guildId) => ipcRenderer.invoke(IPC.getRemoteCalendar, guildId),
+  setRemoteCalendarSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setRemoteCalendarSettings, guildId, settings),
+  saveRemoteActivity: (guildId, input) => ipcRenderer.invoke(IPC.saveRemoteActivity, guildId, input),
+  remoteActivityAction: (guildId, action) => ipcRenderer.invoke(IPC.remoteActivityAction, guildId, action),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

@@ -314,6 +314,10 @@ export type EmbedTemplateKind =
   | 'profileCard'
   | 'profileRanking'
   | 'weeklyReport'
+  | 'activityCard'
+  | 'activityBoard'
+  | 'activityReminder'
+  | 'activityList'
 
 export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'pontosBoard',
@@ -351,6 +355,10 @@ export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'profileCard',
   'profileRanking',
   'weeklyReport',
+  'activityCard',
+  'activityBoard',
+  'activityReminder',
+  'activityList',
 ]
 
 /** Tokens disponíveis nas mensagens que o bot manda quando alguém se justifica (ou pede remoção). */
@@ -1092,6 +1100,177 @@ export const WEEKLY_REPORT_PLACEHOLDERS = [
   '{servidor}',
 ] as const
 export const WEEKLY_LINE_PLACEHOLDERS = ['{posicao}', '{membro}', '{nome}', '{valor}'] as const
+
+// ==========================================================================
+// Agenda de atividades
+// ==========================================================================
+
+export interface ActivityCategory {
+  id: string
+  name: string
+  emoji: string
+  /** Cor hex da barra do embed das atividades desta categoria. */
+  color: string
+}
+
+export interface ActivityPerson {
+  userId: string
+  tag: string
+  at: string
+}
+
+export type ActivityStatus = 'scheduled' | 'cancelled' | 'done'
+
+export interface Activity {
+  id: string
+  guildId: string
+  /** Número curto (#12) usado nos comandos. */
+  number: number
+  title: string
+  description: string
+  categoryId: string
+  /** Início (ISO, UTC). */
+  startAt: string
+  durationMinutes: number
+  /** Onde acontece: um canal (voz/texto) e/ou um texto livre. */
+  locationChannelId: string | null
+  locationText: string
+  responsibleId: string | null
+  responsibleTag: string | null
+  /** 0 = sem limite. */
+  participantSlots: number
+  organizerSlots: number
+  participants: ActivityPerson[]
+  organizers: ActivityPerson[]
+  unavailable: ActivityPerson[]
+  status: ActivityStatus
+  cancelReason?: string
+  /** Mensagem da atividade no canal da agenda. */
+  messageId: string | null
+  /** Lembretes já enviados (minutos antes). */
+  remindersSent: number[]
+  createdByTag: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ActivityInput {
+  id?: string
+  title: string
+  description: string
+  categoryId: string
+  /** Data e hora no fuso da agenda. */
+  date: string
+  time: string
+  durationMinutes: number
+  locationChannelId: string | null
+  locationText: string
+  responsibleId: string | null
+  participantSlots: number
+  organizerSlots: number
+  /** Gravar mesmo com conflito de horário. */
+  force?: boolean
+}
+
+export type ActivityConflictMode = 'off' | 'responsible' | 'location' | 'all'
+
+export interface CalendarSettings {
+  /** Canal onde cada atividade é publicada (com os botões). */
+  channelId: string | null
+  channelName: string | null
+  timezone: string
+  categories: ActivityCategory[]
+  /** Quem pode criar, editar e cancelar (além de Administrador / Gerir servidor). */
+  managerRoleIds: string[]
+  /** Quem pode ocupar as vagas de organizador (vazio = qualquer pessoa). */
+  organizerRoleIds: string[]
+  /** Quem pode confirmar participação (vazio = qualquer pessoa). */
+  participantRoleIds: string[]
+  /** Que atividades não podem sobrepor-se. */
+  conflictMode: ActivityConflictMode
+  /** Impede a mesma pessoa de confirmar duas atividades à mesma hora. */
+  blockPersonConflicts: boolean
+  /** Minutos antes do início em que o bot lembra (0 = na hora). */
+  reminderMinutes: number[]
+  reminderTarget: 'channel' | 'dm' | 'both'
+  /** Canal dos lembretes (vazio = o canal da agenda). */
+  reminderChannelId: string | null
+  reminderMentionRoleId: string | null
+  /** Painel com a agenda dos próximos dias (mensagem fixa atualizada sozinha). */
+  boardEnabled: boolean
+  boardChannelId: string | null
+  boardMessageId: string | null
+  boardDays: number
+  /** Linha de cada atividade no painel/lista — {hora}, {emoji}, {titulo}, {categoria}, {responsavel}, {vagas}, {numero}, {estado}. */
+  boardLineFormat: string
+  /** Cabeçalho de cada dia — {dia}, {data}. */
+  boardDayFormat: string
+  boardEmptyText: string
+  /** Texto de quem confirmou/organiza/não pode — {membro}. */
+  personLineFormat: string
+  emptyPeopleText: string
+  /** Textos do {estado}. */
+  statusOpen: string
+  statusFull: string
+  statusCancelled: string
+  statusDone: string
+  statusLive: string
+  /** Apagar a mensagem da atividade quando é cancelada (senão fica marcada como cancelada). */
+  deleteOnCancel: boolean
+  joinButton: CustomButton
+  unavailableButton: CustomButton
+  organizeButton: CustomButton
+  leaveButton: CustomButton
+  /** Respostas a quem clica (só essa pessoa vê) — {titulo}, {numero}. */
+  replyJoined: string
+  replyOrganizing: string
+  replyUnavailable: string
+  replyLeft: string
+  replyFull: string
+  replyConflict: string
+  replyNoPermission: string
+  replyClosed: string
+}
+
+export interface CalendarState {
+  settings: CalendarSettings
+  activities: Activity[]
+  message?: string
+}
+
+export type ActivityAction =
+  | { kind: 'cancel'; id: string; reason?: string }
+  | { kind: 'delete'; id: string }
+  | { kind: 'repost'; id: string }
+  | { kind: 'removePerson'; id: string; userId: string }
+  | { kind: 'refreshBoard' }
+
+export const ACTIVITY_CARD_PLACEHOLDERS = [
+  '{titulo}',
+  '{descricao}',
+  '{numero}',
+  '{categoria}',
+  '{emoji}',
+  '{data}',
+  '{hora}',
+  '{fim}',
+  '{inicio}',
+  '{relativo}',
+  '{duracao}',
+  '{local}',
+  '{responsavel}',
+  '{participantes}',
+  '{vagasParticipantes}',
+  '{organizadores}',
+  '{vagasOrganizadores}',
+  '{indisponiveis}',
+  '{estado}',
+  '{servidor}',
+] as const
+export const ACTIVITY_BOARD_PLACEHOLDERS = ['{agenda}', '{dias}', '{total}', '{atualizado}', '{servidor}'] as const
+export const ACTIVITY_REMINDER_PLACEHOLDERS = ['{titulo}', '{numero}', '{categoria}', '{emoji}', '{inicio}', '{relativo}', '{minutos}', '{local}', '{responsavel}', '{participantes}', '{link}', '{servidor}'] as const
+export const ACTIVITY_LIST_PLACEHOLDERS = ['{lista}', '{total}', '{filtros}', '{servidor}'] as const
+export const ACTIVITY_LINE_PLACEHOLDERS = ['{hora}', '{data}', '{emoji}', '{titulo}', '{categoria}', '{responsavel}', '{vagas}', '{numero}', '{estado}'] as const
 
 // ==========================================================================
 // Canais de log do servidor (mensagens apagadas/editadas, pontos, horas)

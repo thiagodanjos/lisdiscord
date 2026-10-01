@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import type { Guild } from 'discord.js'
-import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovListOp, type MovListSettings, type VoiceHoursAction, type VoiceHoursSettings, type ProfileSettings, type WeeklyReportAction, type WeeklyReportSettings, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings } from '../shared/types'
+import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovListOp, type MovListSettings, type VoiceHoursAction, type VoiceHoursSettings, type ProfileSettings, type WeeklyReportAction, type WeeklyReportSettings, type ActivityAction, type ActivityInput, type CalendarSettings, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings } from '../shared/types'
 import { discordManager } from '../electron/discord/client'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
 import { applyJustificationChannel, postJustificationMessage } from '../electron/discord/justifications'
@@ -36,6 +36,7 @@ import { applyVoiceHoursAction, applyVoiceHoursSettings, getVoiceHoursState } fr
 import { applyProfileSettings } from '../electron/discord/profileCommand'
 import { applyWeeklyReportAction, applyWeeklyReportSettings, getWeeklyReportState } from '../electron/discord/weeklyReport'
 import { getProfileSettings } from '../electron/store/profileSettings'
+import { applyActivityAction, applyCalendarSettings, getCalendarState, saveActivityFromApp } from '../electron/discord/activities'
 import { applyServerLogSettings } from '../electron/discord/serverLogs'
 import * as serverLogsStore from '../electron/store/serverLogs'
 import { listGuildCategories } from '../electron/discord/memberProfile'
@@ -173,7 +174,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'categories') ||
     (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'logs' && parts[4] === 'settings') ||
     (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'movlist') ||
-    (req.method === 'POST' && parts.length === 5 && isGuildRoute && (parts[3] === 'voicehours' || parts[3] === 'weeklyreport'))
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && (parts[3] === 'voicehours' || parts[3] === 'weeklyreport' || parts[3] === 'calendar'))
 
   if (needsConnection && !discordManager.isConnected()) {
     sendJson(res, 503, { error: 'O bot não está ligado à Discord neste momento.' })
@@ -538,6 +539,38 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
       const actor = typeof body.actor === 'string' && body.actor.trim() ? body.actor.trim().slice(0, 64) : 'App'
       sendJson(res, 200, await applyMovListOp(await discordManager.getClient().guilds.fetch(parts[2]), body.op, actor))
       return
+    }
+
+    // Agenda de atividades
+    //   GET  /api/guilds/:guildId/calendar
+    //   POST /api/guilds/:guildId/calendar/settings  { settings }
+    //   POST /api/guilds/:guildId/calendar/activity  { input, actor? }
+    //   POST /api/guilds/:guildId/calendar/action    { action }
+    if (isGuildRoute && parts[3] === 'calendar') {
+      const guildId = parts[2]
+      if (req.method === 'GET' && parts.length === 4) {
+        sendJson(res, 200, getCalendarState(guildId))
+        return
+      }
+      if (req.method === 'POST' && parts.length === 5) {
+        const body = (await readJsonBody(req)) as { settings?: CalendarSettings; input?: ActivityInput; action?: ActivityAction; actor?: string }
+        const guild = await discordManager.getClient().guilds.fetch(guildId)
+        if (parts[4] === 'settings' && body.settings && typeof body.settings === 'object') {
+          sendJson(res, 200, await applyCalendarSettings(guild, body.settings))
+          return
+        }
+        if (parts[4] === 'activity' && body.input && typeof body.input === 'object') {
+          const actor = typeof body.actor === 'string' && body.actor.trim() ? body.actor.trim().slice(0, 64) : 'App'
+          sendJson(res, 200, await saveActivityFromApp(guild, body.input, actor))
+          return
+        }
+        if (parts[4] === 'action' && body.action && typeof body.action.kind === 'string') {
+          sendJson(res, 200, await applyActivityAction(guild, body.action))
+          return
+        }
+        sendJson(res, 400, { error: 'Pedido inválido.' })
+        return
+      }
     }
 
     // Horas automáticas · /perfil · relatório semanal

@@ -41,10 +41,13 @@ import type {
   VoiceHoursState,
   WeeklyReportSettings,
   WeeklyReportState,
+  Activity,
+  CalendarSettings,
 } from '../../shared/types'
 import { DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
 import { defaultMovListSettings } from '../../shared/movList'
 import { defaultProfileSettings, defaultVoiceHoursSettings, defaultWeeklyReportSettings } from '../../shared/movFeatures'
+import { defaultCalendarSettings, findConflicts, shortDate, zonedParts, zonedToUtc } from '../../shared/calendar'
 
 const DEMO_GAMES = [
   { id: 'dado' as const, name: 'Dado', command: '/dado', description: 'Lança um dado (padrão 6 lados, configurável).' },
@@ -584,6 +587,27 @@ let serverLogSettingsData: Record<string, ServerLogSettings> = {}
 
 let movListSettingsData: Record<string, MovListSettings> = {}
 let voiceHoursSettingsData: Record<string, VoiceHoursSettings> = {}
+let calendarSettingsData: Record<string, CalendarSettings> = {}
+function demoActivity(n: number, dayOffset: number, time: string, title: string, categoryId: string, extra: Partial<Activity> = {}): Activity {
+  const tz = 'America/Sao_Paulo'
+  const day = zonedParts(Date.now() + dayOffset * 86_400_000, tz).date
+  const p = (id: string, tag: string) => ({ userId: id, tag, at: new Date().toISOString() })
+  return {
+    id: `act${n}`, guildId: 'g1', number: n, title, description: 'Atividade de demonstração.', categoryId,
+    startAt: zonedToUtc(day, time, tz).toISOString(), durationMinutes: 60, locationChannelId: null, locationText: 'Call principal',
+    responsibleId: 'u10', responsibleTag: 'ana.dev', participantSlots: 10, organizerSlots: 2,
+    participants: [p('u11', 'ricardo_c'), p('u12', 'sofia_gamer')], organizers: [p('u10', 'ana.dev')], unavailable: [p('u13', 'joao99')],
+    status: 'scheduled', messageId: 'm1', remindersSent: [], createdByTag: 'demo', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    ...extra,
+  }
+}
+let activitiesData: Activity[] = [
+  demoActivity(1, 0, '20:00', 'Mov Call da noite', 'movcall'),
+  demoActivity(2, 1, '15:00', 'Treino de equipa', 'treino', { responsibleId: 'u11', responsibleTag: 'ricardo_c', participantSlots: 2 }),
+  demoActivity(3, 2, '21:30', 'Evento de sábado', 'evento', { participantSlots: 0, durationMinutes: 120 }),
+  demoActivity(4, 3, '19:00', 'Reunião da staff', 'reuniao', { participants: [], unavailable: [] }),
+  demoActivity(5, 5, '20:00', 'Mov Call especial', 'movcall', { status: 'cancelled', cancelReason: 'feriado' }),
+]
 let profileSettingsData: Record<string, ProfileSettings> = {}
 let weeklyReportSettingsData: Record<string, WeeklyReportSettings> = {}
 let demoVoiceLive: VoiceHoursState['live'] = [
@@ -1600,5 +1624,62 @@ export const demoBridge: LisDiscordBridge = {
   },
   async remoteWeeklyReportAction(guildId, action) {
     return demoBridge.weeklyReportAction(guildId, action)
+  },
+
+  async getCalendar(guildId) {
+    await delay()
+    const settings = { ...defaultCalendarSettings(), ...calendarSettingsData[guildId] }
+    return { settings, activities: activitiesData.filter((a) => a.guildId === guildId || guildId !== 'g1').sort((a, b) => a.startAt.localeCompare(b.startAt)) }
+  },
+  async setCalendarSettings(guildId, settings) {
+    await delay()
+    calendarSettingsData = { ...calendarSettingsData, [guildId]: { ...settings, channelName: makeChannels().find((c) => c.id === settings.channelId)?.name ?? null } }
+    return demoBridge.getCalendar(guildId)
+  },
+  async saveActivity(guildId, input) {
+    await delay()
+    const settings = { ...defaultCalendarSettings(), ...calendarSettingsData[guildId] }
+    if (!input.title.trim()) throw new Error('Dá um nome à atividade.')
+    const startAt = zonedToUtc(input.date, input.time, settings.timezone).toISOString()
+    const member = membersData.find((m) => m.id === input.responsibleId)
+    const fields = {
+      title: input.title.trim(), description: input.description, categoryId: input.categoryId, startAt, durationMinutes: input.durationMinutes,
+      locationChannelId: input.locationChannelId, locationText: input.locationText, responsibleId: input.responsibleId,
+      responsibleTag: member?.tag.split('#')[0] ?? null, participantSlots: input.participantSlots, organizerSlots: input.organizerSlots,
+    }
+    if (!input.force) {
+      const c = findConflicts({ id: input.id ?? '', ...fields }, activitiesData, settings.conflictMode)
+      if (c.length) throw new Error(`Conflito de horário com: ${c.map((x) => `#${x.number} ${x.title} (${shortDate(zonedParts(x.startAt, settings.timezone).date)})`).join(', ')}.`)
+    }
+    if (input.id) activitiesData = activitiesData.map((a) => (a.id === input.id ? { ...a, ...fields, updatedAt: new Date().toISOString() } : a))
+    else {
+      const n = Math.max(0, ...activitiesData.map((a) => a.number)) + 1
+      activitiesData = [...activitiesData, { ...demoActivity(n, 0, '00:00', fields.title, fields.categoryId), ...fields, id: `act${n}`, participants: [], organizers: [], unavailable: [] }]
+    }
+    return { ...(await demoBridge.getCalendar(guildId)), message: input.id ? 'Atividade atualizada.' : 'Atividade criada.' }
+  },
+  async activityAction(guildId, action) {
+    await delay()
+    if (action.kind === 'cancel') activitiesData = activitiesData.map((a) => (a.id === action.id ? { ...a, status: 'cancelled', cancelReason: action.reason } : a))
+    if (action.kind === 'delete') activitiesData = activitiesData.filter((a) => a.id !== action.id)
+    if (action.kind === 'removePerson')
+      activitiesData = activitiesData.map((a) =>
+        a.id === action.id
+          ? { ...a, participants: a.participants.filter((p) => p.userId !== action.userId), organizers: a.organizers.filter((p) => p.userId !== action.userId), unavailable: a.unavailable.filter((p) => p.userId !== action.userId) }
+          : a,
+      )
+    return { ...(await demoBridge.getCalendar(guildId)), message: 'Feito (demonstração).' }
+  },
+  async getRemoteCalendar(guildId) {
+    return demoBridge.getCalendar(guildId)
+  },
+  async setRemoteCalendarSettings(guildId, settings) {
+    return demoBridge.setCalendarSettings(guildId, settings)
+  },
+  async saveRemoteActivity(guildId, input) {
+    return demoBridge.saveActivity(guildId, input)
+  },
+  async remoteActivityAction(guildId, action) {
+    return demoBridge.activityAction(guildId, action)
   },
 }

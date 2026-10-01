@@ -140,6 +140,9 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movlist/settings`, { method: 'POST', body: { settings } }),
     updateMovListMembers: <T>(guildId: string, op: unknown, actor: string) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movlist/members`, { method: 'POST', body: { op, actor } }),
+    getCalendar: <T>(guildId: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/calendar`),
+    calendarPost: <T>(guildId: string, path: 'settings' | 'activity' | 'action', body: unknown) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/calendar/${path}`, { method: 'POST', body }),
     getFeature: <T>(guildId: string, feature: 'voicehours' | 'profile' | 'weeklyreport') => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/${feature}`),
     setFeature: <T>(guildId: string, feature: 'voicehours' | 'profile' | 'weeklyreport', settings: unknown) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/${feature}/settings`, { method: 'POST', body: { settings } }),
