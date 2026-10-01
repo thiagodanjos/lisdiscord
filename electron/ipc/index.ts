@@ -27,6 +27,13 @@ import type {
   MovListOp,
   MovListSettings,
   MovListState,
+  VoiceHoursAction,
+  VoiceHoursSettings,
+  VoiceHoursState,
+  ProfileSettings,
+  WeeklyReportAction,
+  WeeklyReportSettings,
+  WeeklyReportState,
   ServerLogSettings,
   VerificationDiagnostics,
   VerificationTicket,
@@ -89,6 +96,10 @@ import * as verificationStore from '../store/verification'
 import { createNotice } from '../discord/movNotices'
 import { applyVerificationSettings, getVerificationDiagnostics, postVerificationPanel } from '../discord/verification'
 import { applyMovListOp, applyMovListSettings, getMovListState, postMovList } from '../discord/movList'
+import { applyVoiceHoursAction, applyVoiceHoursSettings, getVoiceHoursState } from '../discord/voiceHours'
+import { applyProfileSettings } from '../discord/profileCommand'
+import { applyWeeklyReportAction, applyWeeklyReportSettings, getWeeklyReportState } from '../discord/weeklyReport'
+import { getProfileSettings } from '../store/profileSettings'
 import { applyServerLogSettings } from '../discord/serverLogs'
 import * as serverLogsStore from '../store/serverLogs'
 import { listGuildCategories } from '../discord/memberProfile'
@@ -508,6 +519,43 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   )
   ipcMain.handle(IPC.updateRemoteMovListMembers, async (_e, guildId: string, op: MovListOp): Promise<MovListState> =>
     remoteApi(requireRemoteCredentials()).updateMovListMembers(guildId, op, auth.getAuthState().user?.username ?? 'App'),
+  )
+
+  // ---- Horas automáticas, /perfil, relatório semanal ----
+  const guildOf = (guildId: string) => discordManager.getClient().guilds.fetch(guildId)
+  ipcMain.handle(IPC.getVoiceHours, async (_e, guildId: string): Promise<VoiceHoursState> =>
+    getVoiceHoursState(discordManager.isConnected() ? discordManager.getClient() : null, guildId),
+  )
+  ipcMain.handle(IPC.setVoiceHoursSettings, async (_e, guildId: string, settings: VoiceHoursSettings): Promise<VoiceHoursState> =>
+    applyVoiceHoursSettings(await guildOf(guildId), settings),
+  )
+  ipcMain.handle(IPC.voiceHoursAction, async (_e, guildId: string, action: VoiceHoursAction): Promise<VoiceHoursState> => applyVoiceHoursAction(await guildOf(guildId), action))
+  ipcMain.handle(IPC.getRemoteVoiceHours, async (_e, guildId: string): Promise<VoiceHoursState> => remoteApi(requireRemoteCredentials()).getFeature(guildId, 'voicehours'))
+  ipcMain.handle(IPC.setRemoteVoiceHoursSettings, async (_e, guildId: string, settings: VoiceHoursSettings): Promise<VoiceHoursState> =>
+    remoteApi(requireRemoteCredentials()).setFeature(guildId, 'voicehours', settings),
+  )
+  ipcMain.handle(IPC.remoteVoiceHoursAction, async (_e, guildId: string, action: VoiceHoursAction): Promise<VoiceHoursState> =>
+    remoteApi(requireRemoteCredentials()).featureAction(guildId, 'voicehours', action),
+  )
+  ipcMain.handle(IPC.getProfileSettings, async (_e, guildId: string): Promise<ProfileSettings> => getProfileSettings(guildId))
+  ipcMain.handle(IPC.setProfileSettings, async (_e, guildId: string, settings: ProfileSettings): Promise<ProfileSettings> => applyProfileSettings(guildId, settings))
+  ipcMain.handle(IPC.getRemoteProfileSettings, async (_e, guildId: string): Promise<ProfileSettings> => remoteApi(requireRemoteCredentials()).getFeature(guildId, 'profile'))
+  ipcMain.handle(IPC.setRemoteProfileSettings, async (_e, guildId: string, settings: ProfileSettings): Promise<ProfileSettings> =>
+    remoteApi(requireRemoteCredentials()).setFeature(guildId, 'profile', settings),
+  )
+  ipcMain.handle(IPC.getWeeklyReport, async (_e, guildId: string): Promise<WeeklyReportState> => getWeeklyReportState(guildId))
+  ipcMain.handle(IPC.setWeeklyReportSettings, async (_e, guildId: string, settings: WeeklyReportSettings): Promise<WeeklyReportState> =>
+    applyWeeklyReportSettings(await guildOf(guildId), settings),
+  )
+  ipcMain.handle(IPC.weeklyReportAction, async (_e, guildId: string, action: WeeklyReportAction): Promise<WeeklyReportState> =>
+    applyWeeklyReportAction(await guildOf(guildId), action),
+  )
+  ipcMain.handle(IPC.getRemoteWeeklyReport, async (_e, guildId: string): Promise<WeeklyReportState> => remoteApi(requireRemoteCredentials()).getFeature(guildId, 'weeklyreport'))
+  ipcMain.handle(IPC.setRemoteWeeklyReportSettings, async (_e, guildId: string, settings: WeeklyReportSettings): Promise<WeeklyReportState> =>
+    remoteApi(requireRemoteCredentials()).setFeature(guildId, 'weeklyreport', settings),
+  )
+  ipcMain.handle(IPC.remoteWeeklyReportAction, async (_e, guildId: string, action: WeeklyReportAction): Promise<WeeklyReportState> =>
+    remoteApi(requireRemoteCredentials()).featureAction(guildId, 'weeklyreport', action),
   )
 
   ipcMain.handle(IPC.listRemoteVerifications, async (_e, guildId: string): Promise<VerificationEntry[]> =>

@@ -165,6 +165,37 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     color: '#ED4245',
     timestamp: false,
   }),
+  voiceSessionLog: draft({
+    description: '🎙️ {membro} ficou **{duracao}** em call em {canal}.\n**Total agora:** {total}',
+    color: '#22D3EE',
+    footer: '{inicio} → {fim}',
+    timestamp: false,
+  }),
+  profileCard: draft({
+    title: 'Perfil de {nome}',
+    description: '{emCall}\n{barra}\n🏅 **{pontos}** pontos · ⏱️ **{horas}** de call\n🏆 **#{posicao}** de {totalMembros} no ranking\n📅 Esta semana: **{pontosSemana}** pontos · **{horasSemana}**\n{barra}\n**Metas ({metasCumpridas}/{metasTotal})**\n{metas}',
+    color: '#F43F7E',
+    thumbnailUrl: '{avatar}',
+    footer: '{servidor} · entrou {entrou}',
+    timestamp: false,
+  }),
+  profileRanking: draft({
+    title: '🏆 Ranking de Mov Call',
+    description: '{lista}\n{barra}\nA tua posição: **#{posicao}** de {total}',
+    color: '#F0B232',
+    timestamp: false,
+  }),
+  weeklyReport: draft({
+    title: '📊 Relatório semanal — {periodo}',
+    description:
+      '🏅 **Top pontos**\n{topPontos}\n{barra}\n⏱️ **Top horas**\n{topHoras}\n{barra}\n' +
+      '📈 **Resumo:** {pontosSemana} pontos · {horasSemana} · {membrosAtivos} membros ativos · {sessoesCall} sessões em call\n' +
+      '✅ **Verificações:** {verificados} aprovadas · {cancelados} canceladas\n{barra}\n' +
+      '⬆️ **Prontos para upar ({totalProntos})**\n{prontos}\n{barra}\n💤 **Inativos ({totalInativos})**\n{inativos}',
+    color: '#5865F2',
+    footer: '{servidor}',
+    timestamp: true,
+  }),
   verificationStaffPanel: draft({
     title: '🛠️ Painel staff',
     description:

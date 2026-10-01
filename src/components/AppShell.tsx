@@ -1,5 +1,8 @@
 import {
   ListOrdered,
+  Mic,
+  CircleUser,
+  CalendarClock,
   BadgeCheck,
   ChevronDown,
   ChevronRight,
@@ -84,6 +87,7 @@ const NAV: NavSection[] = [
     items: [
       { to: '/horas-mov', label: 'Horas MOV', icon: Timer },
       { to: '/logs-horas', label: 'Logs de horas', icon: History },
+      { to: '/horas-automaticas', label: 'Horas automáticas', icon: Mic },
     ],
   },
   {
@@ -91,6 +95,8 @@ const NAV: NavSection[] = [
     label: 'Equipa',
     items: [
       { to: '/listagem-mov', label: 'Listagem Mov Call', icon: ListOrdered },
+      { to: '/perfil', label: '/perfil', icon: CircleUser },
+      { to: '/relatorio-semanal', label: 'Relatório semanal', icon: CalendarClock },
       { to: '/verificacao', label: 'Verificação', icon: BadgeCheck },
       { to: '/justificativas', label: 'Justificativas', icon: MessageSquareWarning },
       { to: '/metas', label: 'Metas', icon: Target },

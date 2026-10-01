@@ -36,9 +36,15 @@ import type {
   ServerLogSettings,
   MovListMember,
   MovListSettings,
+  ProfileSettings,
+  VoiceHoursSettings,
+  VoiceHoursState,
+  WeeklyReportSettings,
+  WeeklyReportState,
 } from '../../shared/types'
 import { DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
 import { defaultMovListSettings } from '../../shared/movList'
+import { defaultProfileSettings, defaultVoiceHoursSettings, defaultWeeklyReportSettings } from '../../shared/movFeatures'
 
 const DEMO_GAMES = [
   { id: 'dado' as const, name: 'Dado', command: '/dado', description: 'Lança um dado (padrão 6 lados, configurável).' },
@@ -577,6 +583,20 @@ const verificationTicketsData: VerificationTicket[] = [
 let serverLogSettingsData: Record<string, ServerLogSettings> = {}
 
 let movListSettingsData: Record<string, MovListSettings> = {}
+let voiceHoursSettingsData: Record<string, VoiceHoursSettings> = {}
+let profileSettingsData: Record<string, ProfileSettings> = {}
+let weeklyReportSettingsData: Record<string, WeeklyReportSettings> = {}
+let demoVoiceLive: VoiceHoursState['live'] = [
+  { userId: 'u10', tag: 'ana.dev', channelId: 'v1', channelName: 'Mov Call 1', reason: 'counting', sessionSeconds: 2520, startedAt: new Date(Date.now() - 2520_000).toISOString() },
+  { userId: 'u11', tag: 'ricardo_c', channelId: 'v1', channelName: 'Mov Call 1', reason: 'counting', sessionSeconds: 1380, startedAt: new Date(Date.now() - 1380_000).toISOString() },
+  { userId: 'u12', tag: 'sofia_gamer', channelId: 'v2', channelName: 'Mov Call 2', reason: 'alone', sessionSeconds: 600, startedAt: new Date(Date.now() - 900_000).toISOString() },
+  { userId: 'u13', tag: 'joao99', channelId: 'v1', channelName: 'Mov Call 1', reason: 'selfDeafened', sessionSeconds: 0, startedAt: null },
+]
+const demoVoiceRecent: VoiceHoursState['recent'] = [
+  { id: 's1', guildId: 'g1', userId: 'u10', tag: 'ana.dev', channelName: 'Mov Call 1', startedAt: daysAgo(1), endedAt: daysAgo(1), seconds: 7260, credited: true },
+  { id: 's2', guildId: 'g1', userId: 'u14', tag: 'trouble_maker', channelName: 'Mov Call 2', startedAt: daysAgo(1), endedAt: daysAgo(1), seconds: 180, credited: false, note: 'mais curta do que 5 min' },
+  { id: 's3', guildId: 'g1', userId: 'u11', tag: 'ricardo_c', channelName: 'Mov Call 1', startedAt: daysAgo(2), endedAt: daysAgo(2), seconds: 3600, credited: true },
+]
 let movListMembersData: Record<string, MovListMember[]> = {
   g1: [
     { userId: '1526787849175830569', username: 'carioca', displayName: 'carioca maconha flamenguista', addedAt: daysAgo(3), addedByTag: 'demo' },
@@ -1484,5 +1504,101 @@ export const demoBridge: LisDiscordBridge = {
   },
   async updateRemoteMovListMembers(guildId, op) {
     return demoBridge.updateMovListMembers(guildId, op)
+  },
+
+  async getVoiceHours(guildId) {
+    await delay()
+    return {
+      settings: { ...defaultVoiceHoursSettings(), ...voiceHoursSettingsData[guildId] },
+      live: demoVoiceLive,
+      recent: demoVoiceRecent,
+      voiceChannels: [
+        { id: 'v1', name: 'Mov Call 1', kind: 'voice' },
+        { id: 'v2', name: 'Mov Call 2', kind: 'voice' },
+        { id: 'v3', name: 'Lobby', kind: 'voice' },
+        { id: 'cat1', name: 'CALLS', kind: 'category' },
+      ],
+      connected: true,
+    }
+  },
+  async setVoiceHoursSettings(guildId, settings) {
+    await delay()
+    voiceHoursSettingsData = { ...voiceHoursSettingsData, [guildId]: { ...settings, logChannelName: makeChannels().find((c) => c.id === settings.logChannelId)?.name ?? null } }
+    return demoBridge.getVoiceHours(guildId)
+  },
+  async voiceHoursAction(guildId, action) {
+    await delay()
+    demoVoiceLive = demoVoiceLive.map((e) => (e.userId === action.userId ? { ...e, sessionSeconds: 0, startedAt: null } : e))
+    return demoBridge.getVoiceHours(guildId)
+  },
+  async getRemoteVoiceHours(guildId) {
+    return demoBridge.getVoiceHours(guildId)
+  },
+  async setRemoteVoiceHoursSettings(guildId, settings) {
+    return demoBridge.setVoiceHoursSettings(guildId, settings)
+  },
+  async remoteVoiceHoursAction(guildId, action) {
+    return demoBridge.voiceHoursAction(guildId, action)
+  },
+  async getProfileSettings(guildId) {
+    await delay()
+    return { ...defaultProfileSettings(), ...profileSettingsData[guildId] }
+  },
+  async setProfileSettings(guildId, settings) {
+    await delay()
+    profileSettingsData = { ...profileSettingsData, [guildId]: settings }
+    return settings
+  },
+  async getRemoteProfileSettings(guildId) {
+    return demoBridge.getProfileSettings(guildId)
+  },
+  async setRemoteProfileSettings(guildId, settings) {
+    return demoBridge.setProfileSettings(guildId, settings)
+  },
+  async getWeeklyReport(guildId) {
+    await delay()
+    const settings = { ...defaultWeeklyReportSettings(), ...weeklyReportSettingsData[guildId] }
+    const state: WeeklyReportState = { settings, lastSentAt: daysAgo(7), periodStart: daysAgo(7), nextAt: settings.enabled ? daysAgo(-3) : null }
+    return state
+  },
+  async setWeeklyReportSettings(guildId, settings) {
+    await delay()
+    weeklyReportSettingsData = { ...weeklyReportSettingsData, [guildId]: { ...settings, channelName: makeChannels().find((c) => c.id === settings.channelId)?.name ?? null } }
+    return demoBridge.getWeeklyReport(guildId)
+  },
+  async weeklyReportAction(guildId, action) {
+    const state = await demoBridge.getWeeklyReport(guildId)
+    if (action.kind === 'send') return { ...state, message: 'Relatório publicado (demonstração).' }
+    if (action.kind === 'resetPeriod') return { ...state, periodStart: new Date().toISOString(), message: 'Período recomeçado.' }
+    return {
+      ...state,
+      preview: {
+        periodo: '24/09 – 01/10',
+        inicio: '24/09 20:00',
+        fim: '01/10 20:00',
+        topPontos: '**1.** @ana.dev — 45 pontos\n**2.** @ricardo_c — 30 pontos\n**3.** @sofia_gamer — 10 pontos',
+        topHoras: '**1.** @ana.dev — 12h 30m\n**2.** @ricardo_c — 8h 5m',
+        inativos: '@joao99\n@trouble_maker',
+        totalInativos: '2',
+        prontos: '@ana.dev → @Membro',
+        totalProntos: '1',
+        pontosSemana: '85',
+        horasSemana: '20h 35m',
+        membrosAtivos: '3',
+        sessoesCall: '14',
+        verificados: '4',
+        cancelados: '1',
+        servidor: 'Comunidade LisDiscord',
+      },
+    }
+  },
+  async getRemoteWeeklyReport(guildId) {
+    return demoBridge.getWeeklyReport(guildId)
+  },
+  async setRemoteWeeklyReportSettings(guildId, settings) {
+    return demoBridge.setWeeklyReportSettings(guildId, settings)
+  },
+  async remoteWeeklyReportAction(guildId, action) {
+    return demoBridge.weeklyReportAction(guildId, action)
   },
 }

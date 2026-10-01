@@ -168,6 +168,22 @@ const bridge: LisDiscordBridge = {
   getRemoteMovList: (guildId) => ipcRenderer.invoke(IPC.getRemoteMovList, guildId),
   setRemoteMovListSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setRemoteMovListSettings, guildId, settings),
   updateRemoteMovListMembers: (guildId, op) => ipcRenderer.invoke(IPC.updateRemoteMovListMembers, guildId, op),
+  getVoiceHours: (guildId) => ipcRenderer.invoke(IPC.getVoiceHours, guildId),
+  setVoiceHoursSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setVoiceHoursSettings, guildId, settings),
+  voiceHoursAction: (guildId, action) => ipcRenderer.invoke(IPC.voiceHoursAction, guildId, action),
+  getRemoteVoiceHours: (guildId) => ipcRenderer.invoke(IPC.getRemoteVoiceHours, guildId),
+  setRemoteVoiceHoursSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setRemoteVoiceHoursSettings, guildId, settings),
+  remoteVoiceHoursAction: (guildId, action) => ipcRenderer.invoke(IPC.remoteVoiceHoursAction, guildId, action),
+  getProfileSettings: (guildId) => ipcRenderer.invoke(IPC.getProfileSettings, guildId),
+  setProfileSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setProfileSettings, guildId, settings),
+  getRemoteProfileSettings: (guildId) => ipcRenderer.invoke(IPC.getRemoteProfileSettings, guildId),
+  setRemoteProfileSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setRemoteProfileSettings, guildId, settings),
+  getWeeklyReport: (guildId) => ipcRenderer.invoke(IPC.getWeeklyReport, guildId),
+  setWeeklyReportSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setWeeklyReportSettings, guildId, settings),
+  weeklyReportAction: (guildId, action) => ipcRenderer.invoke(IPC.weeklyReportAction, guildId, action),
+  getRemoteWeeklyReport: (guildId) => ipcRenderer.invoke(IPC.getRemoteWeeklyReport, guildId),
+  setRemoteWeeklyReportSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setRemoteWeeklyReportSettings, guildId, settings),
+  remoteWeeklyReportAction: (guildId, action) => ipcRenderer.invoke(IPC.remoteWeeklyReportAction, guildId, action),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

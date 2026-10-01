@@ -310,6 +310,10 @@ export type EmbedTemplateKind =
   | 'logPoints'
   | 'logHours'
   | 'movList'
+  | 'voiceSessionLog'
+  | 'profileCard'
+  | 'profileRanking'
+  | 'weeklyReport'
 
 export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'pontosBoard',
@@ -343,6 +347,10 @@ export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'logPoints',
   'logHours',
   'movList',
+  'voiceSessionLog',
+  'profileCard',
+  'profileRanking',
+  'weeklyReport',
 ]
 
 /** Tokens disponíveis nas mensagens que o bot manda quando alguém se justifica (ou pede remoção). */
@@ -876,6 +884,214 @@ export const MOV_LIST_PLACEHOLDERS = ['{listagem}', '{total}', '{pagina}', '{pag
 export const MOV_LIST_LINE_PLACEHOLDERS = ['{numero}', '{mencao}', '{id}', '{nome}', '{usuario}'] as const
 export const MOV_LIST_REPLY_PLACEHOLDERS = ['{membros}', '{quantidade}', '{total}', '{autor}'] as const
 export const MOV_LIST_COPY_HEADER_PLACEHOLDERS = ['{total}', '{data}', '{servidor}'] as const
+
+// ==========================================================================
+// Horas automáticas (tempo em call)
+// ==========================================================================
+
+/** Botão configurável (texto, emoji normal ou do bot, cor) e se aparece. */
+export interface CustomButton {
+  show: boolean
+  label: string
+  emoji: string
+  style: VerificationButtonStyle
+}
+
+/** Botão de link (sempre cinzento na Discord) com URL própria. */
+export interface CustomLinkButton {
+  show: boolean
+  label: string
+  emoji: string
+  url: string
+}
+
+export interface VoiceHoursSettings {
+  enabled: boolean
+  /** Canais de voz: todos, só os escolhidos, ou todos menos os escolhidos. */
+  channelMode: 'all' | 'only' | 'except'
+  channelIds: string[]
+  /** Só conta quem tem um destes cargos (vazio = toda a gente). */
+  roleIds: string[]
+  /** Membros que nunca contam. */
+  ignoredUserIds: string[]
+  /** Mínimo de pessoas (sem bots) na call para contar — 2 = não conta quem está sozinho. */
+  minMembers: number
+  ignoreSelfMuted: boolean
+  ignoreSelfDeafened: boolean
+  ignoreServerMuted: boolean
+  ignoreAfkChannel: boolean
+  /** Sessões mais curtas do que isto não contam. */
+  minSessionMinutes: number
+  /** Máximo de horas automáticas por dia por membro (0 = sem limite). */
+  dailyCapHours: number
+  /** Canal onde cada sessão creditada é registada (opcional). */
+  logChannelId: string | null
+  logChannelName: string | null
+  /** Só regista no canal sessões com pelo menos estes minutos (evita spam de sessões curtas). */
+  logMinMinutes: number
+  /** Textos do motivo de não contar (mostrados na app e em {estadoCall} do /perfil). */
+  statusCounting: string
+  statusPaused: string
+}
+
+export type VoiceStatusReason = 'counting' | 'alone' | 'selfMuted' | 'selfDeafened' | 'serverMuted' | 'afk' | 'channel' | 'role' | 'ignored' | 'cap'
+
+/** Quem está em call agora, e se está a contar. */
+export interface VoiceLiveEntry {
+  userId: string
+  tag: string
+  channelId: string
+  channelName: string
+  reason: VoiceStatusReason
+  /** Segundos já acumulados na sessão em curso. */
+  sessionSeconds: number
+  startedAt: string | null
+}
+
+/** Sessão já creditada (histórico). */
+export interface VoiceSessionRecord {
+  id: string
+  guildId: string
+  userId: string
+  tag: string
+  channelName: string
+  startedAt: string
+  endedAt: string
+  seconds: number
+  /** false = foi descartada (curta demais, limite diário, ou à mão). */
+  credited: boolean
+  note?: string
+}
+
+export interface VoiceHoursState {
+  settings: VoiceHoursSettings
+  live: VoiceLiveEntry[]
+  recent: VoiceSessionRecord[]
+  voiceChannels: ChannelPickerEntry[]
+  /** O bot está ligado e consegue ver as calls. */
+  connected: boolean
+}
+
+export type VoiceHoursAction = { kind: 'end'; userId: string } | { kind: 'discard'; userId: string }
+
+export const VOICE_LOG_PLACEHOLDERS = ['{membro}', '{nome}', '{avatar}', '{canal}', '{duracao}', '{total}', '{inicio}', '{fim}', '{servidor}'] as const
+
+// ==========================================================================
+// /perfil
+// ==========================================================================
+
+export interface ProfileSettings {
+  /** Só quem usou o comando vê a resposta. */
+  ephemeral: boolean
+  /** Deixa ver o perfil de outras pessoas (senão só o próprio, exceto a gestão). */
+  allowOthers: boolean
+  /** Linha de cada meta — {cargo}, {cargoNome}, {progresso}, {percent}, {progressoPontos}, {percentPontos}, {progressoHoras}, {percentHoras}, {pontos}, {metaPontos}, {horas}, {metaHoras}, {estado}. */
+  goalLineFormat: string
+  goalMet: string
+  goalNotMet: string
+  goalsEmpty: string
+  /** Barra de progresso — cada caractere pode ser um emoji (também do bot). */
+  barFilled: string
+  barEmpty: string
+  barLength: number
+  /** {emCall} quando a pessoa está/não está em call — {canal}, {duracao}, {estadoCall}. */
+  inCallText: string
+  notInCallText: string
+  /** Linha de cada membro no ranking — {posicao}, {membro}, {nome}, {pontos}, {horas}. */
+  rankingLineFormat: string
+  rankingSize: number
+  refreshButton: CustomButton
+  rankingButton: CustomButton
+  linkButton: CustomLinkButton
+}
+
+export const PROFILE_PLACEHOLDERS = [
+  '{membro}',
+  '{nome}',
+  '{avatar}',
+  '{id}',
+  '{pontos}',
+  '{horas}',
+  '{posicao}',
+  '{totalMembros}',
+  '{pontosSemana}',
+  '{horasSemana}',
+  '{metas}',
+  '{metasCumpridas}',
+  '{metasTotal}',
+  '{emCall}',
+  '{entrou}',
+  '{cargoMaisAlto}',
+  '{servidor}',
+] as const
+export const PROFILE_GOAL_PLACEHOLDERS = ['{cargo}', '{cargoNome}', '{progresso}', '{percent}', '{progressoPontos}', '{percentPontos}', '{progressoHoras}', '{percentHoras}', '{pontos}', '{metaPontos}', '{horas}', '{metaHoras}', '{estado}'] as const
+export const PROFILE_RANKING_PLACEHOLDERS = ['{lista}', '{posicao}', '{total}', '{servidor}'] as const
+export const RANKING_LINE_PLACEHOLDERS = ['{posicao}', '{membro}', '{nome}', '{pontos}', '{horas}'] as const
+
+// ==========================================================================
+// Relatório semanal
+// ==========================================================================
+
+export interface WeeklyReportSettings {
+  enabled: boolean
+  channelId: string | null
+  channelName: string | null
+  /** 0 = domingo … 6 = sábado. */
+  dayOfWeek: number
+  hour: number
+  minute: number
+  timezone: string
+  /** Cargo marcado por cima do relatório (opcional). */
+  mentionRoleId: string | null
+  /** Quem entra nas listas (inativos, prontos para upar) — vazio = toda a gente. */
+  roleIds: string[]
+  topCount: number
+  /** Linhas — {posicao}, {membro}, {nome}, {valor}. */
+  topLineFormat: string
+  /** Inativo = menos de X horas e Y pontos no período. */
+  inactiveMaxHours: number
+  inactiveMaxPoints: number
+  inactiveLineFormat: string
+  inactiveLimit: number
+  /** Prontos para upar — {membro}, {nome}, {cargo}. */
+  readyLineFormat: string
+  emptyText: string
+  copyButton: CustomButton
+  rankingButton: CustomButton
+  linkButton: CustomLinkButton
+}
+
+export interface WeeklyReportState {
+  settings: WeeklyReportSettings
+  lastSentAt: string | null
+  periodStart: string
+  nextAt: string | null
+  /** Valores reais dos tokens agora (para a pré-visualização na app). */
+  preview?: Record<string, string>
+  message?: string
+}
+
+export type WeeklyReportAction = { kind: 'preview' } | { kind: 'send' } | { kind: 'resetPeriod' }
+
+export const WEEKLY_REPORT_PLACEHOLDERS = [
+  '{periodo}',
+  '{inicio}',
+  '{fim}',
+  '{topPontos}',
+  '{topHoras}',
+  '{inativos}',
+  '{totalInativos}',
+  '{prontos}',
+  '{totalProntos}',
+  '{pontosSemana}',
+  '{horasSemana}',
+  '{membrosAtivos}',
+  '{sessoesCall}',
+  '{verificados}',
+  '{cancelados}',
+  '{servidor}',
+] as const
+export const WEEKLY_LINE_PLACEHOLDERS = ['{posicao}', '{membro}', '{nome}', '{valor}'] as const
 
 // ==========================================================================
 // Canais de log do servidor (mensagens apagadas/editadas, pontos, horas)

@@ -11,6 +11,7 @@ import { commandsHash, isUpToDate, markSynced } from '../../store/commandSync'
 import { handleGiveawayCommand, sorteioCommandDef } from '../giveawayCommand'
 import { handleMovCallCommand, movCallCommandDefs } from '../movcall'
 import { handleVerifyCommand, verificarCommandDef } from '../verifyCommand'
+import { handleProfileCommand, perfilCommandDef } from '../profileCommand'
 import { blackjackCommandDef, runBlackjack } from './blackjack'
 import { runDuel, duelCommandDef } from './duel'
 import { economyCommandDefs, handleEconomyCommand } from './economyCommands'
@@ -90,6 +91,7 @@ export function buildGlobalCommandDefinitions(): CommandDef[] {
     ...movCallCommandDefs(),
     sorteioCommandDef(),
     verificarCommandDef(),
+    perfilCommandDef(),
     helpCommandDef(),
     addEmojiBotCommandDef(),
     copyEmojiCommandDef(),
@@ -126,6 +128,7 @@ export async function handleGameInteraction(interaction: Interaction): Promise<v
   if (await handleMovCallCommand(interaction)) return
   if (await handleGiveawayCommand(interaction)) return
   if (await handleVerifyCommand(interaction)) return
+  if (await handleProfileCommand(interaction)) return
   if (await handleAddEmojiBotCommand(interaction)) return
   if (await handleCopyEmojiCommand(interaction)) return
   if (await handleEmbedBuilderCommand(interaction)) return

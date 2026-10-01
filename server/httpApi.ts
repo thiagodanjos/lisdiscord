@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import type { Guild } from 'discord.js'
-import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovListOp, type MovListSettings, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings } from '../shared/types'
+import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovListOp, type MovListSettings, type VoiceHoursAction, type VoiceHoursSettings, type ProfileSettings, type WeeklyReportAction, type WeeklyReportSettings, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings } from '../shared/types'
 import { discordManager } from '../electron/discord/client'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
 import { applyJustificationChannel, postJustificationMessage } from '../electron/discord/justifications'
@@ -32,6 +32,10 @@ import * as verificationStore from '../electron/store/verification'
 import { createNotice } from '../electron/discord/movNotices'
 import { applyVerificationSettings, getVerificationDiagnostics, postVerificationPanel } from '../electron/discord/verification'
 import { applyMovListOp, applyMovListSettings, getMovListState, postMovList } from '../electron/discord/movList'
+import { applyVoiceHoursAction, applyVoiceHoursSettings, getVoiceHoursState } from '../electron/discord/voiceHours'
+import { applyProfileSettings } from '../electron/discord/profileCommand'
+import { applyWeeklyReportAction, applyWeeklyReportSettings, getWeeklyReportState } from '../electron/discord/weeklyReport'
+import { getProfileSettings } from '../electron/store/profileSettings'
 import { applyServerLogSettings } from '../electron/discord/serverLogs'
 import * as serverLogsStore from '../electron/store/serverLogs'
 import { listGuildCategories } from '../electron/discord/memberProfile'
@@ -168,7 +172,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'verification' && parts[4] === 'settings') ||
     (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'categories') ||
     (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'logs' && parts[4] === 'settings') ||
-    (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'movlist')
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'movlist') ||
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && (parts[3] === 'voicehours' || parts[3] === 'weeklyreport'))
 
   if (needsConnection && !discordManager.isConnected()) {
     sendJson(res, 503, { error: 'O bot não está ligado à Discord neste momento.' })
@@ -533,6 +538,47 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
       const actor = typeof body.actor === 'string' && body.actor.trim() ? body.actor.trim().slice(0, 64) : 'App'
       sendJson(res, 200, await applyMovListOp(await discordManager.getClient().guilds.fetch(parts[2]), body.op, actor))
       return
+    }
+
+    // Horas automáticas · /perfil · relatório semanal
+    //   GET  /api/guilds/:guildId/{voicehours|profile|weeklyreport}
+    //   POST /api/guilds/:guildId/{voicehours|profile|weeklyreport}/settings  { settings }
+    //   POST /api/guilds/:guildId/{voicehours|weeklyreport}/action           { action }
+    if (isGuildRoute && ['voicehours', 'profile', 'weeklyreport'].includes(parts[3])) {
+      const guildId = parts[2]
+      const feature = parts[3]
+      if (req.method === 'GET' && parts.length === 4) {
+        if (feature === 'voicehours') sendJson(res, 200, await getVoiceHoursState(discordManager.isConnected() ? discordManager.getClient() : null, guildId))
+        else if (feature === 'profile') sendJson(res, 200, getProfileSettings(guildId))
+        else sendJson(res, 200, getWeeklyReportState(guildId))
+        return
+      }
+      if (req.method === 'POST' && parts.length === 5 && parts[4] === 'settings') {
+        const body = (await readJsonBody(req)) as { settings?: unknown }
+        if (!body.settings || typeof body.settings !== 'object') {
+          sendJson(res, 400, { error: 'Falta o campo "settings".' })
+          return
+        }
+        if (feature === 'profile') {
+          sendJson(res, 200, applyProfileSettings(guildId, body.settings as ProfileSettings))
+          return
+        }
+        const guild = await discordManager.getClient().guilds.fetch(guildId)
+        if (feature === 'voicehours') sendJson(res, 200, await applyVoiceHoursSettings(guild, body.settings as VoiceHoursSettings))
+        else sendJson(res, 200, await applyWeeklyReportSettings(guild, body.settings as WeeklyReportSettings))
+        return
+      }
+      if (req.method === 'POST' && parts.length === 5 && parts[4] === 'action' && feature !== 'profile') {
+        const body = (await readJsonBody(req)) as { action?: { kind?: unknown } }
+        if (!body.action || typeof body.action.kind !== 'string') {
+          sendJson(res, 400, { error: 'Falta o campo "action".' })
+          return
+        }
+        const guild = await discordManager.getClient().guilds.fetch(guildId)
+        if (feature === 'voicehours') sendJson(res, 200, await applyVoiceHoursAction(guild, body.action as VoiceHoursAction))
+        else sendJson(res, 200, await applyWeeklyReportAction(guild, body.action as WeeklyReportAction))
+        return
+      }
     }
 
     // GET /api/emojis

@@ -39,6 +39,8 @@ export const HELP_CATEGORIES: Category[] = [
       '`/inativos` — quem não tem pontos ou tem menos de 5h de Mov. Call.',
       `\`/resetmovcall\` — apaga todos os pontos e horas, com confirmação. ${G}`,
       '`/verificar @membro` — pontos, horas e os cargos com meta, com ✅/❌ se já cumpre para upar.',
+      '`/perfil [membro]` — o teu cartão: pontos, horas, posição no ranking, a semana, metas com barras de progresso e se estás em call.',
+      '_🎙️ Horas automáticas: o tempo em call conta sozinho (quando ativado pela gestão na app)._',
       '_📸 Verificação: clica em **Verificar** no painel do canal de verificação — abre um ticket privado onde mandas o print do teu perfil com os cargos._',
     ],
   },

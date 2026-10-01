@@ -28,6 +28,13 @@ import type {
   MovListOp,
   MovListSettings,
   MovListState,
+  VoiceHoursAction,
+  VoiceHoursSettings,
+  VoiceHoursState,
+  ProfileSettings,
+  WeeklyReportAction,
+  WeeklyReportSettings,
+  WeeklyReportState,
   ModerationLogEntry,
   MovPointsBoardConfig,
   MovPointsEntry,
@@ -202,6 +209,22 @@ export const IPC = {
   getRemoteMovList: 'remoteBot:movList:get',
   setRemoteMovListSettings: 'remoteBot:movList:settings:set',
   updateRemoteMovListMembers: 'remoteBot:movList:members:update',
+  getVoiceHours: 'voiceHours:get',
+  setVoiceHoursSettings: 'voiceHours:set',
+  voiceHoursAction: 'voiceHours:action',
+  getRemoteVoiceHours: 'remoteBot:voiceHours:get',
+  setRemoteVoiceHoursSettings: 'remoteBot:voiceHours:set',
+  remoteVoiceHoursAction: 'remoteBot:voiceHours:action',
+  getProfileSettings: 'profile:get',
+  setProfileSettings: 'profile:set',
+  getRemoteProfileSettings: 'remoteBot:profile:get',
+  setRemoteProfileSettings: 'remoteBot:profile:set',
+  getWeeklyReport: 'weeklyReport:get',
+  setWeeklyReportSettings: 'weeklyReport:set',
+  weeklyReportAction: 'weeklyReport:action',
+  getRemoteWeeklyReport: 'remoteBot:weeklyReport:get',
+  setRemoteWeeklyReportSettings: 'remoteBot:weeklyReport:set',
+  remoteWeeklyReportAction: 'remoteBot:weeklyReport:action',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -361,4 +384,21 @@ export interface LisDiscordBridge {
   getRemoteMovList(guildId: string): Promise<MovListState>
   setRemoteMovListSettings(guildId: string, settings: MovListSettings): Promise<MovListState>
   updateRemoteMovListMembers(guildId: string, op: MovListOp): Promise<MovListState>
+
+  getVoiceHours(guildId: string): Promise<VoiceHoursState>
+  setVoiceHoursSettings(guildId: string, settings: VoiceHoursSettings): Promise<VoiceHoursState>
+  voiceHoursAction(guildId: string, action: VoiceHoursAction): Promise<VoiceHoursState>
+  getRemoteVoiceHours(guildId: string): Promise<VoiceHoursState>
+  setRemoteVoiceHoursSettings(guildId: string, settings: VoiceHoursSettings): Promise<VoiceHoursState>
+  remoteVoiceHoursAction(guildId: string, action: VoiceHoursAction): Promise<VoiceHoursState>
+  getProfileSettings(guildId: string): Promise<ProfileSettings>
+  setProfileSettings(guildId: string, settings: ProfileSettings): Promise<ProfileSettings>
+  getRemoteProfileSettings(guildId: string): Promise<ProfileSettings>
+  setRemoteProfileSettings(guildId: string, settings: ProfileSettings): Promise<ProfileSettings>
+  getWeeklyReport(guildId: string): Promise<WeeklyReportState>
+  setWeeklyReportSettings(guildId: string, settings: WeeklyReportSettings): Promise<WeeklyReportState>
+  weeklyReportAction(guildId: string, action: WeeklyReportAction): Promise<WeeklyReportState>
+  getRemoteWeeklyReport(guildId: string): Promise<WeeklyReportState>
+  setRemoteWeeklyReportSettings(guildId: string, settings: WeeklyReportSettings): Promise<WeeklyReportState>
+  remoteWeeklyReportAction(guildId: string, action: WeeklyReportAction): Promise<WeeklyReportState>
 }

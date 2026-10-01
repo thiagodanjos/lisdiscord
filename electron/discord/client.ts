@@ -9,6 +9,9 @@ import { startReminderLoop } from './utilityCommands'
 import { commandsHash, isUpToDate, markSynced } from '../store/commandSync'
 import { handleAvisoMovButtons, startMovNoticeLoop } from './movNotices'
 import { handleMovListInteraction } from './movList'
+import { startVoiceHoursLoop } from './voiceHours'
+import { handleProfileButtons } from './profileCommand'
+import { handleWeeklyReportButtons, startWeeklyReportLoop } from './weeklyReport'
 import {
   handleVerificationButtons,
   handleVerificationChannelDelete,
@@ -36,6 +39,8 @@ class DiscordManager {
   private stopBranding: (() => void) | null = null
   private stopReminders: (() => void) | null = null
   private stopNotices: (() => void) | null = null
+  private stopVoiceHours: (() => void) | null = null
+  private stopWeeklyReport: (() => void) | null = null
   private stopPointsLog: (() => void) | null = null
   private messageContentEnabled = false
   private guildMembersEnabled = false
@@ -108,6 +113,16 @@ class DiscordManager {
           console.error('Erro a processar botão de aviso:', err)
         })
       }
+      if (interaction.isButton()) {
+        await handleProfileButtons(interaction).catch((err) => {
+          if (isAlreadyAcknowledgedError(err)) return
+          console.error('Erro a processar botão do perfil:', err)
+        })
+        await handleWeeklyReportButtons(interaction).catch((err) => {
+          if (isAlreadyAcknowledgedError(err)) return
+          console.error('Erro a processar botão do relatório:', err)
+        })
+      }
       if (interaction.isButton() || interaction.isAnySelectMenu()) {
         await handleMovListInteraction(interaction).catch((err) => {
           if (isAlreadyAcknowledgedError(err)) return
@@ -150,6 +165,8 @@ class DiscordManager {
       if (client.isReady()) this.stopBranding = applyBranding(client)
       this.stopReminders = startReminderLoop(client)
       this.stopNotices = startMovNoticeLoop(client)
+      this.stopVoiceHours = startVoiceHoursLoop(client)
+      this.stopWeeklyReport = startWeeklyReportLoop(client)
       this.stopPointsLog = onMovPointsLogged((entry) => {
         if (isPassive()) return
         postMovPointsLog(client, entry).catch((err) => console.error('Erro no log de pontos/horas:', err))
@@ -164,7 +181,8 @@ class DiscordManager {
   }
 
   private async tryLogin(token: string, withMessageContent: boolean, withGuildMembers: boolean): Promise<Client> {
-    const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMessageReactions]
+    // GuildVoiceStates (não privilegiada): quem está em que call — usada pelas horas automáticas.
+    const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMessageReactions, GatewayIntentBits.GuildVoiceStates]
     if (withMessageContent) intents.push(GatewayIntentBits.MessageContent)
     if (withGuildMembers) intents.push(GatewayIntentBits.GuildMembers)
     // Partials: as reações de verificação têm de funcionar em mensagens que já não estão em cache
@@ -201,6 +219,10 @@ class DiscordManager {
     this.stopReminders = null
     this.stopNotices?.()
     this.stopNotices = null
+    this.stopVoiceHours?.()
+    this.stopVoiceHours = null
+    this.stopWeeklyReport?.()
+    this.stopWeeklyReport = null
     this.stopPointsLog?.()
     this.stopPointsLog = null
     await this.client.destroy().catch(() => undefined)

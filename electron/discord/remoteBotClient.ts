@@ -140,6 +140,11 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movlist/settings`, { method: 'POST', body: { settings } }),
     updateMovListMembers: <T>(guildId: string, op: unknown, actor: string) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/movlist/members`, { method: 'POST', body: { op, actor } }),
+    getFeature: <T>(guildId: string, feature: 'voicehours' | 'profile' | 'weeklyreport') => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/${feature}`),
+    setFeature: <T>(guildId: string, feature: 'voicehours' | 'profile' | 'weeklyreport', settings: unknown) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/${feature}/settings`, { method: 'POST', body: { settings } }),
+    featureAction: <T>(guildId: string, feature: 'voicehours' | 'weeklyreport', action: unknown) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/${feature}/action`, { method: 'POST', body: { action } }),
     getVerificationDiagnostics: <T>(guildId: string) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification/diagnostics`),
 
