@@ -59,6 +59,7 @@ export const paths = {
   profileSettingsFile: path.join(root, 'profile-settings.json'),
   weeklyReportFile: path.join(root, 'weekly-report.json'),
   calendarFile: path.join(root, 'calendar.json'),
+  lisfilmsFile: path.join(root, 'lisfilms.json'),
   serverLogSettingsFile: path.join(root, 'server-log-settings.json'),
   databaseFile: path.join(root, 'lisdiscord.sqlite'),
 }

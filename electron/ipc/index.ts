@@ -27,6 +27,10 @@ import type {
   MovListOp,
   MovListSettings,
   MovListState,
+  LisFilmsHit,
+  LisFilmsSettings,
+  LisFilmsState,
+  LisFilmsStatus,
   ActivityAction,
   ActivityInput,
   CalendarSettings,
@@ -105,6 +109,7 @@ import { applyProfileSettings } from '../discord/profileCommand'
 import { applyWeeklyReportAction, applyWeeklyReportSettings, getWeeklyReportState } from '../discord/weeklyReport'
 import { getProfileSettings } from '../store/profileSettings'
 import { applyActivityAction, applyCalendarSettings, getCalendarState, saveActivityFromApp } from '../discord/activities'
+import { applyLisFilmsSettings, getLisFilmsState, searchLisFilms, testLisFilms } from '../discord/lisfilms'
 import { applyServerLogSettings } from '../discord/serverLogs'
 import * as serverLogsStore from '../store/serverLogs'
 import { listGuildCategories } from '../discord/memberProfile'
@@ -562,6 +567,16 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle(IPC.remoteWeeklyReportAction, async (_e, guildId: string, action: WeeklyReportAction): Promise<WeeklyReportState> =>
     remoteApi(requireRemoteCredentials()).featureAction(guildId, 'weeklyreport', action),
   )
+
+  // ---- LisFilms ----
+  ipcMain.handle(IPC.getLisFilms, async (): Promise<LisFilmsState> => getLisFilmsState())
+  ipcMain.handle(IPC.setLisFilmsSettings, async (_e, settings: LisFilmsSettings): Promise<LisFilmsState> => applyLisFilmsSettings(settings))
+  ipcMain.handle(IPC.testLisFilms, async (): Promise<LisFilmsStatus> => testLisFilms())
+  ipcMain.handle(IPC.searchLisFilms, async (_e, query: string): Promise<LisFilmsHit[]> => searchLisFilms(query))
+  ipcMain.handle(IPC.getRemoteLisFilms, async (): Promise<LisFilmsState> => remoteApi(requireRemoteCredentials()).getLisFilms())
+  ipcMain.handle(IPC.setRemoteLisFilmsSettings, async (_e, settings: LisFilmsSettings): Promise<LisFilmsState> => remoteApi(requireRemoteCredentials()).setLisFilmsSettings(settings))
+  ipcMain.handle(IPC.testRemoteLisFilms, async (): Promise<LisFilmsStatus> => remoteApi(requireRemoteCredentials()).testLisFilms())
+  ipcMain.handle(IPC.searchRemoteLisFilms, async (_e, query: string): Promise<LisFilmsHit[]> => remoteApi(requireRemoteCredentials()).searchLisFilms(query))
 
   // ---- Agenda de atividades ----
   const appActor = () => auth.getAuthState().user?.username ?? 'App'

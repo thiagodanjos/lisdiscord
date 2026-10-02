@@ -1,134 +1,17 @@
-import {
-  ListOrdered,
-  CalendarDays,
-  Mic,
-  CircleUser,
-  CalendarClock,
-  BadgeCheck,
-  ChevronDown,
-  ChevronRight,
-  Clock3,
-  Eraser,
-  FileClock,
-  Gamepad2,
-  Gift,
-  History,
-  Home,
-  LayoutDashboard,
-  LayoutGrid,
-  LogOut,
-  Medal,
-  Megaphone,
-  MessageSquarePlus,
-  MessageSquareWarning,
-  Radio,
-  ScrollText,
-  Server,
-  Settings as SettingsIcon,
-  ShieldAlert,
-  Smile,
-  Target,
-  Timer,
-  TrendingUp,
-} from 'lucide-react'
+import { ChevronDown, ChevronRight, LogOut, Search } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useUiStore } from '../store/ui'
 import { bridge } from '../lib/bridge'
 import { cn, initials } from '../lib/utils'
-import { Logo, PulseDot } from './ui'
+import { ALL_ITEMS, NAV, PINNED, SETTINGS_ITEM, findNavItem, type NavItem } from '../lib/nav'
+import { PulseDot } from './ui'
+import { LisFilmsMark } from './brand'
+import { TitleBar } from './TitleBar'
+import { CommandPalette } from './CommandPalette'
 import type { AuthUser, BotStatus, RemoteBotConfig } from '../../shared/types'
 import pkg from '../../package.json'
 import { CREDIT_HANDLE } from '../../shared/branding'
-
-interface NavItem {
-  to: string
-  label: string
-  icon: typeof Home
-  end?: boolean
-}
-
-interface NavSection {
-  id: string
-  label: string
-  items: NavItem[]
-}
-
-const NAV: NavSection[] = [
-  {
-    id: 'geral',
-    label: 'Geral',
-    items: [
-      { to: '/', label: 'Visão Geral', icon: LayoutDashboard, end: true },
-      { to: '/servidores', label: 'Servidores', icon: Server },
-    ],
-  },
-  {
-    id: 'comunicacao',
-    label: 'Comunicação',
-    items: [
-      { to: '/mensagens', label: 'Mensagens & Embeds', icon: MessageSquarePlus },
-      { to: '/avisos-mov', label: 'Avisos MOV', icon: Megaphone },
-      { to: '/emojis', label: 'Emojis do bot', icon: Smile },
-      { to: '/sorteios', label: 'Sorteios', icon: Gift },
-      { to: '/jogos', label: 'Jogos', icon: Gamepad2 },
-    ],
-  },
-  {
-    id: 'pontos',
-    label: 'Mov. Call · Pontos',
-    items: [
-      { to: '/pontos-mov', label: 'Pontos MOV', icon: Medal },
-      { to: '/logs-pontos', label: 'Logs de pontos', icon: ScrollText },
-    ],
-  },
-  {
-    id: 'horas',
-    label: 'Mov. Call · Horas',
-    items: [
-      { to: '/horas-mov', label: 'Horas MOV', icon: Timer },
-      { to: '/logs-horas', label: 'Logs de horas', icon: History },
-      { to: '/horas-automaticas', label: 'Horas automáticas', icon: Mic },
-    ],
-  },
-  {
-    id: 'equipa',
-    label: 'Equipa',
-    items: [
-      { to: '/agenda', label: 'Agenda', icon: CalendarDays },
-      { to: '/listagem-mov', label: 'Listagem Mov Call', icon: ListOrdered },
-      { to: '/perfil', label: '/perfil', icon: CircleUser },
-      { to: '/relatorio-semanal', label: 'Relatório semanal', icon: CalendarClock },
-      { to: '/verificacao', label: 'Verificação', icon: BadgeCheck },
-      { to: '/justificativas', label: 'Justificativas', icon: MessageSquareWarning },
-      { to: '/metas', label: 'Metas', icon: Target },
-      { to: '/upamentos', label: 'Upamentos', icon: TrendingUp },
-    ],
-  },
-  {
-    id: 'moderacao',
-    label: 'Moderação & Limpeza',
-    items: [
-      { to: '/moderacao', label: 'Moderação', icon: ShieldAlert },
-      { to: '/logs-limpeza', label: 'Logs de limpeza', icon: Eraser },
-      { to: '/canais-log', label: 'Canais de log', icon: ScrollText },
-    ],
-  },
-  {
-    id: 'backups',
-    label: 'Backups',
-    items: [
-      { to: '/backups', label: 'Backups', icon: LayoutGrid },
-      { to: '/agendamentos', label: 'Agendamentos', icon: Clock3 },
-      { to: '/transcripts', label: 'Transcripts', icon: FileClock },
-    ],
-  },
-  {
-    id: 'sistema',
-    label: 'Sistema',
-    items: [{ to: '/definicoes', label: 'Definições', icon: SettingsIcon }],
-  },
-]
 
 const COLLAPSED_KEY = 'lisdiscord-nav-collapsed'
 
@@ -140,12 +23,39 @@ function readCollapsed(): Record<string, boolean> {
   }
 }
 
-function pageLabel(pathname: string): string {
-  const all = NAV.flatMap((s) => s.items)
-  const exact = all.find((i) => i.to === pathname)
-  if (exact) return exact.label
-  const prefix = all.filter((i) => i.to !== '/' && pathname.startsWith(i.to)).sort((a, b) => b.to.length - a.to.length)[0]
-  return prefix?.label ?? 'Visão Geral'
+function isActivePath(item: NavItem, pathname: string): boolean {
+  return item.end ? pathname === item.to : pathname === item.to || pathname.startsWith(`${item.to}/`)
+}
+
+/** Um link da barra lateral — completo (ícone + nome) ou compacto (só o ícone, com o nome ao passar). */
+function SideLink({ item, compact }: { item: NavItem; compact: boolean }) {
+  const Icon = item.icon
+  const lisfilms = item.to === '/lisfilms'
+  return (
+    <NavLink
+      to={item.to}
+      end={item.end}
+      title={compact ? item.label : undefined}
+      className={({ isActive }) =>
+        cn(
+          'group flex items-center gap-3 rounded-lg text-[13.5px] transition-colors',
+          compact ? 'size-10 justify-center' : 'px-3 py-[7px]',
+          isActive ? 'bg-white/[0.07] font-semibold text-text' : 'text-muted hover:bg-white/[0.04] hover:text-text',
+        )
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {lisfilms ? (
+            <LisFilmsMark size={17} plain className={cn(!isActive && 'opacity-80 group-hover:opacity-100')} />
+          ) : (
+            <Icon size={17} className={cn('shrink-0', isActive ? 'text-accent' : 'text-faint group-hover:text-muted')} />
+          )}
+          {!compact && <span className="truncate">{item.label}</span>}
+        </>
+      )}
+    </NavLink>
+  )
 }
 
 export function AppShell({
@@ -160,25 +70,23 @@ export function AppShell({
   onLogout: () => void
 }) {
   const demoMode = useUiStore((s) => s.demoMode)
+  const compact = useUiStore((s) => s.sidebarCollapsed)
+  const recent = useUiStore((s) => s.recent)
+  const pushRecent = useUiStore((s) => s.pushRecent)
+  const setPaletteOpen = useUiStore((s) => s.setPaletteOpen)
   const location = useLocation()
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed)
   const [remote, setRemote] = useState<RemoteBotConfig | null>(null)
-  const [startedAt] = useState(() => Date.now())
-  const [uptime, setUptime] = useState('00:00:00')
 
   useEffect(() => {
     bridge.getRemoteBotConfig().then(setRemote).catch(() => setRemote(null))
   }, [demoMode, location.pathname])
 
+  // Guarda a página nos "Recentes".
   useEffect(() => {
-    const tick = () => {
-      const s = Math.floor((Date.now() - startedAt) / 1000)
-      setUptime([Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((n) => String(n).padStart(2, '0')).join(':'))
-    }
-    tick()
-    const id = setInterval(tick, 1000)
-    return () => clearInterval(id)
-  }, [startedAt])
+    const item = findNavItem(location.pathname)
+    if (item) pushRecent(item.to)
+  }, [location.pathname, pushRecent])
 
   function toggle(id: string) {
     setCollapsed((prev) => {
@@ -193,136 +101,127 @@ export function AppShell({
   }
 
   const isRemote = Boolean(remote?.url && remote.hasApiKey)
-  const connected = demoMode || Boolean(status?.connected)
   const accountName = demoMode ? 'demonstração' : (user?.username ?? 'sem conta')
+  const statusInfo = demoMode
+    ? { label: 'Demonstração', tone: 'demo' as const }
+    : status?.connected
+      ? { label: status.botTag ?? 'Online', tone: 'ok' as const }
+      : isRemote
+        ? { label: 'Bot remoto', tone: 'remote' as const }
+        : { label: 'Bot parado', tone: 'off' as const }
+  const toneClass = { ok: 'text-accent', remote: 'text-cyan', off: 'text-danger', demo: 'text-warning' }[statusInfo.tone]
+  const recentItems = recent
+    .map((p) => ALL_ITEMS.find((i) => i.to === p))
+    .filter((i): i is NavItem => Boolean(i) && !PINNED.includes(i as NavItem))
+    .filter((i) => !isActivePath(i, location.pathname))
+    .slice(0, 4)
 
   return (
-    <div className="app-backdrop flex h-screen overflow-hidden">
-      <aside className="relative z-10 flex w-64 shrink-0 flex-col border-r border-border bg-sidebar/80 backdrop-blur-xl">
-        <div className="flex items-center justify-between px-5 pt-6 pb-5">
-          <Logo version={pkg.version} />
-          <span className={cn('size-2 rounded-full', connected ? 'text-accent' : 'text-danger')}>
-            <PulseDot className="size-2" />
-          </span>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto px-3 pb-4">
-          {NAV.map((section) => {
-            const isCollapsed = collapsed[section.id]
-            const hasActive = section.items.some((i) => (i.end ? location.pathname === i.to : location.pathname.startsWith(i.to)))
-            return (
-              <div key={section.id} className="mb-3">
-                <button
-                  type="button"
-                  onClick={() => toggle(section.id)}
-                  className="flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-bold tracking-[0.16em] text-faint uppercase transition-colors hover:text-muted"
-                >
-                  <span className={cn(hasActive && 'text-accent/80')}>{section.label}</span>
-                  {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                </button>
-                {!isCollapsed && (
-                  <div className="mt-0.5 flex flex-col gap-0.5">
-                    {section.items.map(({ to, label, icon: Icon, end }) => (
-                      <NavLink
-                        key={to}
-                        to={to}
-                        end={end}
-                        className={({ isActive }) =>
-                          cn(
-                            'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all',
-                            isActive
-                              ? 'bg-gradient-to-r from-accent/[0.14] to-transparent text-text shadow-[inset_0_0_0_1px_rgb(34_229_132/0.18)]'
-                              : 'text-muted hover:bg-white/[0.035] hover:text-text',
-                          )
-                        }
-                      >
-                        {({ isActive }) => (
-                          <>
-                            {isActive && <span className="absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-full bg-accent shadow-glow" />}
-                            <Icon size={16} className={cn('shrink-0 transition-colors', isActive ? 'text-accent' : 'text-faint group-hover:text-muted')} />
-                            <span className="truncate">{label}</span>
-                          </>
-                        )}
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </nav>
-
-        <div className="border-t border-border p-3">
-          <div className="glass flex items-center gap-3 rounded-xl border border-border p-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent/30 to-violet/30 text-xs font-black text-text ring-1 ring-white/10">
-              {initials(accountName) || '?'}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-bold text-text">{accountName}</p>
-              <p
-                className={cn(
-                  'flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase',
-                  demoMode ? 'text-warning' : status?.connected ? 'text-accent' : isRemote ? 'text-cyan' : 'text-danger',
-                )}
-              >
-                <PulseDot />
-                {demoMode ? 'Demonstração' : status?.connected ? 'Online' : isRemote ? 'Bot remoto' : 'Parado'}
-              </p>
-            </div>
-            {!demoMode && user && (
-              <button onClick={onLogout} title="Terminar sessão" className="rounded-md p-1.5 text-faint transition-colors hover:bg-danger/10 hover:text-danger">
-                <LogOut size={15} />
-              </button>
-            )}
-          </div>
-        </div>
-      </aside>
-
-      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-bg/60 px-8 backdrop-blur-xl">
-          <div className="flex min-w-0 items-center gap-2 text-sm">
-            <Home size={15} className="shrink-0 text-faint" />
-            <ChevronRight size={13} className="shrink-0 text-faint" />
-            <span className="truncate font-semibold text-text">{pageLabel(location.pathname)}</span>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {isRemote && (
-              <span className="flex items-center gap-1.5 rounded-full border border-cyan/35 bg-cyan/10 px-3 py-1 text-[10px] font-bold tracking-wider text-cyan uppercase">
-                <Radio size={11} />
-                Bot remoto
-              </span>
-            )}
-            <span
+    <div className="app-backdrop flex h-screen flex-col overflow-hidden">
+      <TitleBar shell status={statusInfo} />
+      <div className="flex min-h-0 flex-1">
+        <aside className={cn('flex shrink-0 flex-col transition-[width] duration-200', compact ? 'w-[60px] items-center' : 'w-64')}>
+          <div className={cn('flex flex-col gap-0.5 pt-2', compact ? 'items-center' : 'px-2.5')}>
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              title={compact ? 'Pesquisar (Ctrl+K)' : undefined}
               className={cn(
-                'flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-bold tracking-wider uppercase',
-                connected ? 'border-accent/35 bg-accent/10 text-accent' : 'border-danger/35 bg-danger/10 text-danger',
+                'flex items-center gap-3 rounded-lg text-[13.5px] text-muted transition-colors hover:bg-white/[0.04] hover:text-text',
+                compact ? 'size-10 justify-center' : 'px-3 py-[7px]',
               )}
             >
-              <PulseDot />
-              {connected ? 'Tempo real' : 'Desligado'}
-            </span>
-            {status?.connected && status.botTag && (
-              <span className="hidden rounded-full border border-border bg-white/[0.03] px-3 py-1 font-mono text-[11px] text-muted xl:inline">{status.botTag}</span>
+              <Search size={17} className="text-faint" />
+              {!compact && <span className="flex-1 text-left">Pesquisar</span>}
+              {!compact && <kbd className="font-mono text-[10px] text-faint">Ctrl K</kbd>}
+            </button>
+            {PINNED.map((item) => (
+              <SideLink key={item.to} item={item} compact={compact} />
+            ))}
+          </div>
+
+          <nav className={cn('mt-3 flex-1 overflow-y-auto pb-3', compact ? 'flex flex-col items-center gap-0.5' : 'px-2.5')}>
+            {compact
+              ? NAV.flatMap((s) => s.items).map((item) => <SideLink key={item.to} item={item} compact />)
+              : NAV.map((section) => {
+                  const isCollapsed = collapsed[section.id]
+                  const hasActive = section.items.some((i) => isActivePath(i, location.pathname))
+                  return (
+                    <div key={section.id} className="mb-2">
+                      <button
+                        type="button"
+                        onClick={() => toggle(section.id)}
+                        className="group flex w-full items-center justify-between rounded-md px-3 py-1.5 text-[12.5px] text-faint transition-colors hover:text-muted"
+                      >
+                        <span className={cn(hasActive && 'text-muted')}>{section.label}</span>
+                        <span className="opacity-0 transition-opacity group-hover:opacity-100">{isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}</span>
+                      </button>
+                      {!isCollapsed && (
+                        <div className="flex flex-col gap-0.5">
+                          {section.items.map((item) => (
+                            <SideLink key={item.to} item={item} compact={false} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+            {!compact && recentItems.length > 0 && (
+              <div className="mt-1 mb-2">
+                <p className="px-3 py-1.5 text-[12.5px] text-faint">Recentes</p>
+                <div className="flex flex-col gap-0.5">
+                  {recentItems.map((item) => (
+                    <SideLink key={`r-${item.to}`} item={item} compact={false} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </nav>
+
+          <div className={cn('flex flex-col gap-1 pb-3', compact ? 'items-center' : 'px-2.5')}>
+            <SideLink item={SETTINGS_ITEM} compact={compact} />
+            {compact ? (
+              <div
+                title={`${accountName} · ${statusInfo.label}`}
+                className="mt-1 flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-accent/35 to-cyan/30 text-xs font-black text-text ring-1 ring-white/10"
+              >
+                {initials(accountName) || '?'}
+              </div>
+            ) : (
+              <div className="mt-1 flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-white/[0.04]">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent/35 to-cyan/30 text-xs font-black text-text ring-1 ring-white/10">
+                  {initials(accountName) || '?'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-text">{accountName}</p>
+                  <p className={cn('flex items-center gap-1.5 text-[11px]', toneClass)}>
+                    <PulseDot />
+                    <span className="truncate">{statusInfo.tone === 'ok' ? 'Online' : statusInfo.label}</span>
+                  </p>
+                </div>
+                {!demoMode && user && (
+                  <button onClick={onLogout} title="Terminar sessão" className="rounded-md p-1.5 text-faint transition-colors hover:bg-danger/10 hover:text-danger">
+                    <LogOut size={15} />
+                  </button>
+                )}
+              </div>
+            )}
+            {!compact && (
+              <p className="px-2 pt-1 text-[10.5px] text-faint">
+                v{pkg.version} · Created by <span className="text-brand-gradient font-semibold">{CREDIT_HANDLE}</span>
+              </p>
             )}
           </div>
-        </header>
+        </aside>
 
-        <main className="flex-1 overflow-y-auto px-8 py-8">
-          <div key={location.pathname} className="mx-auto max-w-[1400px] animate-fade-up">
+        <main className="content-panel min-w-0 flex-1 overflow-y-auto rounded-tl-2xl border-t border-l border-border">
+          <div key={location.pathname} className="mx-auto max-w-[1400px] animate-fade-up px-8 py-8">
             {children}
           </div>
         </main>
-
-        <footer className="flex h-9 shrink-0 items-center justify-between border-t border-border bg-bg/60 px-8 text-[11px] text-faint backdrop-blur-xl">
-          <span>
-            LisDiscord • v{pkg.version} © {new Date().getFullYear()} ·{' '}
-            <span className="font-semibold text-muted">
-              Created by <span className="text-brand-gradient">{CREDIT_HANDLE}</span>
-            </span>
-          </span>
-          <span className="font-mono">Tempo de atividade: {uptime}</span>
-        </footer>
       </div>
+      <CommandPalette />
     </div>
   )
 }

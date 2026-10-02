@@ -48,6 +48,20 @@ export const HELP_CATEGORIES: Category[] = [
     ],
   },
   {
+    id: 'lisfilms',
+    label: 'LisFilms — filmes, séries, animes e jogos',
+    emoji: '🎬',
+    description: 'O site LisFilms dentro do Discord',
+    color: 0x1ed760,
+    lines: () => [
+      '`/lisfilms procurar termo: [tipo]` — procura filmes, séries, animes, jogos e pessoas no LisFilms (com menu para abrir cada um).',
+      '`/lisfilms filme|serie|anime titulo:` — ficha com poster, sinopse, nota da comunidade LisFilms e da TMDB.',
+      '`/lisfilms jogo nome:` — ficha do LisGames: capa, plataformas, Metacritic e a nota da casa.',
+      '`/lisfilms top` — o que está em alta · `/lisfilms resumo` — o site em números · `/lisfilms destaque` — o destaque da Home.',
+      '`/lisfilms utilizador nome:` — encontra uma pessoa no LisFilms e abre o perfil.',
+    ],
+  },
+  {
     id: 'utilidades',
     label: 'Utilidades',
     emoji: '🧰',

@@ -224,6 +224,41 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     footer: '{total} atividades',
     timestamp: false,
   }),
+  lisfilmsTitle: draft({
+    title: '{titulo} ({ano})',
+    description: '-# {tipo} · {genero}\n{sinopse}\n{barra}\n⭐ **LisFilms:** {estrelas} {notaLisFilms} · {avaliacoes} reviews\n🌍 **TMDB:** {notaTmdb}',
+    color: '#1ED760',
+    thumbnailUrl: '{poster}',
+    footer: 'LisFilms · lisfilms.pt',
+    footerIconUrl: 'https://lisfilms.pt/pwa-192.png',
+    timestamp: false,
+  }),
+  lisfilmsGame: draft({
+    title: '🎮 {nome} ({ano})',
+    description: '-# {generos} · {plataformas}\n{sinopse}\n{barra}\n⭐ **LisGames:** {estrelas} {notaLisGames} · {avaliacoes} avaliações\n🏆 **Metacritic:** {metacritic} · ⏱️ {duracao}\n🏢 {estudio}',
+    color: '#1ED760',
+    imageUrl: '{capa}',
+    footer: 'LisGames · lisfilms.pt',
+    footerIconUrl: 'https://lisfilms.pt/pwa-192.png',
+    timestamp: false,
+  }),
+  lisfilmsList: draft({
+    title: '{titulo}',
+    description: '{lista}',
+    color: '#1ED760',
+    footer: 'LisFilms · {total} resultados',
+    footerIconUrl: 'https://lisfilms.pt/pwa-192.png',
+    timestamp: false,
+  }),
+  lisfilmsSummary: draft({
+    title: '📊 LisFilms em números',
+    description:
+      '🎬 **{filmes}** filmes · 📺 **{series}** séries\n📝 **{reviews}** reviews · 👥 **{utilizadores}** pessoas\n⭐ Média global: **{media}**\n{barra}\n🔥 **Em alta**\n{emAlta}\n{barra}\n🏆 **Quem mais avalia**\n{topUtilizadores}',
+    color: '#1ED760',
+    footer: 'LisFilms · lisfilms.pt',
+    footerIconUrl: 'https://lisfilms.pt/pwa-192.png',
+    timestamp: true,
+  }),
   verificationStaffPanel: draft({
     title: '🛠️ Painel staff',
     description:

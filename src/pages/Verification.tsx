@@ -1108,7 +1108,7 @@ export default function Verification() {
                   <tr key={e.id} className="border-t border-border/70 transition-colors hover:bg-white/[0.02]">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <Avatar name={e.userTag} color={e.status === 'approved' ? '#22e584' : '#f43f5e'} size="sm" />
+                        <Avatar name={e.userTag} color={e.status === 'approved' ? '#1ed760' : '#f43f5e'} size="sm" />
                         <span className="font-semibold text-text">{e.userTag}</span>
                       </div>
                     </td>

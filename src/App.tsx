@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
+import { SplashScreen } from './components/SplashScreen'
 import { bridge } from './lib/bridge'
 import { useUiStore } from './store/ui'
 import Auth, { ConnectingScreen } from './pages/Auth'
@@ -32,6 +33,7 @@ import VoiceHours from './pages/VoiceHours'
 import ProfilePage from './pages/Profile'
 import WeeklyReport from './pages/WeeklyReport'
 import CalendarPage from './pages/Calendar'
+import LisFilmsPage from './pages/LisFilms'
 import Verification from './pages/Verification'
 import ServerLogs from './pages/ServerLogs'
 import SettingsPage from './pages/Settings'
@@ -90,7 +92,7 @@ export default function App() {
     setPhase('auth')
   }
 
-  if (phase === 'loading') return <div className="app-backdrop h-screen" />
+  if (phase === 'loading') return <SplashScreen />
   if (phase === 'auth') return <Auth hasAccount={auth?.hasAccount ?? false} onAuthenticated={afterLogin} />
   if (phase === 'connecting') {
     return (
@@ -150,6 +152,7 @@ export default function App() {
         <Route path="/perfil" element={<ProfilePage />} />
         <Route path="/relatorio-semanal" element={<WeeklyReport />} />
         <Route path="/agenda" element={<CalendarPage />} />
+        <Route path="/lisfilms" element={<LisFilmsPage />} />
         <Route path="/verificacao" element={<Verification />} />
         <Route path="/canais-log" element={<ServerLogs />} />
         <Route path="/definicoes" element={<SettingsPage status={status} onStatusChange={setStatus} user={auth?.user ?? null} onLogout={logout} />} />

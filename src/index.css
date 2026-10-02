@@ -1,37 +1,40 @@
 @import "tailwindcss";
 
 /* ==========================================================================
-   LisDiscord — tema escuro "neon": fundo quase preto, vidro, brilhos suaves
-   e um verde néon como cor principal (cyan, violeta, rosa e âmbar de apoio).
+   LisDiscord 3.0 — visual uniforme ao estilo das apps desktop modernas: uma só
+   superfície escura para a barra de título e a barra lateral, o conteúdo num
+   painel ligeiramente mais claro, e a marca (verde #1ED760 → ciano) só onde
+   importa. As mesmas cores do LisFilms.
    ========================================================================== */
 @theme {
-  --color-bg: #06080c;
-  --color-sidebar: #080b10;
-  --color-raised: #0d1117;
-  --color-card: #0f141b;
-  --color-card-hover: #141b24;
-  --color-border: #1a212b;
-  --color-border-strong: #283241;
+  --color-bg: #0b0d10;
+  --color-sidebar: #0b0d10;
+  --color-panel: #101317;
+  --color-raised: #15191e;
+  --color-card: #14181d;
+  --color-card-hover: #191e24;
+  --color-border: #1f252c;
+  --color-border-strong: #2c343d;
 
-  --color-text: #eef2f7;
-  --color-muted: #8a96a6;
-  --color-faint: #536070;
+  --color-text: #eef1f4;
+  --color-muted: #9aa4af;
+  --color-faint: #5f6b77;
 
-  --color-accent: #22e584;
-  --color-accent-hover: #4ff0a0;
-  --color-accent-soft: #0b2419;
-  --color-cyan: #22d3ee;
-  --color-violet: #a855f7;
-  --color-pink: #f43f7e;
+  --color-accent: #1ed760;
+  --color-accent-hover: #3ee27a;
+  --color-accent-soft: #0e2a19;
+  --color-cyan: #18cbd6;
+  --color-violet: #a78bfa;
+  --color-pink: #f472b6;
   --color-amber: #f5b53d;
   --color-danger: #f43f5e;
   --color-warning: #f5b53d;
-  --color-success: #22e584;
+  --color-success: #1ed760;
 
   --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", ui-monospace, monospace;
 
-  --shadow-glow: 0 0 22px 0 rgb(34 229 132 / 0.35);
+  --shadow-glow: 0 0 18px 0 rgb(30 215 96 / 0.28);
   --shadow-card: 0 10px 40px rgb(0 0 0 / 0.45);
 
   --radius-2xl: 1.1rem;
@@ -111,39 +114,27 @@ body {
   overflow: hidden;
 }
 
-/* Brilhos de ambiente + grelha muito subtil por trás de tudo. */
+/* Fundo da app: liso, com um brilho de marca muito discreto (verde → ciano). */
 .app-backdrop {
   position: relative;
   background:
-    radial-gradient(900px 520px at 8% -10%, rgb(34 229 132 / 0.08), transparent 60%),
-    radial-gradient(800px 480px at 100% 0%, rgb(34 211 238 / 0.07), transparent 60%),
-    radial-gradient(900px 600px at 70% 120%, rgb(168 85 247 / 0.08), transparent 60%),
+    radial-gradient(700px 380px at 0% 0%, rgb(30 215 96 / 0.05), transparent 65%),
+    radial-gradient(700px 380px at 100% 0%, rgb(24 203 214 / 0.04), transparent 65%),
     var(--color-bg);
 }
-.app-backdrop::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgb(255 255 255 / 0.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(255 255 255 / 0.022) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(ellipse at 50% 0%, black 15%, transparent 70%);
+
+/* Painel do conteúdo (à direita da barra lateral), com o canto arredondado. */
+.content-panel {
+  background: var(--color-panel);
 }
 
-/* Cartão de vidro: fundo translúcido, desfoque e um reflexo em cima. */
+/* Cartões: superfície plana, sem desfoque — mais limpo e mais rápido. */
 .glass {
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.035), rgb(255 255 255 / 0.006)),
-    rgb(13 17 23 / 0.78);
-  backdrop-filter: blur(14px);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.045),
-    0 10px 40px rgb(0 0 0 / 0.35);
+  background: var(--color-card);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.025);
 }
 
-/* Contorno em gradiente néon (verde → cyan → violeta), só na borda. */
+/* Contorno de destaque discreto (verde → ciano) para modais e o cartão de entrada. */
 .neon-ring {
   position: relative;
 }
@@ -153,7 +144,7 @@ body {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(120deg, rgb(34 229 132 / 0.6), rgb(34 211 238 / 0.35), rgb(168 85 247 / 0.5));
+  background: linear-gradient(135deg, rgb(30 215 96 / 0.35), rgb(24 203 214 / 0.18) 40%, transparent 70%);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -163,14 +154,23 @@ body {
 }
 
 .text-brand-gradient {
-  background: linear-gradient(92deg, #22e584 0%, #22d3ee 55%, #a855f7 100%);
+  background: linear-gradient(92deg, #1ed760 0%, #18cbd6 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
+/* Barra de título: arrastar a janela; botões e menus continuam clicáveis. */
+.drag {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
 .text-glow {
-  text-shadow: 0 0 18px rgb(34 229 132 / 0.35);
+  text-shadow: 0 0 18px rgb(30 215 96 / 0.3);
 }
 
 .skeleton {
@@ -180,7 +180,7 @@ body {
 }
 
 ::selection {
-  background: rgb(34 229 132 / 0.28);
+  background: rgb(30 215 96 / 0.28);
 }
 
 input,
@@ -193,10 +193,10 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  box-shadow: 0 0 0 3px rgb(34 229 132 / 0.12);
+  box-shadow: 0 0 0 3px rgb(30 215 96 / 0.12);
 }
 select option {
-  background: #0d1117;
+  background: #15191e;
 }
 
 *::-webkit-scrollbar {
@@ -204,13 +204,13 @@ select option {
   height: 10px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #1d2530;
+  background: #232a32;
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #2a3543;
+  background: #323b45;
 }
 *::-webkit-scrollbar-track {
   background: transparent;

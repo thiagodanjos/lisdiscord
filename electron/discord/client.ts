@@ -13,6 +13,7 @@ import { startVoiceHoursLoop } from './voiceHours'
 import { handleProfileButtons } from './profileCommand'
 import { handleWeeklyReportButtons, startWeeklyReportLoop } from './weeklyReport'
 import { handleActivityAutocomplete, handleActivityButtons, startActivityLoop } from './activities'
+import { handleLisFilmsAutocomplete, handleLisFilmsInteraction } from './lisfilms'
 import {
   handleVerificationButtons,
   handleVerificationChannelDelete,
@@ -92,6 +93,7 @@ class DiscordManager {
 
       if (interaction.isAutocomplete()) {
         await handleActivityAutocomplete(interaction).catch((err) => console.error('Erro no autocompletar:', err))
+        await handleLisFilmsAutocomplete(interaction).catch((err) => console.error('Erro no autocompletar do LisFilms:', err))
         return
       }
       if (interaction.isChatInputCommand()) {
@@ -131,6 +133,12 @@ class DiscordManager {
         await handleWeeklyReportButtons(interaction).catch((err) => {
           if (isAlreadyAcknowledgedError(err)) return
           console.error('Erro a processar botão do relatório:', err)
+        })
+      }
+      if (interaction.isStringSelectMenu()) {
+        await handleLisFilmsInteraction(interaction).catch((err) => {
+          if (isAlreadyAcknowledgedError(err)) return
+          console.error('Erro no menu do LisFilms:', err)
         })
       }
       if (interaction.isButton() || interaction.isAnySelectMenu()) {

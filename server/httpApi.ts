@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import type { Guild } from 'discord.js'
-import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovListOp, type MovListSettings, type VoiceHoursAction, type VoiceHoursSettings, type ProfileSettings, type WeeklyReportAction, type WeeklyReportSettings, type ActivityAction, type ActivityInput, type CalendarSettings, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings } from '../shared/types'
+import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovListOp, type MovListSettings, type VoiceHoursAction, type VoiceHoursSettings, type ProfileSettings, type WeeklyReportAction, type WeeklyReportSettings, type ActivityAction, type ActivityInput, type CalendarSettings, type LisFilmsSettings, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings } from '../shared/types'
 import { discordManager } from '../electron/discord/client'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
 import { applyJustificationChannel, postJustificationMessage } from '../electron/discord/justifications'
@@ -37,6 +37,7 @@ import { applyProfileSettings } from '../electron/discord/profileCommand'
 import { applyWeeklyReportAction, applyWeeklyReportSettings, getWeeklyReportState } from '../electron/discord/weeklyReport'
 import { getProfileSettings } from '../electron/store/profileSettings'
 import { applyActivityAction, applyCalendarSettings, getCalendarState, saveActivityFromApp } from '../electron/discord/activities'
+import { applyLisFilmsSettings, getLisFilmsState, searchLisFilms, testLisFilms } from '../electron/discord/lisfilms'
 import { applyServerLogSettings } from '../electron/discord/serverLogs'
 import * as serverLogsStore from '../electron/store/serverLogs'
 import { listGuildCategories } from '../electron/discord/memberProfile'
@@ -539,6 +540,34 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
       const actor = typeof body.actor === 'string' && body.actor.trim() ? body.actor.trim().slice(0, 64) : 'App'
       sendJson(res, 200, await applyMovListOp(await discordManager.getClient().guilds.fetch(parts[2]), body.op, actor))
       return
+    }
+
+    // LisFilms
+    //   GET  /api/lisfilms · GET /api/lisfilms/test · GET /api/lisfilms/search?q=
+    //   POST /api/lisfilms/settings  { settings }
+    if (parts[0] === 'api' && parts[1] === 'lisfilms') {
+      if (req.method === 'GET' && parts.length === 2) {
+        sendJson(res, 200, getLisFilmsState())
+        return
+      }
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'test') {
+        sendJson(res, 200, await testLisFilms())
+        return
+      }
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'search') {
+        const q = new URL(req.url ?? '', 'http://localhost').searchParams.get('q') ?? ''
+        sendJson(res, 200, await searchLisFilms(q.slice(0, 100)))
+        return
+      }
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'settings') {
+        const body = (await readJsonBody(req)) as { settings?: LisFilmsSettings }
+        if (!body.settings || typeof body.settings !== 'object') {
+          sendJson(res, 400, { error: 'Falta o campo "settings".' })
+          return
+        }
+        sendJson(res, 200, applyLisFilmsSettings(body.settings))
+        return
+      }
     }
 
     // Agenda de atividades

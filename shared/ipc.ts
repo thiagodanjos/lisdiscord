@@ -28,6 +28,10 @@ import type {
   MovListOp,
   MovListSettings,
   MovListState,
+  LisFilmsHit,
+  LisFilmsSettings,
+  LisFilmsState,
+  LisFilmsStatus,
   ActivityAction,
   ActivityInput,
   CalendarSettings,
@@ -237,10 +241,37 @@ export const IPC = {
   setRemoteCalendarSettings: 'remoteBot:calendar:settings:set',
   saveRemoteActivity: 'remoteBot:calendar:activity:save',
   remoteActivityAction: 'remoteBot:calendar:activity:action',
+  getLisFilms: 'lisfilms:get',
+  setLisFilmsSettings: 'lisfilms:set',
+  testLisFilms: 'lisfilms:test',
+  searchLisFilms: 'lisfilms:search',
+  getRemoteLisFilms: 'remoteBot:lisfilms:get',
+  setRemoteLisFilmsSettings: 'remoteBot:lisfilms:set',
+  testRemoteLisFilms: 'remoteBot:lisfilms:test',
+  searchRemoteLisFilms: 'remoteBot:lisfilms:search',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
+export type WindowAction =
+  | 'reload'
+  | 'devtools'
+  | 'zoomIn'
+  | 'zoomOut'
+  | 'zoomReset'
+  | 'fullscreen'
+  | 'minimize'
+  | 'maximize'
+  | 'quit'
+  | 'undo'
+  | 'redo'
+  | 'cut'
+  | 'copy'
+  | 'paste'
+  | 'selectAll'
+
 export interface LisDiscordBridge {
+  windowAction(action: WindowAction): Promise<void>
+  getPlatform(): Promise<string>
   getAuthState(): Promise<AuthState>
   register(username: string, password: string, remember: boolean): Promise<AuthState>
   login(username: string, password: string, remember: boolean): Promise<AuthState>
@@ -422,4 +453,13 @@ export interface LisDiscordBridge {
   setRemoteCalendarSettings(guildId: string, settings: CalendarSettings): Promise<CalendarState>
   saveRemoteActivity(guildId: string, input: ActivityInput): Promise<CalendarState>
   remoteActivityAction(guildId: string, action: ActivityAction): Promise<CalendarState>
+
+  getLisFilms(): Promise<LisFilmsState>
+  setLisFilmsSettings(settings: LisFilmsSettings): Promise<LisFilmsState>
+  testLisFilms(): Promise<LisFilmsStatus>
+  searchLisFilms(query: string): Promise<LisFilmsHit[]>
+  getRemoteLisFilms(): Promise<LisFilmsState>
+  setRemoteLisFilmsSettings(settings: LisFilmsSettings): Promise<LisFilmsState>
+  testRemoteLisFilms(): Promise<LisFilmsStatus>
+  searchRemoteLisFilms(query: string): Promise<LisFilmsHit[]>
 }

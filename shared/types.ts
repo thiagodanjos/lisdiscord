@@ -318,6 +318,10 @@ export type EmbedTemplateKind =
   | 'activityBoard'
   | 'activityReminder'
   | 'activityList'
+  | 'lisfilmsTitle'
+  | 'lisfilmsGame'
+  | 'lisfilmsList'
+  | 'lisfilmsSummary'
 
 export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'pontosBoard',
@@ -359,6 +363,10 @@ export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'activityBoard',
   'activityReminder',
   'activityList',
+  'lisfilmsTitle',
+  'lisfilmsGame',
+  'lisfilmsList',
+  'lisfilmsSummary',
 ]
 
 /** Tokens disponíveis nas mensagens que o bot manda quando alguém se justifica (ou pede remoção). */
@@ -1271,6 +1279,79 @@ export const ACTIVITY_BOARD_PLACEHOLDERS = ['{agenda}', '{dias}', '{total}', '{a
 export const ACTIVITY_REMINDER_PLACEHOLDERS = ['{titulo}', '{numero}', '{categoria}', '{emoji}', '{inicio}', '{relativo}', '{minutos}', '{local}', '{responsavel}', '{participantes}', '{link}', '{servidor}'] as const
 export const ACTIVITY_LIST_PLACEHOLDERS = ['{lista}', '{total}', '{filtros}', '{servidor}'] as const
 export const ACTIVITY_LINE_PLACEHOLDERS = ['{hora}', '{data}', '{emoji}', '{titulo}', '{categoria}', '{responsavel}', '{vagas}', '{numero}', '{estado}'] as const
+
+// ==========================================================================
+// LisFilms (integração com o site de reviews)
+// ==========================================================================
+
+export type LisFilmsMedia = 'movies' | 'series' | 'animes'
+
+export interface LisFilmsCommandToggles {
+  procurar: boolean
+  titulo: boolean
+  jogo: boolean
+  top: boolean
+  resumo: boolean
+  destaque: boolean
+  utilizador: boolean
+}
+
+export interface LisFilmsSettings {
+  /** API pública do LisFilms (Render). */
+  apiUrl: string
+  /** Site, para os links "Ver no LisFilms". */
+  siteUrl: string
+  /** Liga/desliga o /lisfilms inteiro. */
+  enabled: boolean
+  commands: LisFilmsCommandToggles
+  /** Respostas só para quem usou o comando. */
+  ephemeral: boolean
+  /** Quantos resultados nas listas (procurar, top, utilizadores). */
+  resultsLimit: number
+  /** Botão de link para o site em cada resposta. */
+  linkButton: { show: boolean; label: string; emoji: string }
+  /** Mostrar o menu "abrir um resultado" debaixo das pesquisas. */
+  pickMenu: boolean
+  pickPlaceholder: string
+  /** Texto quando a API não responde (o Render gratuito pode estar a acordar). */
+  offlineText: string
+  notFoundText: string
+}
+
+export interface LisFilmsSummary {
+  filmes: number
+  series: number
+  reviews: number
+  utilizadores: number
+  media_global: number | null
+}
+
+export interface LisFilmsStatus {
+  ok: boolean
+  latencyMs: number | null
+  error?: string
+  summary?: LisFilmsSummary
+}
+
+export interface LisFilmsHit {
+  media: LisFilmsMedia | 'games' | 'users'
+  /** id interno (filmes/séries/animes/utilizadores) ou rawg_id (jogos). */
+  id: number
+  title: string
+  year: number | null
+  subtitle: string | null
+  image: string | null
+  url: string
+}
+
+export interface LisFilmsState {
+  settings: LisFilmsSettings
+}
+
+export const LISFILMS_TITLE_PLACEHOLDERS = ['{titulo}', '{tipo}', '{ano}', '{genero}', '{sinopse}', '{notaLisFilms}', '{estrelas}', '{avaliacoes}', '{notaTmdb}', '{poster}', '{link}', '{servidor}'] as const
+export const LISFILMS_GAME_PLACEHOLDERS = ['{nome}', '{ano}', '{lancamento}', '{generos}', '{plataformas}', '{estudio}', '{editora}', '{metacritic}', '{duracao}', '{notaLisGames}', '{estrelas}', '{avaliacoes}', '{sinopse}', '{capa}', '{link}', '{servidor}'] as const
+export const LISFILMS_LIST_PLACEHOLDERS = ['{titulo}', '{lista}', '{total}', '{termo}', '{link}', '{servidor}'] as const
+export const LISFILMS_SUMMARY_PLACEHOLDERS = ['{filmes}', '{series}', '{reviews}', '{utilizadores}', '{media}', '{topUtilizadores}', '{emAlta}', '{link}', '{servidor}'] as const
 
 // ==========================================================================
 // Canais de log do servidor (mensagens apagadas/editadas, pontos, horas)

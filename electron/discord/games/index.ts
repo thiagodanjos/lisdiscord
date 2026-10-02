@@ -13,6 +13,7 @@ import { handleMovCallCommand, movCallCommandDefs } from '../movcall'
 import { handleVerifyCommand, verificarCommandDef } from '../verifyCommand'
 import { handleProfileCommand, perfilCommandDef } from '../profileCommand'
 import { atividadeCommandDef, handleActivityCommand } from '../activities'
+import { handleLisFilmsCommand, lisfilmsCommandDef } from '../lisfilms'
 import { blackjackCommandDef, runBlackjack } from './blackjack'
 import { runDuel, duelCommandDef } from './duel'
 import { economyCommandDefs, handleEconomyCommand } from './economyCommands'
@@ -94,6 +95,7 @@ export function buildGlobalCommandDefinitions(): CommandDef[] {
     verificarCommandDef(),
     perfilCommandDef(),
     atividadeCommandDef(),
+    lisfilmsCommandDef(),
     helpCommandDef(),
     addEmojiBotCommandDef(),
     copyEmojiCommandDef(),
@@ -132,6 +134,7 @@ export async function handleGameInteraction(interaction: Interaction): Promise<v
   if (await handleVerifyCommand(interaction)) return
   if (await handleProfileCommand(interaction)) return
   if (await handleActivityCommand(interaction)) return
+  if (await handleLisFilmsCommand(interaction)) return
   if (await handleAddEmojiBotCommand(interaction)) return
   if (await handleCopyEmojiCommand(interaction)) return
   if (await handleEmbedBuilderCommand(interaction)) return

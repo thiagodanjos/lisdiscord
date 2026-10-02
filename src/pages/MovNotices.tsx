@@ -340,7 +340,7 @@ function NoticeRow({ notice: n, onCancel, cancelling }: { notice: MovNotice; onC
   const badge = STATUS_BADGE[n.status]
   return (
     <div className="flex flex-wrap items-start gap-4 border-t border-border/70 px-5 py-4 first:border-t-0">
-      <Avatar name={n.createdByTag} color={n.source === 'app' ? '#a855f7' : '#22e584'} size="sm" />
+      <Avatar name={n.createdByTag} color={n.source === 'app' ? '#a855f7' : '#1ed760'} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Badge tone={badge.tone}>{badge.label}</Badge>

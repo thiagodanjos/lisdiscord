@@ -4,6 +4,8 @@ import type { LisDiscordBridge } from '../shared/ipc'
 import type { RestoreProgressEvent } from '../shared/types'
 
 const bridge: LisDiscordBridge = {
+  windowAction: (action) => ipcRenderer.invoke('window:action', action),
+  getPlatform: () => ipcRenderer.invoke('window:platform'),
   getAuthState: () => ipcRenderer.invoke(IPC.getAuthState),
   register: (username, password, remember) => ipcRenderer.invoke(IPC.register, username, password, remember),
   login: (username, password, remember) => ipcRenderer.invoke(IPC.login, username, password, remember),
@@ -192,6 +194,14 @@ const bridge: LisDiscordBridge = {
   setRemoteCalendarSettings: (guildId, settings) => ipcRenderer.invoke(IPC.setRemoteCalendarSettings, guildId, settings),
   saveRemoteActivity: (guildId, input) => ipcRenderer.invoke(IPC.saveRemoteActivity, guildId, input),
   remoteActivityAction: (guildId, action) => ipcRenderer.invoke(IPC.remoteActivityAction, guildId, action),
+  getLisFilms: () => ipcRenderer.invoke(IPC.getLisFilms),
+  setLisFilmsSettings: (settings) => ipcRenderer.invoke(IPC.setLisFilmsSettings, settings),
+  testLisFilms: () => ipcRenderer.invoke(IPC.testLisFilms),
+  searchLisFilms: (query) => ipcRenderer.invoke(IPC.searchLisFilms, query),
+  getRemoteLisFilms: () => ipcRenderer.invoke(IPC.getRemoteLisFilms),
+  setRemoteLisFilmsSettings: (settings) => ipcRenderer.invoke(IPC.setRemoteLisFilmsSettings, settings),
+  testRemoteLisFilms: () => ipcRenderer.invoke(IPC.testRemoteLisFilms),
+  searchRemoteLisFilms: (query) => ipcRenderer.invoke(IPC.searchRemoteLisFilms, query),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

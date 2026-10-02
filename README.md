@@ -21,6 +21,13 @@ Isto abre a app já em modo demonstração — dá para navegar tudo sem prepara
 
 **Queres o bot online 24/7, sem depender do teu computador estar ligado?** Há um bot autónomo (`server/`) que corre sem Electron nem interface, pronto a pôr num servidor grátis com Docker — dois guias à escolha: **[Oracle Cloud Always Free](docs/deploy-oracle.md)** (máquina maior, mas por vezes sem capacidade disponível) ou **[Google Cloud Always Free](docs/deploy-gcp.md)** (máquina mais pequena, mas quase sempre disponível na hora).
 
+## Novidades da 3.0
+
+- **Visual novo, mais uniforme** — sem a barra de título do Windows: a app desenha a sua (menus Ficheiro · Editar · Ver · Ajuda, voltar/avançar, mostrar/esconder a barra lateral) e os botões minimizar/maximizar/fechar nativos ficam por cima, nas cores da app (o "encaixar" do Windows 11 continua). Barra lateral ao estilo das apps desktop modernas, com modo compacto (Ctrl+B), **Recentes** e **pesquisa rápida** de qualquer página (Ctrl+K). Ecrã de arranque novo.
+- **Logo novo** — o ponto, a barra e o "D" em verde → ciano, da mesma família do LisFilms (as mesmas cores: `#1ED760` e `#0b0d10`).
+- **Aba LisFilms** — a página do site com o **vídeo de apresentação**, o estado da ligação ao site (com os números da comunidade), uma pesquisa para experimentar e a configuração da integração.
+- **`/lisfilms` no Discord** — `procurar` (filmes, séries, animes, jogos e pessoas, com menu para abrir cada resultado), `filme` / `serie` / `anime` (poster, sinopse, nota LisFilms ★ e TMDB, com autocompletar), `jogo` (LisGames: capa, plataformas, Metacritic, nota da casa), `top`, `resumo`, `destaque` e `utilizador`. Cada comando liga/desliga na app; embeds, botão para o site e textos personalizáveis. Lê a API pública do LisFilms (`lisfilms-api.onrender.com`) — sem contas nem chaves.
+
 ## O que é (e o que não é)
 
 O LisDiscord usa um **bot** que tu próprio crias e adicionas aos teus servidores — nunca uma conta de utilizador automatizada. Só consegue aceder ao que um bot normal consegue: estrutura do servidor, mensagens de canais onde está presente (com a Message Content Intent ativada) e ações de moderação para as quais lhe deste permissão. Não mexe em DMs nem em servidores onde não foi convidado, e não faz nada sem seres tu a pedir.

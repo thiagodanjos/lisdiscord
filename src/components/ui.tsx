@@ -2,26 +2,16 @@ import { createPortal } from 'react-dom'
 import { AlertTriangle, Loader2, X } from 'lucide-react'
 import { type ButtonHTMLAttributes, type ReactNode, forwardRef, useEffect } from 'react'
 import { cn, initials } from '../lib/utils'
+import { LogoMark, Wordmark } from './brand'
 
 export function Logo({ size = 'md', version }: { size?: 'sm' | 'md' | 'lg'; version?: string }) {
   const text = { sm: 'text-base', md: 'text-lg', lg: 'text-3xl' }[size]
-  const mark = { sm: 'size-7 text-xs', md: 'size-9 text-sm', lg: 'size-14 text-xl' }[size]
+  const mark = { sm: 28, md: 36, lg: 56 }[size]
   return (
     <div className="flex items-center gap-3 select-none">
-      <div
-        className={cn(
-          'relative flex shrink-0 items-center justify-center rounded-xl font-black text-black shadow-glow',
-          'bg-gradient-to-br from-accent via-cyan to-violet',
-          mark,
-        )}
-      >
-        L
-      </div>
+      <LogoMark size={mark} />
       <div className="leading-tight">
-        <p className={cn('font-extrabold tracking-tight', text)}>
-          <span className="text-text">Lis</span>
-          <span className="text-brand-gradient">Discord</span>
-        </p>
+        <Wordmark className={text} />
         {version && <p className="font-mono text-[10px] text-faint">v{version}</p>}
       </div>
     </div>
@@ -36,7 +26,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const buttonStyles: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-[#03140b] font-bold hover:bg-accent-hover shadow-[0_0_18px_rgb(34_229_132/0.28)] hover:shadow-[0_0_26px_rgb(34_229_132/0.5)]',
+  primary: 'bg-accent text-[#04150a] font-bold hover:bg-accent-hover shadow-[0_0_18px_rgb(30_215_96/0.28)] hover:shadow-[0_0_26px_rgb(30_215_96/0.5)]',
   dark: 'bg-white/[0.03] text-text border border-border hover:bg-white/[0.06] hover:border-border-strong',
   ghost: 'bg-transparent text-muted hover:text-text hover:bg-white/[0.04]',
   danger: 'bg-danger/10 text-danger border border-danger/35 hover:bg-danger/20 hover:shadow-[0_0_18px_rgb(244_63_94/0.25)]',
@@ -86,7 +76,7 @@ export function PulseDot({ className }: { className?: string }) {
   return <span className={cn('inline-block size-1.5 shrink-0 rounded-full bg-current animate-pulse-dot', className)} />
 }
 
-export function Avatar({ name, color = '#22e584', size = 'md' }: { name: string; color?: string; size?: 'sm' | 'md' | 'lg' }) {
+export function Avatar({ name, color = '#1ed760', size = 'md' }: { name: string; color?: string; size?: 'sm' | 'md' | 'lg' }) {
   const dims = { sm: 'size-8 text-xs', md: 'size-10 text-sm', lg: 'size-16 text-xl' }[size]
   return (
     <div
@@ -105,7 +95,7 @@ export function Card({ children, className }: { children: ReactNode; className?:
 type StatTone = 'green' | 'amber' | 'pink' | 'violet' | 'cyan'
 
 const statTones: Record<StatTone, { box: string; glow: string }> = {
-  green: { box: 'text-accent border-accent/40 bg-accent/10', glow: 'rgb(34 229 132 / 0.25)' },
+  green: { box: 'text-accent border-accent/40 bg-accent/10', glow: 'rgb(30 215 96 / 0.25)' },
   amber: { box: 'text-amber border-amber/40 bg-amber/10', glow: 'rgb(245 181 61 / 0.22)' },
   pink: { box: 'text-pink border-pink/40 bg-pink/10', glow: 'rgb(244 63 126 / 0.22)' },
   violet: { box: 'text-violet border-violet/40 bg-violet/10', glow: 'rgb(168 85 247 / 0.25)' },
@@ -306,7 +296,7 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
         onClick={() => onChange(!checked)}
         className={cn(
           'relative h-5 w-9 shrink-0 rounded-full transition-colors',
-          checked ? 'bg-accent shadow-[0_0_12px_rgb(34_229_132/0.45)]' : 'bg-border-strong',
+          checked ? 'bg-accent shadow-[0_0_12px_rgb(30_215_96/0.45)]' : 'bg-border-strong',
         )}
       >
         <span className={cn('absolute top-0.5 left-0.5 size-4 rounded-full bg-white transition-transform', checked ? 'translate-x-4' : 'translate-x-0')} />

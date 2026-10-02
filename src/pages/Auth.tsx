@@ -5,6 +5,8 @@ import { useUiStore } from '../store/ui'
 import { cn } from '../lib/utils'
 import { cleanIpcError } from '../lib/errors'
 import { Button, Logo, Tabs, Toggle } from '../components/ui'
+import { TitleBar } from '../components/TitleBar'
+import { BrandArcs } from '../components/SplashScreen'
 import type { AuthState } from '../../shared/types'
 import pkg from '../../package.json'
 import { CREDIT_HANDLE } from '../../shared/branding'
@@ -12,11 +14,13 @@ import { CREDIT_HANDLE } from '../../shared/branding'
 /** Fundo animado partilhado pelos ecrãs antes de entrar na app (login, ligação do bot). */
 export function AuthBackdrop({ children }: { children: React.ReactNode }) {
   return (
-    <div className="app-backdrop relative flex h-screen items-center justify-center overflow-hidden px-4">
-      <div className="pointer-events-none absolute -top-32 -left-24 size-[420px] animate-float rounded-full bg-accent/15 blur-[110px]" />
-      <div className="pointer-events-none absolute -right-24 bottom-[-120px] size-[460px] animate-float rounded-full bg-violet/15 blur-[120px] [animation-delay:-3s]" />
-      <div className="pointer-events-none absolute top-1/3 right-1/4 size-[280px] animate-float rounded-full bg-cyan/10 blur-[100px] [animation-delay:-5s]" />
-      <div className="relative z-10 w-full max-w-md animate-pop">{children}</div>
+    <div className="app-backdrop flex h-screen flex-col overflow-hidden">
+      <TitleBar shell={false} />
+      <div className="relative flex flex-1 items-center justify-center overflow-hidden px-4">
+        <BrandArcs />
+        <div className="pointer-events-none absolute -top-40 left-1/2 size-[520px] -translate-x-1/2 rounded-full bg-accent/10 blur-[140px]" />
+        <div className="relative z-10 w-full max-w-md animate-pop">{children}</div>
+      </div>
     </div>
   )
 }

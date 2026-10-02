@@ -43,11 +43,14 @@ import type {
   WeeklyReportState,
   Activity,
   CalendarSettings,
+  LisFilmsHit,
+  LisFilmsSettings,
 } from '../../shared/types'
 import { DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
 import { defaultMovListSettings } from '../../shared/movList'
 import { defaultProfileSettings, defaultVoiceHoursSettings, defaultWeeklyReportSettings } from '../../shared/movFeatures'
 import { defaultCalendarSettings, findConflicts, shortDate, zonedParts, zonedToUtc } from '../../shared/calendar'
+import { defaultLisFilmsSettings } from '../../shared/lisfilms'
 
 const DEMO_GAMES = [
   { id: 'dado' as const, name: 'Dado', command: '/dado', description: 'Lança um dado (padrão 6 lados, configurável).' },
@@ -588,6 +591,15 @@ let serverLogSettingsData: Record<string, ServerLogSettings> = {}
 let movListSettingsData: Record<string, MovListSettings> = {}
 let voiceHoursSettingsData: Record<string, VoiceHoursSettings> = {}
 let calendarSettingsData: Record<string, CalendarSettings> = {}
+let lisfilmsSettingsData: LisFilmsSettings = defaultLisFilmsSettings()
+const DEMO_LISFILMS: LisFilmsHit[] = [
+  { media: 'movies', id: 1, title: 'Interstellar', year: 2014, subtitle: 'Ficção científica', image: 'https://image.tmdb.org/t/p/w185/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg', url: 'https://lisfilms.pt/movies/1' },
+  { media: 'movies', id: 2, title: 'The Batman', year: 2022, subtitle: 'Ação', image: 'https://image.tmdb.org/t/p/w185/74xTEgt7R36Fpooo50r9T25onhq.jpg', url: 'https://lisfilms.pt/movies/2' },
+  { media: 'series', id: 3, title: 'Breaking Bad', year: 2008, subtitle: 'Drama', image: 'https://image.tmdb.org/t/p/w185/ggFHVNu6YYI5L9pCfOacjizRGt.jpg', url: 'https://lisfilms.pt/series/3' },
+  { media: 'animes', id: 4, title: 'Attack on Titan', year: 2013, subtitle: 'Ação', image: null, url: 'https://lisfilms.pt/animes/4' },
+  { media: 'games', id: 3498, title: 'Grand Theft Auto V', year: 2013, subtitle: null, image: null, url: 'https://lisfilms.pt/jogos/3498' },
+  { media: 'users', id: 1, title: 'Thiago 👑', year: null, subtitle: null, image: null, url: 'https://lisfilms.pt/profile/1' },
+]
 function demoActivity(n: number, dayOffset: number, time: string, title: string, categoryId: string, extra: Partial<Activity> = {}): Activity {
   const tz = 'America/Sao_Paulo'
   const day = zonedParts(Date.now() + dayOffset * 86_400_000, tz).date
@@ -649,6 +661,13 @@ const restoreListeners = new Set<(event: RestoreProgressEvent) => void>()
 const DEMO_USER = { id: 1, username: 'demo', createdAt: new Date().toISOString(), lastLoginAt: new Date().toISOString() }
 
 export const demoBridge: LisDiscordBridge = {
+  // A janela é sempre a real, mesmo no modo demonstração.
+  async windowAction(action) {
+    await window.lisdiscord?.windowAction(action)
+  },
+  async getPlatform() {
+    return (await window.lisdiscord?.getPlatform()) ?? 'web'
+  },
   async getAuthState() {
     return { hasAccount: true, user: DEMO_USER, hasBotToken: true }
   },
@@ -1681,5 +1700,36 @@ export const demoBridge: LisDiscordBridge = {
   },
   async remoteActivityAction(guildId, action) {
     return demoBridge.activityAction(guildId, action)
+  },
+
+  async getLisFilms() {
+    await delay()
+    return { settings: lisfilmsSettingsData }
+  },
+  async setLisFilmsSettings(settings) {
+    await delay()
+    lisfilmsSettingsData = settings
+    return { settings }
+  },
+  async testLisFilms() {
+    await delay(600)
+    return { ok: true, latencyMs: 412, summary: { filmes: 1284, series: 356, reviews: 4120, utilizadores: 218, media_global: 3.9 } }
+  },
+  async searchLisFilms(query) {
+    await delay()
+    const q = query.trim().toLowerCase()
+    return q ? DEMO_LISFILMS.filter((h) => h.title.toLowerCase().includes(q) || q.length < 3) : []
+  },
+  async getRemoteLisFilms() {
+    return demoBridge.getLisFilms()
+  },
+  async setRemoteLisFilmsSettings(settings) {
+    return demoBridge.setLisFilmsSettings(settings)
+  },
+  async testRemoteLisFilms() {
+    return demoBridge.testLisFilms()
+  },
+  async searchRemoteLisFilms(query) {
+    return demoBridge.searchLisFilms(query)
   },
 }
