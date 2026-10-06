@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDown,
   ArrowUp,
@@ -28,13 +28,14 @@ import { TemplateEditorModal } from '../components/TemplateEditorModal'
 import { EmbedPreview } from '../components/EmbedPreview'
 import { EmojiTextInput } from '../components/EmojiTextInput'
 import { RichTextField } from '../components/RichTextField'
-import { DiscordButtonEditor, DiscordButtonPreview } from '../components/DiscordButtonEditor'
+import { ButtonEmoji, DiscordButtonEditor, DiscordButtonPreview } from '../components/DiscordButtonEditor'
 import { DEFAULT_DUTIES, defaultDutiesSettings, dutiesText, dutyId, fillDuty, summaryValues } from '../../shared/duties'
 import {
   DUTIES_MINE_PLACEHOLDERS,
   DUTIES_PANEL_PLACEHOLDERS,
   DUTIES_SUMMARY_PLACEHOLDERS,
   DUTY_DETAIL_PLACEHOLDERS,
+  type BotEmoji,
   type DutiesSettings,
   type Duty,
   type DutyAssignee,
@@ -66,6 +67,70 @@ function previewText(text: string) {
     .split('\n')
     .map((l) => l.replace(/^- /, '  • '))
     .join('\n')
+}
+
+const QUICK_ARROWS = ['↳', '➜', '➤', '▸', '›', '•', '◦', '✦', '★', '⭐', '✅', '📌', '🔹', '🔸', '🔺', '💠', '👉', '🎯', '📋', '🛡️', '🎙️', '📊', '⏰', '💎']
+
+/** A seta/emoji de uma função ou divisão: clica para escolher (rápidas, emojis do bot ou escrever). Vazio = `fallback`. */
+function ArrowPicker({ value, fallback, emojis, onChange, small }: { value: string; fallback: string; emojis: BotEmoji[]; onChange: (v: string) => void; small?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', close)
+    return () => window.removeEventListener('mousedown', close)
+  }, [open])
+  const shown = value.trim() || fallback
+  const pick = (v: string) => {
+    onChange(v)
+    setOpen(false)
+  }
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title={value.trim() ? 'Seta própria — clica para mudar' : 'Seta geral — clica para pôr uma só para esta'}
+        className={`flex items-center justify-center rounded-lg border ${small ? 'size-7' : 'size-9'} ${value.trim() ? 'border-accent/60 bg-accent-soft' : 'border-dashed border-border bg-black/20'} text-text hover:border-accent`}
+      >
+        {shown ? <ButtonEmoji value={shown} emojis={emojis} size={small ? 14 : 17} /> : <span className="text-[10px] text-faint">nada</span>}
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 z-30 mt-1.5 flex w-72 flex-col gap-2 rounded-xl border border-border bg-raised p-3 shadow-2xl">
+          <p className="text-[10px] font-bold tracking-[0.14em] text-faint uppercase">Escrever (texto ou emoji)</p>
+          <input autoFocus value={value} onChange={(e) => onChange(e.target.value)} maxLength={100} placeholder={fallback ? `Vazio = ${fallback}` : 'Vazio = nenhuma'} className={`py-1.5 ${inputClass}`} />
+          <p className="text-[10px] font-bold tracking-[0.14em] text-faint uppercase">Rápidas</p>
+          <div className="grid grid-cols-8 gap-1">
+            {QUICK_ARROWS.map((a) => (
+              <button key={a} type="button" onClick={() => pick(a)} className="flex size-7 items-center justify-center rounded hover:bg-white/10">
+                {a}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] font-bold tracking-[0.14em] text-faint uppercase">Emojis do bot</p>
+          {emojis.length === 0 ? (
+            <p className="text-[11px] text-faint">Ainda sem emojis — adiciona na página Emojis do bot.</p>
+          ) : (
+            <div className="grid max-h-36 grid-cols-8 gap-1 overflow-y-auto">
+              {emojis.map((e) => (
+                <button key={e.id} type="button" title={`:${e.name}:`} onClick={() => pick(`<${e.animated ? 'a' : ''}:${e.name}:${e.id}>`)} className="flex size-7 items-center justify-center rounded hover:bg-white/10">
+                  <img src={e.url} alt={e.name} className="size-5 object-contain" />
+                </button>
+              ))}
+            </div>
+          )}
+          {value.trim() && (
+            <button type="button" onClick={() => pick('')} className="self-start text-[11px] text-faint hover:text-text">
+              ↺ {fallback ? 'Usar a seta geral' : 'Sem seta'}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function AssigneeChip({ a, onRemove, roles }: { a: DutyAssignee; onRemove: () => void; roles: RolePickerEntry[] }) {
@@ -348,7 +413,7 @@ export default function Duties() {
           {draft.duties.map((d, i) => (
             <div key={d.id} className="flex flex-col gap-2 rounded-xl border border-border bg-black/20 p-3">
               <div className="flex items-start gap-2">
-                <span className="pt-2 text-sm text-faint">{draft.arrow || '↳'}</span>
+                <ArrowPicker value={d.arrow ?? ''} fallback={draft.arrow} emojis={emojis} onChange={(arrow) => setDuty(d.id, { arrow })} />
                 <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,14rem)]">
                   <input value={d.title} onChange={(e) => setDuty(d.id, { title: e.target.value })} maxLength={200} className={`font-semibold ${inputClass}`} />
                   <input value={d.note} onChange={(e) => setDuty(d.id, { note: e.target.value })} maxLength={200} placeholder="Nota (ex.: durante o dia)" className={inputClass} />
@@ -385,7 +450,7 @@ export default function Duties() {
                   {d.subItems.map((s) => (
                     <div key={s.id} className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-faint">•</span>
+                        <ArrowPicker small value={s.arrow ?? ''} fallback="" emojis={emojis} onChange={(arrow) => setDuty(d.id, { subItems: d.subItems.map((x) => (x.id === s.id ? { ...x, arrow } : x)) })} />
                         <input
                           value={s.label}
                           onChange={(e) => setDuty(d.id, { subItems: d.subItems.map((x) => (x.id === s.id ? { ...x, label: e.target.value } : x)) })}
@@ -513,10 +578,10 @@ export default function Duties() {
           <div>
             <Label>Linha de cada divisão</Label>
             <input value={draft.subLineFormat} onChange={(e) => set('subLineFormat', e.target.value)} maxLength={300} className={`mt-1.5 font-mono ${inputClass}`} />
-            <Tokens tokens={['{item}', '{responsaveis}']} />
+            <Tokens tokens={['{seta}', '{item}', '{responsaveis}']} />
           </div>
           <div>
-            <Label>Seta ({'{seta}'}) — pode ser um emoji do bot</Label>
+            <Label>Seta geral ({'{seta}'}) — cada função pode ter a sua (clica na seta à esquerda)</Label>
             <div className="mt-1.5">
               <EmojiTextInput value={draft.arrow} onChange={(v) => set('arrow', v)} emojis={emojis} maxLength={100} />
             </div>

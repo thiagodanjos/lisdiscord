@@ -1729,12 +1729,16 @@ export interface DutyAssignee {
 export interface DutySubItem {
   id: string
   label: string
+  /** Seta/emoji desta divisão ({seta} na linha da divisão) — vazio = nenhuma. */
+  arrow?: string
   assignees: DutyAssignee[]
 }
 
 export interface Duty {
   id: string
   title: string
+  /** Seta/emoji só desta função — vazio = a seta geral. */
+  arrow?: string
   /** Texto extra a seguir ao título (ex.: "em #verificação durante o dia"). */
   note: string
   /** Descrição que aparece ao ver a função em detalhe. */
@@ -1767,7 +1771,7 @@ export interface DutiesSettings {
   lineFormat: string
   /** Linha de uma função dividida (com divisões por baixo) — {seta}, {funcao}, {nota}, {numero}. */
   groupLineFormat: string
-  /** Linha de cada divisão — {item}, {responsaveis}. */
+  /** Linha de cada divisão — {seta}, {item}, {responsaveis}. */
   subLineFormat: string
   /** Emoji/seta antes de cada função ({seta}). */
   arrow: string

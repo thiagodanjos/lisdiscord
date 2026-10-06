@@ -202,13 +202,14 @@ export async function applyDutiesSettings(guild: Guild, input: DutiesSettings): 
     .map((x) => ({
       id: uniqueId(x.id, 'd'),
       title: x.title.trim().slice(0, 200),
+      arrow: txt(x.arrow, 100, '').trim(),
       note: txt(x.note, 200, '').trim(),
       description: txt(x.description, 1500, '').trim(),
       assignees: assignees(x.assignees),
       subItems: (Array.isArray(x.subItems) ? x.subItems : [])
         .filter((sub): sub is DutySubItem => sub && typeof sub.label === 'string' && Boolean(sub.label.trim()))
         .slice(0, MAX_SUBS)
-        .map((sub) => ({ id: uniqueId(sub.id, 's'), label: sub.label.trim().slice(0, 100), assignees: assignees(sub.assignees) })),
+        .map((sub) => ({ id: uniqueId(sub.id, 's'), label: sub.label.trim().slice(0, 100), arrow: txt(sub.arrow, 100, '').trim(), assignees: assignees(sub.assignees) })),
     }))
   const buttons: DutyPanelButton[] = (Array.isArray(input.buttons) ? input.buttons : [])
     .filter((b) => b && ['summary', 'mine', 'link', 'message'].includes(b.kind))

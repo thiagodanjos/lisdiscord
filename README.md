@@ -23,6 +23,8 @@ Isto abre a app já em modo demonstração — dá para navegar tudo sem prepara
 
 ## Novidades da 3.1
 
+- **3.1.4** — Funções da gestão: cada função (e cada divisão, ex.: cada dia) pode ter a **sua própria seta ou emoji** — clica na seta à esquerda e escolhe uma rápida, um emoji do bot ou escreve o que quiseres. Vazio = a seta geral.
+
 - **3.1.3** — sorteio 100% personalizável: também a lista de participantes (embed ou texto), o "A criar sorteio…" (agora um embed), os avisos de sorteio apagado / reroll antes de terminar / reroll falhou e o texto "… e mais" das listas grandes.
 
 - **3.1.2** — o painel das Funções da gestão passa a sair em **embed** por omissão, com o botão **Personalizar o embed** logo na pré-visualização (cor, autor, título, descrição, campos, imagem, miniatura, rodapé) e a escolha Embed / Texto simples ali mesmo.

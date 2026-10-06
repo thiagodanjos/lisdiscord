@@ -1,4 +1,4 @@
-import type { Duty, DutyAssignee, DutiesSettings, DutyPanelButton } from './types'
+import type { Duty, DutyAssignee, DutiesSettings, DutyPanelButton, DutySubItem } from './types'
 
 // Funções da gestão: quem cuida de quê. O mesmo código monta o texto no bot (com menções) e na app
 // (pré-visualização com nomes), por isso fica aqui partilhado.
@@ -47,7 +47,7 @@ export function defaultDutiesSettings(): DutiesSettings {
     plainTemplate: '**Funções da Gestão** 🐼\n\n{funcoes}',
     lineFormat: '{seta} {funcao}{nota} • {responsaveis}',
     groupLineFormat: '{seta} {funcao}{nota}:',
-    subLineFormat: '- {item} • {responsaveis}',
+    subLineFormat: '- {seta}{item} • {responsaveis}',
     arrow: '↳',
     separator: ' | ',
     emptyAssignee: '*ninguém ainda*',
@@ -81,12 +81,22 @@ export function assigneesText(list: DutyAssignee[], s: DutiesSettings, mention: 
 
 const noteOf = (d: Duty) => (d.note.trim() ? ` ${d.note.trim()}` : '')
 
+/** A seta de uma função: a dela, ou a geral. */
+export const arrowOf = (d: Duty, s: DutiesSettings) => (d.arrow ?? '').trim() || s.arrow
+
+/** Linha de uma divisão — a seta própria entra em {seta} (formatos antigos sem {seta} recebem-na antes do item). */
+export function subLine(s: DutiesSettings, sub: DutySubItem, responsaveis: string): string {
+  const arrow = (sub.arrow ?? '').trim()
+  const format = arrow && !s.subLineFormat.includes('{seta}') ? s.subLineFormat.replace('{item}', '{seta}{item}') : s.subLineFormat
+  return fillDuty(format, { seta: arrow ? `${arrow} ` : '', item: sub.label, responsaveis })
+}
+
 /** As linhas de uma função (com as divisões por baixo, se tiver). */
 export function dutyLines(d: Duty, index: number, s: DutiesSettings, mention: DutyMention): string[] {
-  const base = { seta: s.arrow, funcao: d.title, nota: noteOf(d), numero: String(index + 1) }
+  const base = { seta: arrowOf(d, s), funcao: d.title, nota: noteOf(d), numero: String(index + 1) }
   if (d.subItems.length === 0) return [fillDuty(s.lineFormat, { ...base, responsaveis: assigneesText(d.assignees, s, mention) })]
   const head = d.assignees.length ? fillDuty(s.lineFormat, { ...base, responsaveis: assigneesText(d.assignees, s, mention) }) : fillDuty(s.groupLineFormat, base)
-  return [head, ...d.subItems.map((sub) => fillDuty(s.subLineFormat, { item: sub.label, responsaveis: assigneesText(sub.assignees, s, mention) }))]
+  return [head, ...d.subItems.map((sub) => subLine(s, sub, assigneesText(sub.assignees, s, mention)))]
 }
 
 /** O texto {funcoes} do painel. */
@@ -146,8 +156,8 @@ export function minesFor(s: DutiesSettings, userId: string, roleIds: string[]): 
   const mine = (list: DutyAssignee[]) => list.some((a) => (a.kind === 'user' ? a.id === userId : roleIds.includes(a.id)))
   const out: string[] = []
   for (const d of s.duties) {
-    if (mine(d.assignees)) out.push(fillDuty(s.mineLineFormat, { seta: s.arrow, funcao: d.title, item: '' }))
-    for (const sub of d.subItems) if (mine(sub.assignees)) out.push(fillDuty(s.mineLineFormat, { seta: s.arrow, funcao: d.title, item: ` (${sub.label})` }))
+    if (mine(d.assignees)) out.push(fillDuty(s.mineLineFormat, { seta: arrowOf(d, s), funcao: d.title, item: '' }))
+    for (const sub of d.subItems) if (mine(sub.assignees)) out.push(fillDuty(s.mineLineFormat, { seta: (sub.arrow ?? '').trim() || arrowOf(d, s), funcao: d.title, item: ` (${sub.label})` }))
   }
   return out
 }
@@ -158,7 +168,7 @@ export function detailValues(d: Duty, s: DutiesSettings, mention: DutyMention, s
     nota: d.note.trim(),
     descricao: d.description.trim() || d.note.trim() || '—',
     responsaveis: assigneesText(d.assignees, s, mention),
-    divisoes: d.subItems.map((sub) => fillDuty(s.subLineFormat, { item: sub.label, responsaveis: assigneesText(sub.assignees, s, mention) })).join('\n'),
+    divisoes: d.subItems.map((sub) => subLine(s, sub, assigneesText(sub.assignees, s, mention))).join('\n'),
     servidor: serverName,
   }
 }
