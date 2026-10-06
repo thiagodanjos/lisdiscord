@@ -459,6 +459,26 @@ export async function applyGiveawaySettings(guild: Guild, input: GiveawaySetting
     replyRerollDone: txt(input.replyRerollDone, 500, d.replyRerollDone),
     replyRerollEmpty: txt(input.replyRerollEmpty, 500, d.replyRerollEmpty),
     replyNoParticipants: txt(input.replyNoParticipants, 500, d.replyNoParticipants),
+    wizard: {
+      selectPlaceholder: txt(input.wizard?.selectPlaceholder, 150, d.wizard.selectPlaceholder),
+      writeButton: { ...btn(input.wizard?.writeButton, d.wizard.writeButton), show: true },
+      backButton: btn(input.wizard?.backButton, d.wizard.backButton),
+      cancelButton: { ...btn(input.wizard?.cancelButton, d.wizard.cancelButton), show: true },
+      // A Discord limita títulos e etiquetas do formulário a 45 caracteres e os exemplos a 100.
+      modalTitle: txt(input.wizard?.modalTitle, 45, d.wizard.modalTitle),
+      prizeLabel: txt(input.wizard?.prizeLabel, 45, d.wizard.prizeLabel),
+      prizePlaceholder: txt(input.wizard?.prizePlaceholder, 100, d.wizard.prizePlaceholder),
+      durationLabel: txt(input.wizard?.durationLabel, 45, d.wizard.durationLabel),
+      durationPlaceholder: txt(input.wizard?.durationPlaceholder, 100, d.wizard.durationPlaceholder),
+      descriptionLabel: txt(input.wizard?.descriptionLabel, 45, d.wizard.descriptionLabel),
+      descriptionPlaceholder: txt(input.wizard?.descriptionPlaceholder, 100, d.wizard.descriptionPlaceholder),
+      winnersLabel: txt(input.wizard?.winnersLabel, 45, d.wizard.winnersLabel),
+      winnersPlaceholder: txt(input.wizard?.winnersPlaceholder, 100, d.wizard.winnersPlaceholder),
+      errorPrize: txt(input.wizard?.errorPrize, 500, d.wizard.errorPrize),
+      errorDuration: txt(input.wizard?.errorDuration, 500, d.wizard.errorDuration),
+      errorWinners: txt(input.wizard?.errorWinners, 500, d.wizard.errorWinners),
+      creatingText: txt(input.wizard?.creatingText, 200, d.wizard.creatingText),
+    },
   }
   store.saveGiveawaySettings(guild.id, next)
   // Os sorteios a decorrer passam a mostrar os botões/textos novos.

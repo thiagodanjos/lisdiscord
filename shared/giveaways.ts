@@ -1,4 +1,4 @@
-import type { GiveawaySettings } from './types'
+import type { GiveawaySettings, GiveawayWizardSettings } from './types'
 
 // Valores de fábrica do sorteio — partilhados entre o bot e a app (modo demonstração e pré-visualização).
 
@@ -30,6 +30,29 @@ export function defaultGiveawaySettings(): GiveawaySettings {
     replyRerollDone: '🔁 Reroll feito — o novo resultado foi anunciado no canal.',
     replyRerollEmpty: 'ℹ️ Não há mais participantes que ainda não tenham ganho.',
     replyNoParticipants: 'Ainda ninguém está a participar.',
+    wizard: defaultGiveawayWizard(),
+  }
+}
+
+export function defaultGiveawayWizard(): GiveawayWizardSettings {
+  return {
+    selectPlaceholder: 'Escolhe um canal',
+    writeButton: { show: true, label: 'Escrever detalhes', emoji: '📝', style: 'primary' },
+    backButton: { show: true, label: 'Voltar', emoji: '⬅️', style: 'secondary' },
+    cancelButton: { show: true, label: 'Cancelar', emoji: '', style: 'danger' },
+    modalTitle: 'Detalhes do sorteio',
+    prizeLabel: 'Título / prémio',
+    prizePlaceholder: 'Ex: Nitro de 1 mês',
+    durationLabel: 'Duração exata (ex: 1h30m, 2d, 45m, 30s)',
+    durationPlaceholder: '1h30m',
+    descriptionLabel: 'Descrição (opcional)',
+    descriptionPlaceholder: 'Regras, como receber o prémio…',
+    winnersLabel: 'Número de vencedores (padrão: 1)',
+    winnersPlaceholder: '1',
+    errorPrize: 'Escreve um título/prémio para o sorteio.',
+    errorDuration: 'Duração inválida. Usa um formato como `1h30m`, `2d`, `45m` ou `30s` — entre 30 segundos e 30 dias.',
+    errorWinners: 'O número de vencedores tem de ser entre 1 e 50.',
+    creatingText: '⏳ A criar sorteio…',
   }
 }
 

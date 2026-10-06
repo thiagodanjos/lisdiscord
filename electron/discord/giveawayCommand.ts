@@ -1,7 +1,6 @@
 import {
   ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
+  type ButtonBuilder,
   ChannelSelectMenuBuilder,
   ChannelType,
   type ChatInputCommandInteraction,
@@ -18,7 +17,14 @@ import {
   TextInputStyle,
 } from 'discord.js'
 import { parseDurationMs } from '../../shared/duration'
+import type { CustomButton } from '../../shared/types'
+import { getGiveawaySettings } from '../store/giveaways'
+import { getTemplate } from '../store/embedTemplates'
+import { buildEmbedFromDraft, embedHasContent } from './embedTemplate'
+import { customButton } from './profileCommand'
 import { createAndPostGiveaway } from './giveaways'
+
+type WizardTemplate = 'giveawayWizardChannel' | 'giveawayWizardDetails' | 'giveawayWizardError' | 'giveawayWizardCreated' | 'giveawayWizardCancelled' | 'giveawayWizardTimeout'
 
 export { handleGiveawayButtons } from './giveaways'
 
@@ -32,7 +38,7 @@ const MAX_DURATION_MS = 30 * 24 * 60 * 60_000
 export function sorteioCommandDef(): RESTPostAPIChatInputApplicationCommandsJSONBody {
   return new SlashCommandBuilder()
     .setName('sorteio')
-    .setDescription('Cria um sorteio interativo por reações neste servidor')
+    .setDescription('Cria um sorteio neste servidor (com as mensagens e botões da app)')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .toJSON()
 }
@@ -55,63 +61,63 @@ export async function handleGiveawayCommand(interaction: ChatInputCommandInterac
 // ==========================================================================
 
 async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild): Promise<void> {
+  const settings = getGiveawaySettings(guild.id)
+  const w = settings.wizard
   let channelId: string | null = null
-  let channelName: string | null = null
   let errorText = ''
+  /** Se a Discord recusar um emoji dos botões, o resto do assistente segue sem emojis. */
+  let withEmoji = true
 
-  function channelEmbed(): EmbedBuilder {
-    return new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle('🎉 Novo sorteio')
-      .setDescription('Escolhe o canal onde o sorteio vai ser publicado:')
-      .setFooter({ text: 'Só tu consegues usar isto.' })
+  const values = (extra: Record<string, string> = {}) => ({
+    canal: channelId ? `<#${channelId}>` : '—',
+    membro: `<@${interaction.user.id}>`,
+    servidor: guild.name,
+    erro: errorText,
+    ...extra,
+  })
+  const embed = (kind: WizardTemplate, extra: Record<string, string> = {}, fallback = '🎉 Novo sorteio') => {
+    const e = buildEmbedFromDraft(getTemplate(guild.id, kind), values(extra))
+    return embedHasContent(e) ? e : new EmbedBuilder().setDescription(fallback)
   }
+  const button = (id: string, b: CustomButton, fallback: string) => customButton(id, b, fallback, withEmoji)
+  const cancelButton = () => button('sorteio:cancel', w.cancelButton, 'Cancelar')
+  const backButtons = (): ButtonBuilder[] => (w.backButton.show ? [button('sorteio:back', w.backButton, 'Voltar')] : [])
 
   function channelRows(): [ActionRowBuilder<ChannelSelectMenuBuilder>, ActionRowBuilder<ButtonBuilder>] {
     return [
       new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
         new ChannelSelectMenuBuilder()
           .setCustomId('sorteio:channel')
-          .setPlaceholder('Escolhe um canal')
+          .setPlaceholder((w.selectPlaceholder || 'Escolhe um canal').slice(0, 150))
           .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
           .setMinValues(1)
           .setMaxValues(1),
       ),
-      new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId('sorteio:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
-      ),
+      new ActionRowBuilder<ButtonBuilder>().addComponents(cancelButton()),
     ]
   }
+  const channelStep = () => ({ embeds: [embed('giveawayWizardChannel', {}, 'Escolhe o canal onde o sorteio vai ser publicado:')], components: channelRows() })
+  const detailsStep = () => ({
+    embeds: [embed('giveawayWizardDetails', {}, `Canal escolhido: ${values().canal}`)],
+    components: [new ActionRowBuilder<ButtonBuilder>().addComponents(button('sorteio:write', w.writeButton, 'Escrever detalhes'), ...backButtons(), cancelButton())],
+  })
+  const errorStep = () => ({
+    embeds: [embed('giveawayWizardError', {}, `❌ ${errorText}`)],
+    components: [new ActionRowBuilder<ButtonBuilder>().addComponents(...(w.backButton.show ? backButtons() : [button('sorteio:write', w.writeButton, 'Escrever detalhes')]), cancelButton())],
+  })
 
-  function detailsEmbed(): EmbedBuilder {
-    return new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle('🎉 Novo sorteio')
-      .setDescription(
-        `Canal escolhido: **#${channelName}**\n\nClica em **Escrever detalhes** para indicares o título/prémio, a duração exata e o número de vencedores.`,
-      )
+  /** Corre de novo sem emojis se a Discord recusar um (ex.: emoji de outro servidor). */
+  async function retry<T>(run: () => Promise<T>): Promise<T> {
+    try {
+      return await run()
+    } catch (err) {
+      if (!withEmoji || !/emoji/i.test(err instanceof Error ? err.message : String(err))) throw err
+      withEmoji = false
+      return run()
+    }
   }
 
-  function detailsRow(): ActionRowBuilder<ButtonBuilder> {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('sorteio:write').setLabel('Escrever detalhes').setStyle(ButtonStyle.Primary).setEmoji('📝'),
-      new ButtonBuilder().setCustomId('sorteio:back').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
-      new ButtonBuilder().setCustomId('sorteio:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
-    )
-  }
-
-  function errorEmbed(): EmbedBuilder {
-    return new EmbedBuilder().setColor(0xed4245).setTitle('❌ Não consegui criar o sorteio').setDescription(errorText)
-  }
-
-  function errorRow(): ActionRowBuilder<ButtonBuilder> {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('sorteio:back').setLabel('Voltar').setStyle(ButtonStyle.Secondary).setEmoji('⬅️'),
-      new ButtonBuilder().setCustomId('sorteio:cancel').setLabel('Cancelar').setStyle(ButtonStyle.Danger),
-    )
-  }
-
-  const reply = await interaction.reply({ embeds: [channelEmbed()], components: channelRows(), ephemeral: true, withResponse: true })
+  const reply = await retry(() => interaction.reply({ ...channelStep(), ephemeral: true, withResponse: true }))
   const message = reply.resource?.message
   if (!message) return
 
@@ -127,10 +133,7 @@ async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild
       const click = await msg.awaitMessageComponent({ time: SETUP_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
 
       if (click.customId === 'sorteio:cancel') {
-        await click.update({
-          embeds: [new EmbedBuilder().setColor(0x99aab5).setTitle('Cancelado').setDescription('Criação de sorteio cancelada.')],
-          components: [],
-        })
+        await click.update({ embeds: [embed('giveawayWizardCancelled', {}, 'Criação de sorteio cancelada.')], components: [] })
         await deleteAfter(CANCEL_DISPLAY_MS)
         return
       }
@@ -142,59 +145,37 @@ async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild
           return
         }
         channelId = channel.id
-        channelName = 'name' in channel && channel.name ? channel.name : 'canal'
-        await click.update({ embeds: [detailsEmbed()], components: [detailsRow()] })
+        await retry(() => click.update(detailsStep()))
         await loop(msg)
         return
       }
 
       if (click.customId === 'sorteio:back') {
         channelId = null
-        channelName = null
-        await click.update({ embeds: [channelEmbed()], components: channelRows() })
+        await retry(() => click.update(channelStep()))
         await loop(msg)
         return
       }
 
       if (click.customId === 'sorteio:write') {
+        const field = (id: string, label: string, fallbackLabel: string, placeholder: string, style: TextInputStyle, required: boolean, max?: number) => {
+          const input = new TextInputBuilder()
+            .setCustomId(id)
+            .setLabel((label || fallbackLabel).slice(0, 45))
+            .setStyle(style)
+            .setRequired(required)
+          if (placeholder) input.setPlaceholder(placeholder.slice(0, 100))
+          if (max) input.setMaxLength(max)
+          return new ActionRowBuilder<TextInputBuilder>().addComponents(input)
+        }
         const modal = new ModalBuilder()
           .setCustomId('sorteio:modal')
-          .setTitle('Detalhes do sorteio')
+          .setTitle((w.modalTitle || 'Detalhes do sorteio').slice(0, 45))
           .addComponents(
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder()
-                .setCustomId('titulo')
-                .setLabel('Título / prémio')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setMaxLength(200)
-                .setPlaceholder('Ex: Nitro de 1 mês'),
-            ),
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder()
-                .setCustomId('duracao')
-                .setLabel('Duração exata (ex: 1h30m, 2d, 45m, 30s)')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setPlaceholder('1h30m'),
-            ),
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder()
-                .setCustomId('descricao')
-                .setLabel('Descrição (opcional)')
-                .setStyle(TextInputStyle.Paragraph)
-                .setRequired(false)
-                .setMaxLength(1500)
-                .setPlaceholder('Regras, como receber o prémio…'),
-            ),
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder()
-                .setCustomId('vencedores')
-                .setLabel('Número de vencedores (padrão: 1)')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(false)
-                .setPlaceholder('1'),
-            ),
+            field('titulo', w.prizeLabel, 'Título / prémio', w.prizePlaceholder, TextInputStyle.Short, true, 200),
+            field('duracao', w.durationLabel, 'Duração', w.durationPlaceholder, TextInputStyle.Short, true),
+            field('descricao', w.descriptionLabel, 'Descrição (opcional)', w.descriptionPlaceholder, TextInputStyle.Paragraph, false, 1500),
+            field('vencedores', w.winnersLabel, 'Número de vencedores', w.winnersPlaceholder, TextInputStyle.Short, false),
           )
         await click.showModal(modal)
 
@@ -203,7 +184,7 @@ async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild
           submitted = await click.awaitModalSubmit({ time: MODAL_TIMEOUT_MS, filter: (i) => i.user.id === interaction.user.id })
         } catch {
           // modal fechada sem submeter — mantém-se no passo dos detalhes
-          await interaction.editReply({ embeds: [detailsEmbed()], components: [detailsRow()] })
+          await retry(() => interaction.editReply(detailsStep()))
           await loop(msg)
           return
         }
@@ -216,32 +197,17 @@ async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild
 
           const parsedDuration = parseDuration(durationInput)
           const parsedWinners = winnersInput === '' ? 1 : parseNonNegativeInt(winnersInput)
-
-          if (titleInput === '') {
-            errorText = 'Escreve um título/prémio para o sorteio.'
-            await updateFromModal(submitted, interaction, { embeds: [errorEmbed()], components: [errorRow()] })
+          const fail = async (text: string) => {
+            errorText = text
+            await retry(() => updateFromModal(submitted, interaction, errorStep()))
             await loop(msg)
-            return
           }
 
-          if (parsedDuration === null) {
-            errorText = 'Duração inválida. Usa um formato como `1h30m`, `2d`, `45m` ou `30s` — entre 30 segundos e 30 dias.'
-            await updateFromModal(submitted, interaction, { embeds: [errorEmbed()], components: [errorRow()] })
-            await loop(msg)
-            return
-          }
+          if (titleInput === '') return await fail(w.errorPrize)
+          if (parsedDuration === null) return await fail(w.errorDuration)
+          if (parsedWinners === null || parsedWinners < 1 || parsedWinners > 50) return await fail(w.errorWinners)
 
-          if (parsedWinners === null || parsedWinners < 1 || parsedWinners > 50) {
-            errorText = 'O número de vencedores tem de ser entre 1 e 50.'
-            await updateFromModal(submitted, interaction, { embeds: [errorEmbed()], components: [errorRow()] })
-            await loop(msg)
-            return
-          }
-
-          await updateFromModal(submitted, interaction, {
-            embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏳ A criar sorteio…')],
-            components: [],
-          })
+          await updateFromModal(submitted, interaction, { embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle((w.creatingText || '⏳ A criar sorteio…').slice(0, 256))], components: [] })
 
           const created = await createAndPostGiveaway(guild, {
             channelId: channelId as string,
@@ -251,19 +217,16 @@ async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild
             winnerCount: parsedWinners,
             hostTag: `<@${interaction.user.id}>`,
           })
-          const endsAt = created.endsAt
-
-          const resultEmbed = new EmbedBuilder()
-            .setColor(0x3ba55c)
-            .setTitle('✅ Sorteio criado')
-            .setDescription(
-              `**${titleInput}** foi publicado em <#${channelId}>.\n**Vencedores:** ${parsedWinners}\n**Termina:** <t:${Math.floor(new Date(endsAt).getTime() / 1000)}:R>`,
-            )
-          await interaction.editReply({ embeds: [resultEmbed], components: [] })
+          const unix = Math.floor(new Date(created.endsAt).getTime() / 1000)
+          const link = created.messageId ? `https://discord.com/channels/${guild.id}/${created.channelId}/${created.messageId}` : 'https://discord.com'
+          await interaction.editReply({
+            embeds: [embed('giveawayWizardCreated', { premio: titleInput, vencedores: String(parsedWinners), termina: `<t:${unix}:R>`, link }, `✅ **${titleInput}** publicado em ${values().canal}.`)],
+            components: [],
+          })
           await deleteAfter(RESULT_DISPLAY_MS)
         } catch (err) {
           errorText = err instanceof Error && err.message ? err.message : 'Ocorreu um erro inesperado ao criar o sorteio. Tenta novamente.'
-          await interaction.editReply({ embeds: [errorEmbed()], components: [errorRow()] }).catch(() => undefined)
+          await retry(() => interaction.editReply(errorStep())).catch(() => undefined)
           await loop(msg)
         }
         return
@@ -271,12 +234,7 @@ async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild
 
       await loop(msg)
     } catch {
-      await interaction
-        .editReply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('⏱️ Tempo esgotado').setDescription('Criação de sorteio cancelada.')],
-          components: [],
-        })
-        .catch(() => undefined)
+      await interaction.editReply({ embeds: [embed('giveawayWizardTimeout', {}, '⏱️ Tempo esgotado.')], components: [] }).catch(() => undefined)
       await interaction.deleteReply().catch(() => undefined)
     }
   }

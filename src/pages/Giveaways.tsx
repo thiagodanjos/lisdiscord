@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Gift, MessageSquare, MousePointerClick, Palette, Play, Plus, Repeat, Save, Settings2, Trash2, Users } from 'lucide-react'
+import { Gift, MessageSquare, MousePointerClick, Palette, Play, Plus, Repeat, Save, Settings2, Trash2, Users, Wand2 } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { cleanIpcError } from '../lib/errors'
 import { formatRelativeDate } from '../lib/format'
@@ -15,7 +15,7 @@ import { CustomButtonEditor } from '../components/CustomButtonEditor'
 import { DiscordButtonPreview } from '../components/DiscordButtonEditor'
 import { parseDurationMs } from '../../shared/duration'
 import { defaultGiveawaySettings, fillGiveaway } from '../../shared/giveaways'
-import { GIVEAWAY_PLACEHOLDERS, type EmbedDraft, type EmbedTemplateKind, type Giveaway, type GiveawayAction, type GiveawayMessage, type GiveawaySettings } from '../../shared/types'
+import { GIVEAWAY_PLACEHOLDERS, GIVEAWAY_WIZARD_PLACEHOLDERS, type GiveawayWizardSettings, type EmbedDraft, type EmbedTemplateKind, type Giveaway, type GiveawayAction, type GiveawayMessage, type GiveawaySettings } from '../../shared/types'
 
 const DURATIONS = ['10m', '30m', '1h', '6h', '12h', '1d', '3d', '7d']
 
@@ -28,6 +28,33 @@ const MESSAGES: { key: MessageKey; kind: EmbedTemplateKind; title: string; hint:
   { key: 'reroll', kind: 'giveawayReroll', title: 'Mensagem do reroll', hint: 'Quando alguém carrega em Rerolar.' },
   { key: 'noEntrants', kind: 'giveawayNoEntrants', title: 'Sem participantes', hint: 'Se ninguém entrou.' },
   { key: 'winnerDm', kind: 'giveawayWinnerDm', title: 'DM ao vencedor', hint: 'Só se "avisar por DM" estiver ligado.' },
+]
+
+const WIZARD_TEMPLATES: { kind: EmbedTemplateKind; title: string; hint: string }[] = [
+  { kind: 'giveawayWizardChannel', title: '1. Escolher o canal', hint: 'A primeira mensagem, com o menu de canais.' },
+  { kind: 'giveawayWizardDetails', title: '2. Canal escolhido', hint: '{canal} = o canal escolhido.' },
+  { kind: 'giveawayWizardCreated', title: 'Sorteio criado', hint: '{premio}, {canal}, {vencedores}, {termina}, {link}.' },
+  { kind: 'giveawayWizardError', title: 'Erro', hint: '{erro} = o que correu mal (os textos abaixo).' },
+  { kind: 'giveawayWizardCancelled', title: 'Cancelado', hint: 'Quando carregam em Cancelar.' },
+  { kind: 'giveawayWizardTimeout', title: 'Tempo esgotado', hint: 'Se ficar 10 minutos parado.' },
+]
+
+type WizardTextKey = Exclude<keyof GiveawayWizardSettings, 'writeButton' | 'backButton' | 'cancelButton'>
+const WIZARD_TEXTS: { key: WizardTextKey; label: string; max: number }[] = [
+  { key: 'selectPlaceholder', label: 'Texto do menu de canais', max: 150 },
+  { key: 'modalTitle', label: 'Título do formulário (máx. 45)', max: 45 },
+  { key: 'prizeLabel', label: 'Campo prémio — título (máx. 45)', max: 45 },
+  { key: 'prizePlaceholder', label: 'Campo prémio — exemplo', max: 100 },
+  { key: 'durationLabel', label: 'Campo duração — título (máx. 45)', max: 45 },
+  { key: 'durationPlaceholder', label: 'Campo duração — exemplo', max: 100 },
+  { key: 'descriptionLabel', label: 'Campo descrição — título (máx. 45)', max: 45 },
+  { key: 'descriptionPlaceholder', label: 'Campo descrição — exemplo', max: 100 },
+  { key: 'winnersLabel', label: 'Campo vencedores — título (máx. 45)', max: 45 },
+  { key: 'winnersPlaceholder', label: 'Campo vencedores — exemplo', max: 100 },
+  { key: 'errorPrize', label: 'Erro: sem prémio', max: 500 },
+  { key: 'errorDuration', label: 'Erro: duração inválida', max: 500 },
+  { key: 'errorWinners', label: 'Erro: vencedores inválidos', max: 500 },
+  { key: 'creatingText', label: 'Enquanto cria', max: 200 },
 ]
 
 const REPLIES: { key: keyof GiveawaySettings; label: string }[] = [
@@ -70,6 +97,7 @@ export default function Giveaways() {
   const [draft, setDraft] = useState<GiveawaySettings>(defaultGiveawaySettings())
   const [templates, setTemplates] = useState<Partial<Record<EmbedTemplateKind, EmbedDraft>>>({})
   const [editing, setEditing] = useState<(typeof MESSAGES)[number] | null>(null)
+  const [editingWizard, setEditingWizard] = useState<(typeof WIZARD_TEMPLATES)[number] | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
@@ -88,7 +116,7 @@ export default function Giveaways() {
   function loadTemplates() {
     if (!guildId) return
     const get = isRemote ? bridge.getRemoteEmbedTemplate : bridge.getEmbedTemplate
-    Promise.all(MESSAGES.map((m) => get(guildId, m.kind).then((r) => [m.kind, r.draft] as const)))
+    Promise.all([...MESSAGES, ...WIZARD_TEMPLATES].map((m) => get(guildId, m.kind).then((r) => [m.kind, r.draft] as const)))
       .then((list) => setTemplates(Object.fromEntries(list)))
       .catch(() => setTemplates({}))
   }
@@ -120,6 +148,7 @@ export default function Giveaways() {
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(settings)
   const set = <K extends keyof GiveawaySettings>(key: K, value: GiveawaySettings[K]) => setDraft((d) => ({ ...d, [key]: value }))
+  const setWizard = <K extends keyof GiveawayWizardSettings>(key: K, value: GiveawayWizardSettings[K]) => setDraft((d) => ({ ...d, wizard: { ...d.wizard, [key]: value } }))
   const setMsg = (key: MessageKey, patch: Partial<GiveawayMessage>) => setDraft((d) => ({ ...d, [key]: { ...d[key], ...patch } }))
   const durationMs = parseDurationMs(duration)
   const guildName = ctx.guilds.find((g) => g.id === guildId)?.name ?? 'Servidor'
@@ -395,6 +424,50 @@ export default function Giveaways() {
               </div>
             </div>
           </Card>
+
+          <Card className="flex flex-col gap-4">
+            <SectionTitle icon={Wand2} title="Assistente do /sorteio" subtitle="As mensagens que aparecem a quem usa /sorteio no Discord (só essa pessoa vê): embeds de cada passo, menu, botões, formulário e erros." />
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap gap-2">
+                  {WIZARD_TEMPLATES.map((t) => (
+                    <Button key={t.kind} variant="dark" onClick={() => setEditingWizard(t)} disabled={!guildId}>
+                      <Palette size={14} /> {t.title}
+                    </Button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <CustomButtonEditor title="Escrever detalhes" value={{ ...draft.wizard.writeButton, show: true }} fallback="Escrever detalhes" emojis={emojis} onChange={(v) => setWizard('writeButton', { ...v, show: true })} />
+                  <CustomButtonEditor title="Voltar" value={draft.wizard.backButton} fallback="Voltar" emojis={emojis} onChange={(v) => setWizard('backButton', v)} />
+                  <CustomButtonEditor title="Cancelar" value={{ ...draft.wizard.cancelButton, show: true }} fallback="Cancelar" emojis={emojis} onChange={(v) => setWizard('cancelButton', { ...v, show: true })} />
+                </div>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {WIZARD_TEXTS.map((f) => (
+                    <div key={f.key}>
+                      <Label>{f.label}</Label>
+                      <div className="mt-1.5">
+                        <EmojiTextInput value={draft.wizard[f.key]} onChange={(v) => setWizard(f.key, v)} emojis={emojis} maxLength={f.max} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 self-start rounded-xl border border-border bg-black/20 p-3">
+                <p className="text-[10px] font-bold tracking-[0.14em] text-faint uppercase">Pré-visualização — 1.º passo</p>
+                {templates.giveawayWizardChannel && <EmbedPreview draft={sub(templates.giveawayWizardChannel, { ...values, canal: '#sorteios', membro: '@thiagoanjoss' })} botName="LisDiscord" />}
+                <div className="rounded-md border border-border bg-black/40 px-3 py-2 text-xs text-faint">{draft.wizard.selectPlaceholder || 'Escolhe um canal'} ›</div>
+                <div className="flex flex-wrap gap-2">
+                  <DiscordButtonPreview label={draft.wizard.cancelButton.label || 'Cancelar'} emoji={draft.wizard.cancelButton.emoji} style={draft.wizard.cancelButton.style} emojis={emojis} />
+                </div>
+                <p className="pt-2 text-[10px] font-bold tracking-[0.14em] text-faint uppercase">2.º passo</p>
+                <div className="flex flex-wrap gap-2">
+                  <DiscordButtonPreview label={draft.wizard.writeButton.label || 'Escrever detalhes'} emoji={draft.wizard.writeButton.emoji} style={draft.wizard.writeButton.style} emojis={emojis} />
+                  {draft.wizard.backButton.show && <DiscordButtonPreview label={draft.wizard.backButton.label || 'Voltar'} emoji={draft.wizard.backButton.emoji} style={draft.wizard.backButton.style} emojis={emojis} />}
+                  <DiscordButtonPreview label={draft.wizard.cancelButton.label || 'Cancelar'} emoji={draft.wizard.cancelButton.emoji} style={draft.wizard.cancelButton.style} emojis={emojis} />
+                </div>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
 
@@ -463,6 +536,23 @@ export default function Giveaways() {
           tokens={GIVEAWAY_PLACEHOLDERS}
           previewPlaceholders={values}
           previewContent={fillGiveaway(draft[editing.key].content, values)}
+        />
+      )}
+
+      {editingWizard && (
+        <TemplateEditorModal
+          open
+          onClose={() => {
+            setEditingWizard(null)
+            loadTemplates()
+          }}
+          kind={editingWizard.kind}
+          guildId={guildId}
+          isRemote={isRemote}
+          title={`Personalizar /sorteio — ${editingWizard.title}`}
+          hint={editingWizard.hint}
+          tokens={GIVEAWAY_WIZARD_PLACEHOLDERS}
+          previewPlaceholders={{ ...values, canal: '#sorteios', membro: '@thiagoanjoss', erro: draft.wizard.errorDuration }}
         />
       )}
 

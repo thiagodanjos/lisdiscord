@@ -349,6 +349,43 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     color: '#1ED760',
     timestamp: false,
   }),
+  giveawayWizardChannel: draft({
+    title: '🎉 Novo sorteio',
+    description: 'Escolhe o canal onde o sorteio vai ser publicado:',
+    color: '#5865F2',
+    footer: 'Só tu consegues usar isto.',
+    timestamp: false,
+  }),
+  giveawayWizardDetails: draft({
+    title: '🎉 Novo sorteio',
+    description: 'Canal escolhido: **{canal}**\n\nClica em **Escrever detalhes** para indicares o título/prémio, a duração exata e o número de vencedores.',
+    color: '#5865F2',
+    timestamp: false,
+  }),
+  giveawayWizardError: draft({
+    title: '❌ Não consegui criar o sorteio',
+    description: '{erro}',
+    color: '#ED4245',
+    timestamp: false,
+  }),
+  giveawayWizardCreated: draft({
+    title: '✅ Sorteio criado',
+    description: '**{premio}** foi publicado em {canal}.\n**Vencedores:** {vencedores}\n**Termina:** {termina}',
+    color: '#3BA55C',
+    timestamp: false,
+  }),
+  giveawayWizardCancelled: draft({
+    title: 'Cancelado',
+    description: 'Criação de sorteio cancelada.',
+    color: '#99AAB5',
+    timestamp: false,
+  }),
+  giveawayWizardTimeout: draft({
+    title: '⏱️ Tempo esgotado',
+    description: 'Criação de sorteio cancelada.',
+    color: '#ED4245',
+    timestamp: false,
+  }),
   activityOwnerAsk: draft({
     title: '📣 Vais conseguir fazer a {titulo}?',
     description: 'Estás como dono de **{titulo}** (#{numero}).\n{emoji} {categoria} · {inicio} ({relativo})\n📍 {local}\n{barra}\nConfirma se vais conseguir — se não, avisamos os supervisores para alguém assumir.',

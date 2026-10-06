@@ -328,6 +328,12 @@ export type EmbedTemplateKind =
   | 'giveawayReroll'
   | 'giveawayNoEntrants'
   | 'giveawayWinnerDm'
+  | 'giveawayWizardChannel'
+  | 'giveawayWizardDetails'
+  | 'giveawayWizardError'
+  | 'giveawayWizardCreated'
+  | 'giveawayWizardCancelled'
+  | 'giveawayWizardTimeout'
   | 'activityOwnerAsk'
   | 'activityOwnerConfirmed'
   | 'activityOwnerDeclined'
@@ -389,6 +395,12 @@ export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'giveawayReroll',
   'giveawayNoEntrants',
   'giveawayWinnerDm',
+  'giveawayWizardChannel',
+  'giveawayWizardDetails',
+  'giveawayWizardError',
+  'giveawayWizardCreated',
+  'giveawayWizardCancelled',
+  'giveawayWizardTimeout',
   'activityOwnerAsk',
   'activityOwnerConfirmed',
   'activityOwnerDeclined',
@@ -542,7 +554,31 @@ export interface GiveawaySettings {
   replyRerollDone: string
   replyRerollEmpty: string
   replyNoParticipants: string
+  /** O assistente do /sorteio no Discord (só quem o usa vê). */
+  wizard: GiveawayWizardSettings
 }
+
+export interface GiveawayWizardSettings {
+  selectPlaceholder: string
+  writeButton: CustomButton
+  backButton: CustomButton
+  cancelButton: CustomButton
+  modalTitle: string
+  prizeLabel: string
+  prizePlaceholder: string
+  durationLabel: string
+  durationPlaceholder: string
+  descriptionLabel: string
+  descriptionPlaceholder: string
+  winnersLabel: string
+  winnersPlaceholder: string
+  errorPrize: string
+  errorDuration: string
+  errorWinners: string
+  creatingText: string
+}
+
+export const GIVEAWAY_WIZARD_PLACEHOLDERS = ['{canal}', '{premio}', '{vencedores}', '{termina}', '{link}', '{erro}', '{membro}', '{servidor}'] as const
 
 export interface GiveawayState {
   settings: GiveawaySettings
