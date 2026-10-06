@@ -45,12 +45,58 @@ import type {
   CalendarSettings,
   LisFilmsHit,
   LisFilmsSettings,
+  DutiesSettings,
+  GiveawaySettings,
+  ModerationBan,
+  ModerationMember,
+  ModerationRole,
 } from '../../shared/types'
 import { DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
 import { defaultMovListSettings } from '../../shared/movList'
 import { defaultProfileSettings, defaultVoiceHoursSettings, defaultWeeklyReportSettings } from '../../shared/movFeatures'
 import { defaultCalendarSettings, findConflicts, shortDate, zonedParts, zonedToUtc } from '../../shared/calendar'
 import { defaultLisFilmsSettings } from '../../shared/lisfilms'
+import { defaultGiveawaySettings } from '../../shared/giveaways'
+import { defaultDutiesSettings } from '../../shared/duties'
+
+const giveawaySettingsData = new Map<string, GiveawaySettings>()
+const dutiesData = new Map<string, DutiesSettings>()
+let demoBans: ModerationBan[] = [
+  { userId: '900000000000000001', tag: 'spammer_x', avatarUrl: null, reason: 'Spam de links' },
+  { userId: '900000000000000002', tag: 'troll.account', avatarUrl: null, reason: null },
+]
+const demoMemberState = new Map<string, Partial<ModerationMember>>()
+
+function demoModerationRoles(): ModerationRole[] {
+  return demoRoles.map((r, i) => ({ ...r, position: demoRoles.length - i, memberCount: 3 + ((i * 7) % 11), managed: false, editable: i > 0, hoist: i < 3, mentionable: true }))
+}
+
+function demoModMember(id: string): ModerationMember {
+  const base = membersData.find((m) => m.id === id)
+  const name = (base?.tag ?? 'membro').split('#')[0]
+  return {
+    id,
+    tag: base?.tag ?? id,
+    displayName: name,
+    nickname: null,
+    avatarUrl: null,
+    isBot: base?.isBot ?? false,
+    isOwner: false,
+    timedOutUntil: base?.isTimedOut ? new Date(Date.now() + 3_600_000).toISOString() : null,
+    joinedAt: daysAgo(40),
+    createdAt: daysAgo(400),
+    roleIds: demoRoles.slice(2, 4).map((r) => r.id),
+    voiceChannelId: id === 'u10' ? 'v1' : null,
+    voiceChannelName: id === 'u10' ? 'Mov Call 1' : null,
+    serverMuted: false,
+    serverDeafened: false,
+    kickable: true,
+    bannable: true,
+    moderatable: true,
+    manageable: true,
+    ...demoMemberState.get(id),
+  }
+}
 
 const DEMO_GAMES = [
   { id: 'dado' as const, name: 'Dado', command: '/dado', description: 'Lança um dado (padrão 6 lados, configurável).' },
@@ -415,6 +461,9 @@ const demoRoles: RolePickerEntry[] = [
   { id: 'r3', name: 'Veterano', color: '#F0B232' },
   { id: 'r2', name: 'Membro Ativo', color: '#3BA55C' },
   { id: 'r1', name: 'Membro', color: '#99AAB5' },
+  { id: '700000000000000004', name: 'Supervisor', color: '#5865F2' },
+  { id: '700000000000000005', name: 'Gestão', color: '#ED4245' },
+  { id: '700000000000000006', name: 'Novato', color: '#22D3EE' },
 ]
 
 const memberRolesData: Record<string, RolePickerEntry[]> = {
@@ -1731,5 +1780,120 @@ export const demoBridge: LisDiscordBridge = {
   },
   async searchRemoteLisFilms(query) {
     return demoBridge.searchLisFilms(query)
+  },
+
+  async getModerationState(guildId) {
+    await delay()
+    return { roles: demoModerationRoles(), log: moderationLogData.filter((e) => e.guildId === guildId || guildId === 'g1'), botHighestPosition: demoRoles.length }
+  },
+  async getModerationMember(_guildId, userId) {
+    await delay(200)
+    return demoModMember(userId)
+  },
+  async listModerationBans() {
+    await delay()
+    return demoBans
+  },
+  async moderationAction(guildId, op) {
+    await delay()
+    const m = 'userId' in op && op.userId ? demoModMember(op.userId) : null
+    const patch = (p: Partial<ModerationMember>) => m && demoMemberState.set(m.id, { ...demoMemberState.get(m.id), ...p })
+    const role = 'roleId' in op ? demoRoles.find((r) => r.id === op.roleId) : undefined
+    let message = 'Feito (demonstração).'
+    if (op.kind === 'addRole' && m) {
+      patch({ roleIds: [...new Set([...m.roleIds, op.roleId])] })
+      message = `@${role?.name} dado a ${m.displayName} (demonstração).`
+    }
+    if (op.kind === 'removeRole' && m) {
+      patch({ roleIds: m.roleIds.filter((r) => r !== op.roleId) })
+      message = `@${role?.name} tirado a ${m.displayName} (demonstração).`
+    }
+    if (op.kind === 'nickname') patch({ nickname: op.nickname || null, displayName: op.nickname || m?.tag.split('#')[0] })
+    if (op.kind === 'timeout') patch({ timedOutUntil: new Date(Date.now() + op.durationMs).toISOString() })
+    if (op.kind === 'removeTimeout') patch({ timedOutUntil: null })
+    if (op.kind === 'voiceMute') patch({ serverMuted: op.on })
+    if (op.kind === 'voiceDeafen') patch({ serverDeafened: op.on })
+    if (op.kind === 'voiceDisconnect') patch({ voiceChannelId: null, voiceChannelName: null })
+    if (op.kind === 'unban') demoBans = demoBans.filter((b) => b.userId !== op.userId)
+    const actionMap: Record<string, ModerationLogEntry['action']> = { nickname: 'nickname' }
+    moderationLogData = [
+      {
+        id: `ml${Date.now()}`,
+        guildId,
+        guildName: guilds.find((g) => g.id === guildId)?.name ?? '',
+        action: actionMap[op.kind] ?? (op.kind as ModerationLogEntry['action']),
+        targetTag: m?.tag ?? (role ? `@${role.name}` : 'canal'),
+        reason: 'reason' in op ? op.reason || null : null,
+        detail: role ? `@${role.name}` : null,
+        actor: 'demo',
+        date: new Date().toISOString(),
+      },
+      ...moderationLogData,
+    ]
+    const gone = op.kind === 'ban' || op.kind === 'kick'
+    return { message, member: m && !gone ? demoModMember(m.id) : null, state: await demoBridge.getModerationState(guildId, false) }
+  },
+  async leaveGuild(guildId) {
+    await delay()
+    const i = guilds.findIndex((g) => g.id === guildId)
+    const name = guilds[i]?.name ?? ''
+    if (i >= 0) guilds.splice(i, 1)
+    return { name }
+  },
+  async getGiveawayState(guildId) {
+    await delay()
+    return { settings: giveawaySettingsData.get(guildId) ?? defaultGiveawaySettings(), giveaways: giveawaysData.filter((g) => g.guildId === guildId) }
+  },
+  async setGiveawaySettings(guildId, settings) {
+    await delay()
+    giveawaySettingsData.set(guildId, settings)
+    return demoBridge.getGiveawayState(guildId, false)
+  },
+  async giveawayAction(guildId, action) {
+    await delay()
+    if (action.kind === 'create') {
+      giveawaysData = [
+        {
+          id: `giv${Date.now()}`,
+          guildId,
+          guildName: guilds.find((g) => g.id === guildId)?.name ?? '',
+          channelId: action.channelId,
+          channelName: 'geral',
+          messageId: 'demo',
+          prize: action.prize,
+          description: action.description,
+          winnerCount: action.winnerCount,
+          createdAt: new Date().toISOString(),
+          endsAt: new Date(Date.now() + action.durationMs).toISOString(),
+          ended: false,
+          winners: [],
+          entryMode: (giveawaySettingsData.get(guildId) ?? defaultGiveawaySettings()).entryMode,
+          entrants: ['u10', 'u11', 'u12'],
+          hostTag: 'demo (app)',
+        },
+        ...giveawaysData,
+      ]
+    }
+    if (action.kind === 'end' || action.kind === 'reroll') {
+      const pick = ['sofia_gamer', 'ana.dev', 'ricardo_c'][Math.floor(Math.random() * 3)]
+      giveawaysData = giveawaysData.map((g) => (g.id === action.id ? { ...g, ended: true, winners: [pick] } : g))
+    }
+    if (action.kind === 'delete') giveawaysData = giveawaysData.filter((g) => g.id !== action.id)
+    return { ...(await demoBridge.getGiveawayState(guildId, false)), message: 'Feito (demonstração).' }
+  },
+  async getDuties(guildId) {
+    await delay()
+    return { settings: dutiesData.get(guildId) ?? defaultDutiesSettings() }
+  },
+  async setDutiesSettings(guildId, settings) {
+    await delay()
+    dutiesData.set(guildId, settings)
+    return { settings }
+  },
+  async dutiesAction(guildId, action) {
+    await delay()
+    const s = dutiesData.get(guildId) ?? defaultDutiesSettings()
+    dutiesData.set(guildId, { ...s, messageId: action.kind === 'publish' ? 'demo-panel' : null })
+    return { settings: dutiesData.get(guildId)!, message: action.kind === 'publish' ? 'Painel publicado (demonstração).' : 'Painel apagado (demonstração).' }
   },
 }

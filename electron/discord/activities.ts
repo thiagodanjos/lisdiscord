@@ -46,6 +46,7 @@ import { getTemplate } from '../store/embedTemplates'
 import { buildEmbedFromDraft, embedHasContent } from './embedTemplate'
 import { embedToContainer, textLine } from './componentsV2'
 import { customButton } from './profileCommand'
+import { closeCover, coverAction, coverTick } from './activityCover'
 
 // Agenda de atividades: cada atividade é uma mensagem (caixa V2) no canal da agenda, com os botões
 // Confirmar presença · Indisponível · Quero organizar · Sair. Um painel fixo mostra os próximos dias
@@ -403,7 +404,7 @@ export async function refreshBoard(guild: Guild): Promise<void> {
 }
 
 /** Atualiza o painel daqui a pouco (junta vários cliques seguidos numa só edição). */
-function scheduleBoard(guild: Guild): void {
+export function scheduleBoard(guild: Guild): void {
   clearTimeout(boardTimers.get(guild.id))
   boardTimers.set(
     guild.id,
@@ -470,8 +471,11 @@ export async function saveActivity(guild: Guild, input: ActivityInput, actorTag:
   let saved: Activity
   if (existing) {
     const moved = existing.startAt !== startAt || existing.durationMinutes !== durationMinutes
+    // Mudou a hora ou o dono: a confirmação do dono/supervisores recomeça.
+    if ((moved || existing.responsibleId !== fields.responsibleId) && existing.cover) await closeCover(guild, existing).catch(() => undefined)
     saved = store.updateActivity(guild.id, existing.id, (a) => {
       Object.assign(a, fields)
+      if (moved || existing.responsibleId !== fields.responsibleId) a.cover = null
       if (moved) {
         a.remindersSent = []
         if (a.status === 'done' && activityEnd(a) > Date.now()) a.status = 'scheduled'
@@ -499,7 +503,10 @@ export async function cancelActivity(guild: Guild, activity: Activity, reason?: 
     a.status = 'cancelled'
     a.cancelReason = reason?.slice(0, 300)
   })
-  if (updated) await postActivityMessage(guild, updated).catch(() => undefined)
+  if (updated) {
+    await postActivityMessage(guild, updated).catch(() => undefined)
+    await closeCover(guild, updated).catch(() => undefined)
+  }
   scheduleBoard(guild)
 }
 
@@ -659,10 +666,14 @@ async function tickGuild(guild: Guild): Promise<void> {
     const start = new Date(a.startAt).getTime()
     if (activityEnd(a) <= now) {
       const done = store.updateActivity(guild.id, a.id, (x) => (x.status = 'done'))
-      if (done) await postActivityMessage(guild, done).catch(() => undefined)
+      if (done) {
+        await postActivityMessage(guild, done).catch(() => undefined)
+        await closeCover(guild, done).catch(() => undefined)
+      }
       changed = true
       continue
     }
+    await coverTick(guild, settings, a, now)
     // Lembretes que já chegaram à hora: manda só o mais próximo do início (se o bot esteve desligado,
     // não manda vários de seguida) e marca os outros como enviados.
     const due = settings.reminderMinutes.filter((m) => !a.remindersSent.includes(m) && now >= start - m * 60_000)
@@ -769,6 +780,31 @@ export async function applyCalendarSettings(guild: Guild, input: CalendarSetting
     replyConflict: txt(input.replyConflict, 500, d.replyConflict),
     replyNoPermission: txt(input.replyNoPermission, 500, d.replyNoPermission),
     replyClosed: txt(input.replyClosed, 500, d.replyClosed),
+    coverEnabled: Boolean(input.coverEnabled),
+    coverAskMinutes: Math.min(10_080, Math.max(5, Math.round(Number(input.coverAskMinutes) || d.coverAskMinutes))),
+    coverOwnerTimeoutMinutes: Math.min(10_080, Math.max(0, Math.round(Number(input.coverOwnerTimeoutMinutes) || 0))),
+    coverCategoryIds: (Array.isArray(input.coverCategoryIds) ? input.coverCategoryIds : []).filter((id) => categories.some((c) => c.id === id)),
+    supervisorRoleIds: roles(input.supervisorRoleIds),
+    coverDmSupervisors: input.coverDmSupervisors !== false,
+    coverChannelId: input.coverChannelId || null,
+    coverMentionRole: input.coverMentionRole !== false,
+    coverAlertAtStart: input.coverAlertAtStart !== false,
+    ownerConfirmButton: btn(input.ownerConfirmButton, d.ownerConfirmButton),
+    ownerDeclineButton: btn(input.ownerDeclineButton, d.ownerDeclineButton),
+    supervisorTakeButton: btn(input.supervisorTakeButton, d.supervisorTakeButton),
+    replyOwnerConfirmed: txt(input.replyOwnerConfirmed, 500, d.replyOwnerConfirmed),
+    replyOwnerDeclined: txt(input.replyOwnerDeclined, 500, d.replyOwnerDeclined),
+    replyTaken: txt(input.replyTaken, 500, d.replyTaken),
+    replyAlreadyTaken: txt(input.replyAlreadyTaken, 500, d.replyAlreadyTaken),
+    replyNotSupervisor: txt(input.replyNotSupervisor, 500, d.replyNotSupervisor),
+    replyCoverClosed: txt(input.replyCoverClosed, 500, d.replyCoverClosed),
+    coverReasonDeclined: txt(input.coverReasonDeclined, 300, d.coverReasonDeclined),
+    coverReasonNoAnswer: txt(input.coverReasonNoAnswer, 300, d.coverReasonNoAnswer),
+    coverReasonNoOwner: txt(input.coverReasonNoOwner, 300, d.coverReasonNoOwner),
+    coverReasonManual: txt(input.coverReasonManual, 300, d.coverReasonManual),
+  }
+  if (next.coverEnabled && next.supervisorRoleIds.length === 0 && !next.coverChannelId) {
+    throw new Error('Para o dono da mov + supervisores, escolhe os cargos de supervisor (ou um canal geral).')
   }
 
   const me = guild.members.me ?? (await guild.members.fetchMe())
@@ -784,6 +820,7 @@ export async function applyCalendarSettings(guild: Guild, input: CalendarSetting
   next.channelName = await checkChannel(next.channelId, 'da agenda')
   await checkChannel(next.boardChannelId, 'do painel')
   await checkChannel(next.reminderChannelId, 'dos lembretes')
+  await checkChannel(next.coverChannelId, 'geral dos supervisores')
 
   // O painel mudou de canal (ou foi desligado): apaga o antigo.
   const oldBoardChannel = previous.boardChannelId ?? previous.channelId
@@ -834,6 +871,10 @@ export async function applyActivityAction(guild: Guild, action: ActivityAction):
     store.updateActivity(guild.id, a.id, (x) => (x.messageId = null))
     await postActivityMessage(guild, store.getActivity(guild.id, a.id)!)
     return { ...getCalendarState(guild.id), message: `${a.title} publicada outra vez.` }
+  }
+  if (action.kind === 'coverAsk' || action.kind === 'coverEscalate' || action.kind === 'coverReset') {
+    const message = await coverAction(guild, a, action.kind)
+    return { ...getCalendarState(guild.id), message }
   }
   if (action.kind === 'removePerson') {
     const updated = store.updateActivity(guild.id, a.id, (x) => {

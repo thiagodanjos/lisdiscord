@@ -37,7 +37,9 @@ function write(data: Data): void {
 export function getCalendarSettings(guildId: string): CalendarSettings {
   const d = defaultCalendarSettings()
   const saved = readAll()[guildId]?.settings ?? {}
-  const btn = (key: 'joinButton' | 'unavailableButton' | 'organizeButton' | 'leaveButton'): CustomButton => ({ ...d[key], ...saved[key] })
+  const btn = (
+    key: 'joinButton' | 'unavailableButton' | 'organizeButton' | 'leaveButton' | 'ownerConfirmButton' | 'ownerDeclineButton' | 'supervisorTakeButton',
+  ): CustomButton => ({ ...d[key], ...saved[key] })
   return {
     ...d,
     ...saved,
@@ -46,6 +48,9 @@ export function getCalendarSettings(guildId: string): CalendarSettings {
     unavailableButton: btn('unavailableButton'),
     organizeButton: btn('organizeButton'),
     leaveButton: btn('leaveButton'),
+    ownerConfirmButton: btn('ownerConfirmButton'),
+    ownerDeclineButton: btn('ownerDeclineButton'),
+    supervisorTakeButton: btn('supervisorTakeButton'),
   }
 }
 

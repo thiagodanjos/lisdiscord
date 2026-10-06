@@ -21,6 +21,14 @@ Isto abre a app já em modo demonstração — dá para navegar tudo sem prepara
 
 **Queres o bot online 24/7, sem depender do teu computador estar ligado?** Há um bot autónomo (`server/`) que corre sem Electron nem interface, pronto a pôr num servidor grátis com Docker — dois guias à escolha: **[Oracle Cloud Always Free](docs/deploy-oracle.md)** (máquina maior, mas por vezes sem capacidade disponível) ou **[Google Cloud Always Free](docs/deploy-gcp.md)** (máquina mais pequena, mas quase sempre disponível na hora).
 
+## Novidades da 3.1
+
+- **Moderação completa na app** — procura um membro (nome ou ID) e dá/tira cargos, muda o apelido, castiga (timeout), tira da call, silencia/ensurdece, avisa por DM, expulsa ou bane. Separadores para **Cargos** (criar, editar cor/nome, apagar, dar/tirar cargo em massa), **Banidos** (lista, desbanir, banir por ID), **Canais** (bloquear, modo lento, apagar mensagens) e o **Registo** com quem fez o quê. Funciona com o bot remoto.
+- **Tirar o bot de um servidor** — em Servidores, com confirmação pelo nome do servidor.
+- **Sorteios remodelados** — participar por **botão** (com o número de participantes no botão) ou por reação; cargo exigido para participar; quem pode rerolar; DM aos vencedores. As 6 mensagens (sorteio, fim, vencedores, **reroll**, sem participantes, DM) podem ir **em embed ou só em texto**, com embed, botões e respostas totalmente personalizáveis.
+- **Agenda: dono da mov + supervisores** — antes de cada mov o bot pergunta por DM ao dono se vai conseguir. Se não puder (ou não responder, ou não houver dono), manda DM a todos os supervisores (e, se quiseres, uma mensagem geral num canal). O primeiro a carregar em **Eu assumo** fica com a mov e todas as mensagens mudam para "assumida por …". Tempos, cargos, categorias, botões, textos e as 6 mensagens são personalizáveis.
+- **Funções da gestão** — painel num canal com quem cuida de cada função (pessoas ou cargos, com divisões por dia), em texto simples ou embed, com botões configuráveis (**Quem cuida de quê**, **As minhas funções**, links, mensagens próprias) e um menu para ver cada função em detalhe. Já vem com as 12 funções da gestão.
+
 ## Novidades da 3.0
 
 - **Visual novo, mais uniforme** — sem a barra de título do Windows: a app desenha a sua (menus Ficheiro · Editar · Ver · Ajuda, voltar/avançar, mostrar/esconder a barra lateral) e os botões minimizar/maximizar/fechar nativos ficam por cima, nas cores da app (o "encaixar" do Windows 11 continua). Barra lateral ao estilo das apps desktop modernas, com modo compacto (Ctrl+B), **Recentes** e **pesquisa rápida** de qualquer página (Ctrl+K). Ecrã de arranque novo.

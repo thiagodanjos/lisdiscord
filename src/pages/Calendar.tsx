@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Copy, List, MapPin, Pencil, Plus, Radio, RefreshCw, Save, Search, Trash2, Users, XCircle } from 'lucide-react'
+import { BellRing, CalendarDays, ChevronLeft, ChevronRight, Clock3, Copy, List, MapPin, Pencil, Plus, Radio, RefreshCw, RotateCcw, Save, Search, Siren, Trash2, Users, XCircle } from 'lucide-react'
 import { bridge } from '../lib/bridge'
 import { cleanIpcError } from '../lib/errors'
 import { Badge, Button, Card, ConfirmDialog, EmptyState, Modal, PageHeader, Tabs } from '../components/ui'
@@ -27,7 +27,9 @@ import {
   ACTIVITY_CARD_PLACEHOLDERS,
   ACTIVITY_LIST_PLACEHOLDERS,
   ACTIVITY_REMINDER_PLACEHOLDERS,
+  ACTIVITY_COVER_PLACEHOLDERS,
   type Activity,
+  type ActivityCover,
   type ActivityAction,
   type ActivityInput,
   type BotEmoji,
@@ -41,6 +43,14 @@ import {
 } from '../../shared/types'
 
 const EMPTY_REMOTE_CONFIG: RemoteBotConfig = { url: null, hasApiKey: false }
+
+const COVER_STATE: Record<ActivityCover['state'], { label: string; tone: 'default' | 'success' | 'warning' | 'danger' | 'cyan' }> = {
+  asked: { label: '📨 À espera do dono', tone: 'cyan' },
+  confirmed: { label: '✅ Dono confirmou', tone: 'success' },
+  searching: { label: '🚨 À procura de supervisor', tone: 'warning' },
+  covered: { label: '🙋 Assumida por supervisor', tone: 'success' },
+  uncovered: { label: '⚠️ Começou sem supervisor', tone: 'danger' },
+}
 const POLL_MS = 20_000
 const inputClass = 'rounded-lg border border-border bg-black/30 px-3 py-2 text-sm text-text placeholder:text-faint focus:border-accent focus:outline-none'
 
@@ -282,6 +292,33 @@ export default function Calendar() {
       tokens: ACTIVITY_REMINDER_PLACEHOLDERS,
       values: { ...activityPlaceholders(draft, sample, 'preview', guildName), minutos: '10', link: 'https://discord.com' },
     },
+    ...Object.fromEntries(
+      (
+        [
+          ['activityOwnerAsk', 'DM ao dono — "vais conseguir?"', 'Vai com os botões Vou fazer / Não vou conseguir.'],
+          ['activityOwnerConfirmed', 'DM ao dono — confirmou', 'A DM do dono muda para isto quando confirma.'],
+          ['activityOwnerDeclined', 'DM ao dono — não pode', 'A DM do dono muda para isto quando diz que não consegue.'],
+          ['activityCoverCall', 'Chamada aos supervisores', 'DM a cada supervisor (e a mensagem geral), com o botão Eu assumo. {motivo} = porque se está à procura.'],
+          ['activityCoverTaken', 'Assumida', 'Todas as mensagens da chamada mudam para isto quando alguém assume (e o dono também recebe).'],
+          ['activityCoverUncovered', 'Começou sem supervisor', 'Se a mov começar sem ninguém — o botão Eu assumo continua até ao fim.'],
+        ] as const
+      ).map(([kind, title, hint]) => [
+        kind,
+        {
+          title,
+          hint,
+          tokens: ACTIVITY_COVER_PLACEHOLDERS,
+          values: {
+            ...activityPlaceholders(draft, sample, 'preview', guildName),
+            dono: '@ana.dev',
+            supervisor: '@ricardo_c',
+            supervisores: '@Supervisor',
+            motivo: draft.coverReasonDeclined,
+            link: 'https://discord.com',
+          },
+        },
+      ]),
+    ),
     activityList: {
       title: 'Embed do /atividade listar',
       hint: '{lista} = as atividades com os filtros escolhidos no comando; {filtros} = o resumo dos filtros.',
@@ -311,6 +348,7 @@ export default function Calendar() {
           {cat.emoji} {a.title}
         </span>
         <span className="truncate text-[10px] text-faint">👑 {a.responsibleTag ?? '—'}</span>
+        {a.cover && a.status === 'scheduled' && <span className="truncate text-[10px] font-semibold text-warning">{COVER_STATE[a.cover.state].label}</span>}
         <SlotBar taken={a.participants.length} slots={a.participantSlots} color={cat.color} />
         {a.organizerSlots > 0 && <span className="text-[10px] text-faint">🛠️ {slotsText(a.organizers.length, a.organizerSlots)} organizadores</span>}
       </button>
@@ -627,6 +665,29 @@ export default function Calendar() {
                     <Users size={13} /> criada por {a.createdByTag}
                   </p>
                 </div>
+                {(settings.coverEnabled || a.cover) && a.status === 'scheduled' && (
+                  <div className="flex flex-col gap-2 rounded-lg border border-border bg-black/20 p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[10px] font-bold tracking-[0.14em] text-faint uppercase">Dono + supervisores</p>
+                      {a.cover ? <Badge tone={COVER_STATE[a.cover.state].tone}>{COVER_STATE[a.cover.state].label}</Badge> : <Badge>Ainda não perguntado</Badge>}
+                      {a.cover?.coveredBy && <span className="text-xs text-muted">por @{a.cover.coveredBy.tag}</span>}
+                      {a.cover && a.cover.notified > 0 && <span className="text-xs text-faint">{a.cover.notified} supervisor(es) avisados</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="dark" onClick={() => void act({ kind: 'coverAsk', id: a.id })} disabled={!a.responsibleId}>
+                        <BellRing size={13} /> Perguntar ao dono agora
+                      </Button>
+                      <Button variant="dark" onClick={() => void act({ kind: 'coverEscalate', id: a.id })}>
+                        <Siren size={13} /> Chamar supervisores agora
+                      </Button>
+                      {a.cover && (
+                        <Button variant="ghost" onClick={() => void act({ kind: 'coverReset', id: a.id })}>
+                          <RotateCcw size={13} /> Repor
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {a.description && <p className="rounded-lg border border-border bg-black/20 p-3 text-sm whitespace-pre-wrap text-muted">{a.description}</p>}
                 {a.cancelReason && <p className="text-xs text-warning">Motivo do cancelamento: {a.cancelReason}</p>}
                 {people('✅ Participantes', a.participants, a.participantSlots)}

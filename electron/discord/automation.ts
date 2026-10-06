@@ -16,10 +16,7 @@ export async function concludeGiveawayById(id: string): Promise<Giveaway> {
   if (!giveaway.messageId) throw new Error('Sorteio sem mensagem associada.')
 
   const guild = await discordManager.getClient().guilds.fetch(giveaway.guildId)
-  const winners = await concludeGiveaway(guild, giveaway.channelId, giveaway.messageId, giveaway.prize, giveaway.winnerCount, giveaway.id)
-  const updated = giveawaysStore.markConcluded(id, winners)
-  if (!updated) throw new Error('Falha ao guardar o resultado do sorteio.')
-  return updated
+  return concludeGiveaway(guild, giveaway)
 }
 
 /** Liga os agendamentos de backup automático — corre o callback sempre que um agendamento vencer. */
@@ -34,16 +31,25 @@ export function startScheduledBackups(): void {
   })
 }
 
+const concluding = new Set<string>()
+const failures = new Map<string, number>()
+
 /** Verifica periodicamente se algum sorteio já deveria ter terminado e conclui-o. */
 export function startGiveawayScheduler(): void {
   setInterval(() => {
     if (!discordManager.isConnected()) return
     for (const giveaway of giveawaysStore.listGiveaways()) {
-      if (giveaway.ended) continue
+      if (giveaway.ended || concluding.has(giveaway.id)) continue
       if (new Date(giveaway.endsAt).getTime() > Date.now()) continue
-      concludeGiveawayById(giveaway.id).catch((err) => {
-        console.error(`Falha a concluir o sorteio "${giveaway.prize}":`, err)
-      })
+      // Se falhar várias vezes (ex.: canal apagado), deixa de tentar — pode terminar-se na app.
+      if ((failures.get(giveaway.id) ?? 0) >= 5) continue
+      concluding.add(giveaway.id)
+      concludeGiveawayById(giveaway.id)
+        .catch((err) => {
+          failures.set(giveaway.id, (failures.get(giveaway.id) ?? 0) + 1)
+          console.error(`Falha a concluir o sorteio "${giveaway.prize}":`, err)
+        })
+        .finally(() => concluding.delete(giveaway.id))
     }
   }, GIVEAWAY_CHECK_INTERVAL_MS)
 }

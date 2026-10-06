@@ -3,6 +3,7 @@ import {
   CalendarClock,
   CalendarDays,
   CircleUser,
+  ClipboardList,
   Clapperboard,
   Clock3,
   Eraser,
@@ -50,7 +51,7 @@ export interface NavSection {
 export const PINNED: NavItem[] = [
   { to: '/', label: 'Visão Geral', icon: LayoutDashboard, end: true, keywords: 'inicio dashboard home' },
   { to: '/lisfilms', label: 'LisFilms', icon: Clapperboard, keywords: 'filmes series animes jogos reviews site' },
-  { to: '/agenda', label: 'Agenda', icon: CalendarDays, keywords: 'calendario atividades eventos' },
+  { to: '/agenda', label: 'Agenda', icon: CalendarDays, keywords: 'calendario atividades eventos supervisor dono mov' },
 ]
 
 export const NAV: NavSection[] = [
@@ -81,6 +82,7 @@ export const NAV: NavSection[] = [
     id: 'equipa',
     label: 'Equipa',
     items: [
+      { to: '/funcoes', label: 'Funções da gestão', icon: ClipboardList, keywords: 'responsaveis tarefas quem cuida painel' },
       { to: '/verificacao', label: 'Verificação', icon: BadgeCheck, keywords: 'ticket print' },
       { to: '/justificativas', label: 'Justificativas', icon: MessageSquareWarning },
       { to: '/metas', label: 'Metas', icon: Target },
@@ -93,7 +95,7 @@ export const NAV: NavSection[] = [
     id: 'moderacao',
     label: 'Moderação',
     items: [
-      { to: '/moderacao', label: 'Moderação', icon: ShieldAlert, keywords: 'ban kick castigo' },
+      { to: '/moderacao', label: 'Moderação', icon: ShieldAlert, keywords: 'ban kick castigo cargos dar tirar apelido desbanir' },
       { to: '/logs-limpeza', label: 'Logs de limpeza', icon: Eraser },
       { to: '/canais-log', label: 'Canais de log', icon: ScrollText, keywords: 'mensagens apagadas editadas' },
     ],
@@ -102,7 +104,7 @@ export const NAV: NavSection[] = [
     id: 'servidor',
     label: 'Servidor',
     items: [
-      { to: '/servidores', label: 'Servidores', icon: Server },
+      { to: '/servidores', label: 'Servidores', icon: Server, keywords: 'sair remover bot' },
       { to: '/backups', label: 'Backups', icon: LayoutGrid },
       { to: '/agendamentos', label: 'Agendamentos', icon: Clock3 },
       { to: '/transcripts', label: 'Transcripts', icon: FileClock },

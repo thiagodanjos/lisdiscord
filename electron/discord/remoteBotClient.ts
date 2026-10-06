@@ -155,6 +155,11 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
     getVerificationDiagnostics: <T>(guildId: string) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/verification/diagnostics`),
 
+    /** Rotas genéricas debaixo de /api/guilds/:guildId/… (moderação, sorteios, funções, sair). */
+    guildGet: <T>(guildId: string, path: string) => remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/${path}`),
+    guildPost: <T>(guildId: string, path: string, body: unknown = {}) =>
+      remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/${path}`, { method: 'POST', body }),
+
     sendEmbed: <T>(guildId: string, channelId: string, draft: unknown, options?: unknown) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/messages`, { method: 'POST', body: { channelId, draft, options } }),
   }

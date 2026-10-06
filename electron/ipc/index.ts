@@ -64,6 +64,17 @@ import type {
   SendMessageResult,
   TimeoutDuration,
   TranscriptSummary,
+  DutiesAction,
+  DutiesSettings,
+  DutiesState,
+  GiveawayAction,
+  GiveawaySettings,
+  GiveawayState,
+  ModerationBan,
+  ModerationMember,
+  ModerationOp,
+  ModerationResult,
+  ModerationState,
 } from '../../shared/types'
 import { IPC } from '../../shared/ipc'
 import { discordManager } from '../discord/client'
@@ -73,7 +84,8 @@ import { diffBackups } from '../discord/diff'
 import { exportTranscript, newTranscriptId } from '../discord/transcript'
 import { sendEmbedMessage } from '../discord/messaging'
 import * as moderation from '../discord/moderation'
-import { postGiveawayMessage } from '../discord/giveaways'
+import { applyGiveawayAction, applyGiveawaySettings, createAndPostGiveaway, getGiveawayState } from '../discord/giveaways'
+import { applyDutiesAction, applyDutiesSettings, getDutiesState } from '../discord/duties'
 import { registerCommandsForGuild } from '../discord/games'
 import { GAMES } from '../discord/games/catalog'
 import { refreshBoard } from '../discord/movcall'
@@ -336,19 +348,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     IPC.createGiveaway,
     async (_e, guildId: string, channelId: string, prize: string, durationMs: number, winnerCount: number): Promise<Giveaway> => {
       const guild = await discordManager.getClient().guilds.fetch(guildId)
-      const channel = await guild.channels.fetch(channelId)
-      const endsAt = new Date(Date.now() + durationMs).toISOString()
-      const messageId = await postGiveawayMessage(guild, channelId, prize, endsAt, winnerCount)
-      return giveawaysStore.createGiveaway({
-        guildId,
-        guildName: guild.name,
-        channelId,
-        channelName: channel?.name ?? channelId,
-        messageId,
-        prize,
-        winnerCount,
-        endsAt,
-      })
+      const actor = auth.getAuthState().user?.username
+      return createAndPostGiveaway(guild, { channelId, prize, description: '', durationMs, winnerCount, hostTag: actor ? `${actor} (app)` : 'App' })
     },
   )
 
@@ -573,6 +574,46 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle(IPC.setLisFilmsSettings, async (_e, settings: LisFilmsSettings): Promise<LisFilmsState> => applyLisFilmsSettings(settings))
   ipcMain.handle(IPC.testLisFilms, async (): Promise<LisFilmsStatus> => testLisFilms())
   ipcMain.handle(IPC.searchLisFilms, async (_e, query: string): Promise<LisFilmsHit[]> => searchLisFilms(query))
+  // ---- Moderação completa · sair do servidor · sorteios · funções (local ou bot remoto) ----
+  const actorName = () => auth.getAuthState().user?.username ?? null
+  const localGuild = (guildId: string) => discordManager.getClient().guilds.fetch(guildId)
+  const remote = () => remoteApi(requireRemoteCredentials())
+
+  ipcMain.handle(IPC.getModerationState, async (_e, guildId: string, isRemote: boolean): Promise<ModerationState> =>
+    isRemote ? remote().guildGet(guildId, 'moderation') : moderation.getModerationState(await localGuild(guildId)),
+  )
+  ipcMain.handle(IPC.getModerationMember, async (_e, guildId: string, userId: string, isRemote: boolean): Promise<ModerationMember> =>
+    isRemote ? remote().guildGet(guildId, `moderation/member/${encodeURIComponent(userId)}`) : moderation.getModerationMember(await localGuild(guildId), userId),
+  )
+  ipcMain.handle(IPC.listModerationBans, async (_e, guildId: string, isRemote: boolean): Promise<ModerationBan[]> =>
+    isRemote ? remote().guildGet(guildId, 'moderation/bans') : moderation.listBans(await localGuild(guildId)),
+  )
+  ipcMain.handle(IPC.moderationAction, async (_e, guildId: string, op: ModerationOp, isRemote: boolean): Promise<ModerationResult> =>
+    isRemote ? remote().guildPost(guildId, 'moderation/action', { op, actor: actorName() }) : moderation.runModerationOp(await localGuild(guildId), op, actorName()),
+  )
+  ipcMain.handle(IPC.leaveGuild, async (_e, guildId: string, isRemote: boolean): Promise<{ name: string }> =>
+    isRemote ? remote().guildPost(guildId, 'leave') : moderation.leaveGuild(await localGuild(guildId)),
+  )
+  ipcMain.handle(IPC.getGiveawayState, async (_e, guildId: string, isRemote: boolean): Promise<GiveawayState> =>
+    isRemote ? remote().guildGet(guildId, 'giveaways') : getGiveawayState(guildId),
+  )
+  ipcMain.handle(IPC.setGiveawaySettings, async (_e, guildId: string, settings: GiveawaySettings, isRemote: boolean): Promise<GiveawayState> =>
+    isRemote ? remote().guildPost(guildId, 'giveaways/settings', { settings }) : applyGiveawaySettings(await localGuild(guildId), settings),
+  )
+  ipcMain.handle(IPC.giveawayAction, async (_e, guildId: string, action: GiveawayAction, isRemote: boolean): Promise<GiveawayState> => {
+    const withActor = action.kind === 'create' ? { ...action, actor: actorName() ?? undefined } : action
+    return isRemote ? remote().guildPost(guildId, 'giveaways/action', { action: withActor }) : applyGiveawayAction(await localGuild(guildId), withActor)
+  })
+  ipcMain.handle(IPC.getDuties, async (_e, guildId: string, isRemote: boolean): Promise<DutiesState> =>
+    isRemote ? remote().guildGet(guildId, 'duties') : getDutiesState(guildId),
+  )
+  ipcMain.handle(IPC.setDutiesSettings, async (_e, guildId: string, settings: DutiesSettings, isRemote: boolean): Promise<DutiesState> =>
+    isRemote ? remote().guildPost(guildId, 'duties/settings', { settings }) : applyDutiesSettings(await localGuild(guildId), settings),
+  )
+  ipcMain.handle(IPC.dutiesAction, async (_e, guildId: string, action: DutiesAction, isRemote: boolean): Promise<DutiesState> =>
+    isRemote ? remote().guildPost(guildId, 'duties/action', { action }) : applyDutiesAction(await localGuild(guildId), action),
+  )
+
   ipcMain.handle(IPC.getRemoteLisFilms, async (): Promise<LisFilmsState> => remoteApi(requireRemoteCredentials()).getLisFilms())
   ipcMain.handle(IPC.setRemoteLisFilmsSettings, async (_e, settings: LisFilmsSettings): Promise<LisFilmsState> => remoteApi(requireRemoteCredentials()).setLisFilmsSettings(settings))
   ipcMain.handle(IPC.testRemoteLisFilms, async (): Promise<LisFilmsStatus> => remoteApi(requireRemoteCredentials()).testLisFilms())

@@ -14,6 +14,8 @@ import { handleProfileButtons } from './profileCommand'
 import { handleWeeklyReportButtons, startWeeklyReportLoop } from './weeklyReport'
 import { handleActivityAutocomplete, handleActivityButtons, startActivityLoop } from './activities'
 import { handleLisFilmsAutocomplete, handleLisFilmsInteraction } from './lisfilms'
+import { handleActivityCoverButtons } from './activityCover'
+import { handleDutiesInteraction } from './duties'
 import {
   handleVerificationButtons,
   handleVerificationChannelDelete,
@@ -133,6 +135,16 @@ class DiscordManager {
         await handleWeeklyReportButtons(interaction).catch((err) => {
           if (isAlreadyAcknowledgedError(err)) return
           console.error('Erro a processar botão do relatório:', err)
+        })
+        await handleActivityCoverButtons(interaction).catch((err) => {
+          if (isAlreadyAcknowledgedError(err)) return
+          console.error('Erro a processar botão do dono/supervisor:', err)
+        })
+      }
+      if (interaction.isButton() || interaction.isStringSelectMenu()) {
+        await handleDutiesInteraction(interaction).catch((err) => {
+          if (isAlreadyAcknowledgedError(err)) return
+          console.error('Erro no painel de funções:', err)
         })
       }
       if (interaction.isStringSelectMenu()) {

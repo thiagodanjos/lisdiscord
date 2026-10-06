@@ -322,6 +322,22 @@ export type EmbedTemplateKind =
   | 'lisfilmsGame'
   | 'lisfilmsList'
   | 'lisfilmsSummary'
+  | 'giveawayStart'
+  | 'giveawayEnded'
+  | 'giveawayWinners'
+  | 'giveawayReroll'
+  | 'giveawayNoEntrants'
+  | 'giveawayWinnerDm'
+  | 'activityOwnerAsk'
+  | 'activityOwnerConfirmed'
+  | 'activityOwnerDeclined'
+  | 'activityCoverCall'
+  | 'activityCoverTaken'
+  | 'activityCoverUncovered'
+  | 'dutiesPanel'
+  | 'dutiesSummary'
+  | 'dutiesMine'
+  | 'dutyDetail'
 
 export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'pontosBoard',
@@ -367,6 +383,22 @@ export const EMBED_TEMPLATE_KINDS: EmbedTemplateKind[] = [
   'lisfilmsGame',
   'lisfilmsList',
   'lisfilmsSummary',
+  'giveawayStart',
+  'giveawayEnded',
+  'giveawayWinners',
+  'giveawayReroll',
+  'giveawayNoEntrants',
+  'giveawayWinnerDm',
+  'activityOwnerAsk',
+  'activityOwnerConfirmed',
+  'activityOwnerDeclined',
+  'activityCoverCall',
+  'activityCoverTaken',
+  'activityCoverUncovered',
+  'dutiesPanel',
+  'dutiesSummary',
+  'dutiesMine',
+  'dutyDetail',
 ]
 
 /** Tokens disponíveis nas mensagens que o bot manda quando alguém se justifica (ou pede remoção). */
@@ -402,7 +434,25 @@ export interface MemberSearchResult {
   isBot: boolean
 }
 
-export type ModerationAction = 'ban' | 'kick' | 'timeout' | 'removeTimeout'
+export type ModerationAction =
+  | 'ban'
+  | 'unban'
+  | 'kick'
+  | 'timeout'
+  | 'removeTimeout'
+  | 'addRole'
+  | 'removeRole'
+  | 'nickname'
+  | 'warn'
+  | 'voiceDisconnect'
+  | 'voiceMute'
+  | 'voiceDeafen'
+  | 'slowmode'
+  | 'purge'
+  | 'massRole'
+  | 'createRole'
+  | 'editRole'
+  | 'deleteRole'
 
 export type TimeoutDuration = 60_000 | 300_000 | 600_000 | 3_600_000 | 86_400_000 | 604_800_000
 
@@ -414,6 +464,10 @@ export interface ModerationLogEntry {
   targetTag: string
   reason: string | null
   date: string
+  /** Pormenor extra (ex.: o cargo dado, a duração do castigo). */
+  detail?: string | null
+  /** Quem fez (utilizador da app). */
+  actor?: string | null
 }
 
 // ==========================================================================
@@ -432,8 +486,89 @@ export interface Giveaway {
   createdAt: string
   endsAt: string
   ended: boolean
+  /** Nomes dos vencedores (para mostrar). */
   winners: string[]
+  /** Descrição opcional (aparece em {descricao}). */
+  description?: string
+  /** Como se participa neste sorteio (fixado no momento da criação). */
+  entryMode?: GiveawayEntryMode
+  /** Participantes (modo botão). */
+  entrants?: string[]
+  /** IDs dos vencedores atuais (o reroll exclui quem já ganhou). */
+  winnerIds?: string[]
+  /** Todos os que já ganharam (incluindo rerolls anteriores). */
+  pastWinnerIds?: string[]
+  hostTag?: string
+  /** Mensagem do anúncio dos vencedores. */
+  resultMessageId?: string | null
 }
+
+export type GiveawayEntryMode = 'button' | 'reaction'
+
+/** Uma mensagem do sorteio: texto normal por cima e, opcionalmente, o embed (personalizável). */
+export interface GiveawayMessage {
+  embed: boolean
+  content: string
+}
+
+export interface GiveawaySettings {
+  entryMode: GiveawayEntryMode
+  reactionEmoji: string
+  joinButton: CustomButton
+  participantsButton: CustomButton
+  rerollButton: CustomButton
+  /** Quem pode participar (vazio = toda a gente). */
+  requiredRoleIds: string[]
+  /** Quem pode rerolar/terminar pelos botões, além de Gerir servidor. */
+  managerRoleIds: string[]
+  mentionRoleId: string | null
+  /** Segundo clique no botão = sair do sorteio. */
+  allowLeave: boolean
+  dmWinners: boolean
+  start: GiveawayMessage
+  ended: GiveawayMessage
+  winners: GiveawayMessage
+  reroll: GiveawayMessage
+  noEntrants: GiveawayMessage
+  winnerDm: GiveawayMessage
+  /** Linha de cada participante na lista (botão Participantes) — {posicao}, {membro}. */
+  participantLine: string
+  replyJoined: string
+  replyLeft: string
+  replyAlready: string
+  replyEnded: string
+  replyNoRole: string
+  replyNoPermission: string
+  replyRerollDone: string
+  replyRerollEmpty: string
+  replyNoParticipants: string
+}
+
+export interface GiveawayState {
+  settings: GiveawaySettings
+  giveaways: Giveaway[]
+  message?: string
+}
+
+export type GiveawayAction =
+  | { kind: 'create'; channelId: string; prize: string; description: string; durationMs: number; winnerCount: number; actor?: string }
+  | { kind: 'end'; id: string }
+  | { kind: 'reroll'; id: string }
+  | { kind: 'delete'; id: string }
+
+export const GIVEAWAY_PLACEHOLDERS = [
+  '{premio}',
+  '{descricao}',
+  '{vencedores}',
+  '{ganhadores}',
+  '{participantes}',
+  '{termina}',
+  '{terminaData}',
+  '{criador}',
+  '{emoji}',
+  '{link}',
+  '{servidor}',
+] as const
 
 // ==========================================================================
 // Jogos (slash commands)
@@ -1129,6 +1264,33 @@ export interface ActivityPerson {
 
 export type ActivityStatus = 'scheduled' | 'cancelled' | 'done'
 
+/**
+ * asked = o dono recebeu a DM e ainda não respondeu · confirmed = o dono confirmou ·
+ * searching = à procura de um supervisor (DMs enviadas) · covered = um supervisor assumiu ·
+ * uncovered = começou sem ninguém assumir.
+ */
+export type ActivityCoverState = 'asked' | 'confirmed' | 'searching' | 'covered' | 'uncovered'
+
+export interface ActivityMessageRef {
+  channelId: string
+  messageId: string
+}
+
+export interface ActivityCover {
+  state: ActivityCoverState
+  askedAt: string
+  ownerId: string | null
+  ownerTag: string | null
+  ownerMessage: ActivityMessageRef | null
+  /** As mensagens de chamada aos supervisores (DMs + mensagem geral) — todas mudam quando alguém assume. */
+  messages: ActivityMessageRef[]
+  /** Porque se foi à procura: o dono disse que não pode, não respondeu, ou não havia dono. */
+  reason: 'declined' | 'noAnswer' | 'noOwner' | 'manual' | null
+  escalatedAt: string | null
+  coveredBy: ActivityPerson | null
+  /** Quantos supervisores receberam a DM. */
+  notified: number
+}
 export interface Activity {
   id: string
   guildId: string
@@ -1157,6 +1319,8 @@ export interface Activity {
   messageId: string | null
   /** Lembretes já enviados (minutos antes). */
   remindersSent: number[]
+  /** Confirmação do dono e, se ele não puder, a procura de um supervisor. */
+  cover?: ActivityCover | null
   createdByTag: string
   createdAt: string
   updatedAt: string
@@ -1238,6 +1402,36 @@ export interface CalendarSettings {
   replyConflict: string
   replyNoPermission: string
   replyClosed: string
+  /** ---- Dono da mov + supervisores ---- */
+  coverEnabled: boolean
+  /** Minutos antes do início em que o dono recebe a DM a perguntar se vai conseguir. */
+  coverAskMinutes: number
+  /** Se o dono não responder em X minutos, vai-se logo à procura de um supervisor (0 = espera até ao início). */
+  coverOwnerTimeoutMinutes: number
+  /** Só estas categorias (vazio = todas). */
+  coverCategoryIds: string[]
+  /** Quem é supervisor (recebe a DM e pode assumir). */
+  supervisorRoleIds: string[]
+  coverDmSupervisors: boolean
+  /** Canal da mensagem geral para os supervisores (opcional). */
+  coverChannelId: string | null
+  coverMentionRole: boolean
+  /** Avisar no início se ninguém assumiu. */
+  coverAlertAtStart: boolean
+  ownerConfirmButton: CustomButton
+  ownerDeclineButton: CustomButton
+  supervisorTakeButton: CustomButton
+  replyOwnerConfirmed: string
+  replyOwnerDeclined: string
+  replyTaken: string
+  replyAlreadyTaken: string
+  replyNotSupervisor: string
+  replyCoverClosed: string
+  /** O {motivo} da chamada aos supervisores. */
+  coverReasonDeclined: string
+  coverReasonNoAnswer: string
+  coverReasonNoOwner: string
+  coverReasonManual: string
 }
 
 export interface CalendarState {
@@ -1252,6 +1446,9 @@ export type ActivityAction =
   | { kind: 'repost'; id: string }
   | { kind: 'removePerson'; id: string; userId: string }
   | { kind: 'refreshBoard' }
+  | { kind: 'coverAsk'; id: string }
+  | { kind: 'coverEscalate'; id: string }
+  | { kind: 'coverReset'; id: string }
 
 export const ACTIVITY_CARD_PLACEHOLDERS = [
   '{titulo}',
@@ -1273,6 +1470,23 @@ export const ACTIVITY_CARD_PLACEHOLDERS = [
   '{vagasOrganizadores}',
   '{indisponiveis}',
   '{estado}',
+  '{servidor}',
+] as const
+export const ACTIVITY_COVER_PLACEHOLDERS = [
+  '{titulo}',
+  '{numero}',
+  '{categoria}',
+  '{emoji}',
+  '{data}',
+  '{hora}',
+  '{inicio}',
+  '{relativo}',
+  '{local}',
+  '{dono}',
+  '{supervisor}',
+  '{supervisores}',
+  '{motivo}',
+  '{link}',
   '{servidor}',
 ] as const
 export const ACTIVITY_BOARD_PLACEHOLDERS = ['{agenda}', '{dias}', '{total}', '{atualizado}', '{servidor}'] as const
@@ -1373,3 +1587,171 @@ export interface ServerLogSettings {
 export const LOG_DELETE_PLACEHOLDERS = ['{autor}', '{nomeAutor}', '{avatarAutor}', '{idAutor}', '{canal}', '{conteudo}', '{anexos}', '{apagadaPor}', '{enviadaEm}', '{idMensagem}'] as const
 export const LOG_EDIT_PLACEHOLDERS = ['{autor}', '{nomeAutor}', '{avatarAutor}', '{idAutor}', '{canal}', '{antes}', '{depois}', '{link}'] as const
 export const LOG_POINTS_PLACEHOLDERS = ['{membro}', '{nomeMembro}', '{acao}', '{quantidade}', '{total}', '{autor}', '{nota}'] as const
+
+// ==========================================================================
+// Moderação (painel completo na app)
+// ==========================================================================
+
+export interface ModerationRole extends RolePickerEntry {
+  position: number
+  memberCount: number
+  /** Cargo de integração (bots/boost) — não se pode dar nem tirar. */
+  managed: boolean
+  /** O bot consegue dar/tirar (está abaixo do cargo mais alto do bot). */
+  editable: boolean
+  hoist: boolean
+  mentionable: boolean
+}
+
+export interface ModerationMember {
+  id: string
+  tag: string
+  displayName: string
+  nickname: string | null
+  avatarUrl: string | null
+  isBot: boolean
+  isOwner: boolean
+  timedOutUntil: string | null
+  joinedAt: string | null
+  createdAt: string
+  roleIds: string[]
+  /** Em que call está (se estiver). */
+  voiceChannelId: string | null
+  voiceChannelName: string | null
+  serverMuted: boolean
+  serverDeafened: boolean
+  kickable: boolean
+  bannable: boolean
+  moderatable: boolean
+  manageable: boolean
+}
+
+export interface ModerationBan {
+  userId: string
+  tag: string
+  avatarUrl: string | null
+  reason: string | null
+}
+
+export interface ModerationState {
+  roles: ModerationRole[]
+  log: ModerationLogEntry[]
+  botHighestPosition: number
+}
+
+export type ModerationOp =
+  | { kind: 'ban'; userId: string; reason: string; deleteMessageSeconds: number }
+  | { kind: 'unban'; userId: string; reason: string }
+  | { kind: 'kick'; userId: string; reason: string }
+  | { kind: 'timeout'; userId: string; durationMs: number; reason: string }
+  | { kind: 'removeTimeout'; userId: string }
+  | { kind: 'addRole'; userId: string; roleId: string; reason: string }
+  | { kind: 'removeRole'; userId: string; roleId: string; reason: string }
+  | { kind: 'nickname'; userId: string; nickname: string }
+  | { kind: 'warn'; userId: string; reason: string }
+  | { kind: 'voiceDisconnect'; userId: string }
+  | { kind: 'voiceMute'; userId: string; on: boolean }
+  | { kind: 'voiceDeafen'; userId: string; on: boolean }
+  | { kind: 'lockChannel'; channelId: string }
+  | { kind: 'unlockChannel'; channelId: string }
+  | { kind: 'slowmode'; channelId: string; seconds: number }
+  | { kind: 'purge'; channelId: string; count: number; userId?: string | null }
+  | { kind: 'massRole'; roleId: string; mode: 'add' | 'remove'; filterRoleId: string | null }
+  | { kind: 'createRole'; name: string; color: string; hoist: boolean; mentionable: boolean }
+  | { kind: 'editRole'; roleId: string; name: string; color: string; hoist: boolean; mentionable: boolean }
+  | { kind: 'deleteRole'; roleId: string }
+
+export interface ModerationResult {
+  message: string
+  member?: ModerationMember | null
+  state?: ModerationState
+}
+
+// ==========================================================================
+// Funções da gestão (painel com quem cuida de quê)
+// ==========================================================================
+
+export interface DutyAssignee {
+  kind: 'user' | 'role'
+  id: string
+  /** Nome guardado para mostrar na app (e no texto simples). */
+  name: string
+}
+
+export interface DutySubItem {
+  id: string
+  label: string
+  assignees: DutyAssignee[]
+}
+
+export interface Duty {
+  id: string
+  title: string
+  /** Texto extra a seguir ao título (ex.: "em #verificação durante o dia"). */
+  note: string
+  /** Descrição que aparece ao ver a função em detalhe. */
+  description: string
+  assignees: DutyAssignee[]
+  /** Divisões da função (ex.: um responsável por dia da semana). */
+  subItems: DutySubItem[]
+}
+
+export type DutyButtonKind = 'summary' | 'mine' | 'link' | 'message'
+
+export interface DutyPanelButton extends CustomButton {
+  id: string
+  kind: DutyButtonKind
+  /** Para 'link'. */
+  url: string
+  /** Para 'message' — o texto que aparece (só a quem clica). */
+  text: string
+}
+
+export interface DutiesSettings {
+  channelId: string | null
+  channelName: string | null
+  messageId: string | null
+  /** Embed (personalizável) ou texto simples, como uma mensagem normal. */
+  useEmbed: boolean
+  /** Texto do painel quando não é embed — {funcoes}, {servidor}, {atualizado}. */
+  plainTemplate: string
+  /** Linha de cada função — {seta}, {funcao}, {nota}, {responsaveis}, {numero}. */
+  lineFormat: string
+  /** Linha de uma função dividida (com divisões por baixo) — {seta}, {funcao}, {nota}, {numero}. */
+  groupLineFormat: string
+  /** Linha de cada divisão — {item}, {responsaveis}. */
+  subLineFormat: string
+  /** Emoji/seta antes de cada função ({seta}). */
+  arrow: string
+  /** Entre responsáveis. */
+  separator: string
+  emptyAssignee: string
+  /** Linha em branco entre funções. */
+  spacing: boolean
+  /** Menções no painel notificam as pessoas? */
+  pingOnPublish: boolean
+  duties: Duty[]
+  buttons: DutyPanelButton[]
+  /** Menu "escolhe uma função" para ver o detalhe de cada uma. */
+  showSelect: boolean
+  selectPlaceholder: string
+  /** Linha de cada pessoa no resumo — {membro}, {funcoes}, {total}. */
+  summaryLineFormat: string
+  /** Linha de cada função em "as minhas funções" — {seta}, {funcao}, {item}. */
+  mineLineFormat: string
+  replyNoDuties: string
+  /** Respostas do painel só para quem clica. */
+  ephemeral: boolean
+}
+
+export interface DutiesState {
+  settings: DutiesSettings
+  message?: string
+}
+
+export type DutiesAction = { kind: 'publish' } | { kind: 'remove' }
+
+export const DUTIES_PANEL_PLACEHOLDERS = ['{funcoes}', '{total}', '{atualizado}', '{servidor}'] as const
+export const DUTIES_SUMMARY_PLACEHOLDERS = ['{resumo}', '{semResponsavel}', '{total}', '{pessoas}', '{servidor}'] as const
+export const DUTIES_MINE_PLACEHOLDERS = ['{membro}', '{funcoes}', '{total}', '{servidor}'] as const
+export const DUTY_DETAIL_PLACEHOLDERS = ['{funcao}', '{nota}', '{descricao}', '{responsaveis}', '{divisoes}', '{servidor}'] as const

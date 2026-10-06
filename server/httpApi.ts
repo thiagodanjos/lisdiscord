@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import type { Guild } from 'discord.js'
-import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovListOp, type MovListSettings, type VoiceHoursAction, type VoiceHoursSettings, type ProfileSettings, type WeeklyReportAction, type WeeklyReportSettings, type ActivityAction, type ActivityInput, type CalendarSettings, type LisFilmsSettings, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings } from '../shared/types'
+import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovListOp, type MovListSettings, type VoiceHoursAction, type VoiceHoursSettings, type ProfileSettings, type WeeklyReportAction, type WeeklyReportSettings, type ActivityAction, type ActivityInput, type CalendarSettings, type LisFilmsSettings, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings, type ModerationOp, type GiveawayAction, type GiveawaySettings, type DutiesAction, type DutiesSettings } from '../shared/types'
 import { discordManager } from '../electron/discord/client'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
 import { applyJustificationChannel, postJustificationMessage } from '../electron/discord/justifications'
@@ -41,6 +41,8 @@ import { applyLisFilmsSettings, getLisFilmsState, searchLisFilms, testLisFilms }
 import { applyServerLogSettings } from '../electron/discord/serverLogs'
 import * as serverLogsStore from '../electron/store/serverLogs'
 import { listGuildCategories } from '../electron/discord/memberProfile'
+import { applyGiveawayAction, applyGiveawaySettings, getGiveawayState } from '../electron/discord/giveaways'
+import { applyDutiesAction, applyDutiesSettings, getDutiesState } from '../electron/discord/duties'
 
 /** Mesma lógica que o IPC da app usa — atualiza logo a mensagem já publicada quando o template muda. */
 async function refreshEmbedTemplateTarget(guild: Guild, kind: EmbedTemplateKind): Promise<void> {
@@ -175,7 +177,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     (req.method === 'GET' && parts.length === 4 && isGuildRoute && parts[3] === 'categories') ||
     (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'logs' && parts[4] === 'settings') ||
     (req.method === 'POST' && parts.length === 5 && isGuildRoute && parts[3] === 'movlist') ||
-    (req.method === 'POST' && parts.length === 5 && isGuildRoute && (parts[3] === 'voicehours' || parts[3] === 'weeklyreport' || parts[3] === 'calendar'))
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && (parts[3] === 'voicehours' || parts[3] === 'weeklyreport' || parts[3] === 'calendar')) ||
+    (isGuildRoute && parts[3] === 'moderation') ||
+    (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'leave') ||
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && (parts[3] === 'giveaways' || parts[3] === 'duties'))
 
   if (needsConnection && !discordManager.isConnected()) {
     sendJson(res, 503, { error: 'O bot não está ligado à Discord neste momento.' })
@@ -595,6 +600,71 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
         }
         if (parts[4] === 'action' && body.action && typeof body.action.kind === 'string') {
           sendJson(res, 200, await applyActivityAction(guild, body.action))
+          return
+        }
+        sendJson(res, 400, { error: 'Pedido inválido.' })
+        return
+      }
+    }
+
+    // Moderação completa
+    //   GET  /api/guilds/:guildId/moderation
+    //   GET  /api/guilds/:guildId/moderation/bans
+    //   GET  /api/guilds/:guildId/moderation/member/:userId
+    //   POST /api/guilds/:guildId/moderation/action  { op, actor? }
+    if (isGuildRoute && parts[3] === 'moderation') {
+      const guild = await discordManager.getClient().guilds.fetch(parts[2])
+      if (req.method === 'GET' && parts.length === 4) {
+        sendJson(res, 200, await moderation.getModerationState(guild))
+        return
+      }
+      if (req.method === 'GET' && parts.length === 5 && parts[4] === 'bans') {
+        sendJson(res, 200, await moderation.listBans(guild))
+        return
+      }
+      if (req.method === 'GET' && parts.length === 6 && parts[4] === 'member') {
+        sendJson(res, 200, await moderation.getModerationMember(guild, parts[5]))
+        return
+      }
+      if (req.method === 'POST' && parts.length === 5 && parts[4] === 'action') {
+        const body = (await readJsonBody(req)) as { op?: ModerationOp; actor?: unknown }
+        if (!body.op || typeof body.op.kind !== 'string') {
+          sendJson(res, 400, { error: 'Falta o campo "op".' })
+          return
+        }
+        const actor = typeof body.actor === 'string' && body.actor.trim() ? body.actor.trim().slice(0, 64) : 'App'
+        sendJson(res, 200, await moderation.runModerationOp(guild, body.op, actor))
+        return
+      }
+    }
+
+    // POST /api/guilds/:guildId/leave — tira o bot do servidor
+    if (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'leave') {
+      const guild = await discordManager.getClient().guilds.fetch(parts[2])
+      sendJson(res, 200, await moderation.leaveGuild(guild))
+      return
+    }
+
+    // Sorteios · funções da gestão
+    //   GET  /api/guilds/:guildId/{giveaways|duties}
+    //   POST /api/guilds/:guildId/{giveaways|duties}/settings  { settings }
+    //   POST /api/guilds/:guildId/{giveaways|duties}/action    { action }
+    if (isGuildRoute && (parts[3] === 'giveaways' || parts[3] === 'duties')) {
+      const guildId = parts[2]
+      const feature = parts[3]
+      if (req.method === 'GET' && parts.length === 4) {
+        sendJson(res, 200, feature === 'giveaways' ? getGiveawayState(guildId) : getDutiesState(guildId))
+        return
+      }
+      if (req.method === 'POST' && parts.length === 5) {
+        const body = (await readJsonBody(req)) as { settings?: unknown; action?: { kind?: unknown } }
+        const guild = await discordManager.getClient().guilds.fetch(guildId)
+        if (parts[4] === 'settings' && body.settings && typeof body.settings === 'object') {
+          sendJson(res, 200, feature === 'giveaways' ? await applyGiveawaySettings(guild, body.settings as GiveawaySettings) : await applyDutiesSettings(guild, body.settings as DutiesSettings))
+          return
+        }
+        if (parts[4] === 'action' && body.action && typeof body.action.kind === 'string') {
+          sendJson(res, 200, feature === 'giveaways' ? await applyGiveawayAction(guild, body.action as GiveawayAction) : await applyDutiesAction(guild, body.action as DutiesAction))
           return
         }
         sendJson(res, 400, { error: 'Pedido inválido.' })

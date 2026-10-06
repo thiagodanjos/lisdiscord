@@ -64,6 +64,17 @@ import type {
   VerificationEntry,
   VerificationSettings,
   VerificationTicket,
+  DutiesAction,
+  DutiesSettings,
+  DutiesState,
+  GiveawayAction,
+  GiveawaySettings,
+  GiveawayState,
+  ModerationBan,
+  ModerationMember,
+  ModerationOp,
+  ModerationResult,
+  ModerationState,
 } from './types'
 
 /** Nomes dos canais IPC — usados em ambos os lados para nunca ficarem dessincronizados. */
@@ -249,6 +260,18 @@ export const IPC = {
   setRemoteLisFilmsSettings: 'remoteBot:lisfilms:set',
   testRemoteLisFilms: 'remoteBot:lisfilms:test',
   searchRemoteLisFilms: 'remoteBot:lisfilms:search',
+  // Estes recebem `remote` no fim: true = pede ao bot remoto, false = à ligação local.
+  getModerationState: 'moderation2:state',
+  getModerationMember: 'moderation2:member',
+  listModerationBans: 'moderation2:bans',
+  moderationAction: 'moderation2:action',
+  leaveGuild: 'guilds:leave',
+  getGiveawayState: 'giveaways2:state',
+  setGiveawaySettings: 'giveaways2:settings',
+  giveawayAction: 'giveaways2:action',
+  getDuties: 'duties:get',
+  setDutiesSettings: 'duties:settings',
+  dutiesAction: 'duties:action',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -462,4 +485,16 @@ export interface LisDiscordBridge {
   setRemoteLisFilmsSettings(settings: LisFilmsSettings): Promise<LisFilmsState>
   testRemoteLisFilms(): Promise<LisFilmsStatus>
   searchRemoteLisFilms(query: string): Promise<LisFilmsHit[]>
+
+  getModerationState(guildId: string, remote: boolean): Promise<ModerationState>
+  getModerationMember(guildId: string, userId: string, remote: boolean): Promise<ModerationMember>
+  listModerationBans(guildId: string, remote: boolean): Promise<ModerationBan[]>
+  moderationAction(guildId: string, op: ModerationOp, remote: boolean): Promise<ModerationResult>
+  leaveGuild(guildId: string, remote: boolean): Promise<{ name: string }>
+  getGiveawayState(guildId: string, remote: boolean): Promise<GiveawayState>
+  setGiveawaySettings(guildId: string, settings: GiveawaySettings, remote: boolean): Promise<GiveawayState>
+  giveawayAction(guildId: string, action: GiveawayAction, remote: boolean): Promise<GiveawayState>
+  getDuties(guildId: string, remote: boolean): Promise<DutiesState>
+  setDutiesSettings(guildId: string, settings: DutiesSettings, remote: boolean): Promise<DutiesState>
+  dutiesAction(guildId: string, action: DutiesAction, remote: boolean): Promise<DutiesState>
 }

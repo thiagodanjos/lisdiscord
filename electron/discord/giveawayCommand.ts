@@ -1,6 +1,5 @@
 import {
   ActionRowBuilder,
-  type ButtonInteraction,
   ButtonBuilder,
   ButtonStyle,
   ChannelSelectMenuBuilder,
@@ -19,8 +18,9 @@ import {
   TextInputStyle,
 } from 'discord.js'
 import { parseDurationMs } from '../../shared/duration'
-import * as giveawaysStore from '../store/giveaways'
-import { postGiveawayMessage, rerollGiveaway } from './giveaways'
+import { createAndPostGiveaway } from './giveaways'
+
+export { handleGiveawayButtons } from './giveaways'
 
 const SETUP_TIMEOUT_MS = 10 * 60_000
 const MODAL_TIMEOUT_MS = 120_000
@@ -28,7 +28,6 @@ const RESULT_DISPLAY_MS = 8_000
 const CANCEL_DISPLAY_MS = 2_500
 const MIN_DURATION_MS = 30_000
 const MAX_DURATION_MS = 30 * 24 * 60 * 60_000
-const REROLL_PREFIX = 'giveaway:reroll:'
 
 export function sorteioCommandDef(): RESTPostAPIChatInputApplicationCommandsJSONBody {
   return new SlashCommandBuilder()
@@ -36,53 +35,6 @@ export function sorteioCommandDef(): RESTPostAPIChatInputApplicationCommandsJSON
     .setDescription('Cria um sorteio interativo por reações neste servidor')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .toJSON()
-}
-
-/** Trata o clique no botão "Rerolar vencedor(es)" que fica na mensagem de conclusão de qualquer sorteio — pode ser clicado muito depois do sorteio ter terminado, por isso não usa um collector local. */
-export async function handleGiveawayButtons(interaction: ButtonInteraction): Promise<boolean> {
-  if (!interaction.customId.startsWith(REROLL_PREFIX)) return false
-
-  const guild = interaction.guild
-  if (!guild) {
-    await interaction.reply({ content: '❌ Este botão só funciona dentro de um servidor.', ephemeral: true })
-    return true
-  }
-
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-    await interaction.reply({ content: '❌ Só quem pode gerir o servidor pode fazer reroll.', ephemeral: true })
-    return true
-  }
-
-  const id = interaction.customId.slice(REROLL_PREFIX.length)
-  const giveaway = giveawaysStore.getGiveaway(id)
-  if (!giveaway) {
-    await interaction.reply({ content: '❌ Já não encontro este sorteio (pode ter sido apagado).', ephemeral: true })
-    return true
-  }
-  if (!giveaway.ended || !giveaway.messageId) {
-    await interaction.reply({ content: '❌ Este sorteio ainda não terminou — espera que termine antes de rerolar.', ephemeral: true })
-    return true
-  }
-
-  await interaction.deferReply({ ephemeral: true })
-  try {
-    const winners = await rerollGiveaway(
-      guild,
-      giveaway.channelId,
-      giveaway.messageId,
-      giveaway.prize,
-      giveaway.winnerCount,
-      giveaway.id,
-      giveaway.winners,
-    )
-    giveawaysStore.markConcluded(giveaway.id, winners)
-    await interaction.editReply({
-      content: winners.length > 0 ? '🔁 Reroll feito — o novo resultado foi anunciado no canal.' : '🔁 Reroll feito, mas não havia mais participantes elegíveis.',
-    })
-  } catch (err) {
-    await interaction.editReply({ content: `❌ Não consegui fazer o reroll: ${err instanceof Error ? err.message : 'erro desconhecido'}` })
-  }
-  return true
 }
 
 export async function handleGiveawayCommand(interaction: ChatInputCommandInteraction): Promise<boolean> {
@@ -228,6 +180,15 @@ async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild
             ),
             new ActionRowBuilder<TextInputBuilder>().addComponents(
               new TextInputBuilder()
+                .setCustomId('descricao')
+                .setLabel('Descrição (opcional)')
+                .setStyle(TextInputStyle.Paragraph)
+                .setRequired(false)
+                .setMaxLength(1500)
+                .setPlaceholder('Regras, como receber o prémio…'),
+            ),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder()
                 .setCustomId('vencedores')
                 .setLabel('Número de vencedores (padrão: 1)')
                 .setStyle(TextInputStyle.Short)
@@ -251,6 +212,7 @@ async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild
           const titleInput = submitted.fields.getTextInputValue('titulo').trim()
           const durationInput = submitted.fields.getTextInputValue('duracao').trim()
           const winnersInput = submitted.fields.getTextInputValue('vencedores').trim()
+          const descriptionInput = submitted.fields.getTextInputValue('descricao').trim()
 
           const parsedDuration = parseDuration(durationInput)
           const parsedWinners = winnersInput === '' ? 1 : parseNonNegativeInt(winnersInput)
@@ -269,8 +231,8 @@ async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild
             return
           }
 
-          if (parsedWinners === null || parsedWinners < 1) {
-            errorText = 'O número de vencedores tem de ser 1 ou mais.'
+          if (parsedWinners === null || parsedWinners < 1 || parsedWinners > 50) {
+            errorText = 'O número de vencedores tem de ser entre 1 e 50.'
             await updateFromModal(submitted, interaction, { embeds: [errorEmbed()], components: [errorRow()] })
             await loop(msg)
             return
@@ -281,18 +243,15 @@ async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild
             components: [],
           })
 
-          const endsAt = new Date(Date.now() + parsedDuration).toISOString()
-          const messageId = await postGiveawayMessage(guild, channelId as string, titleInput, endsAt, parsedWinners)
-          giveawaysStore.createGiveaway({
-            guildId: guild.id,
-            guildName: guild.name,
+          const created = await createAndPostGiveaway(guild, {
             channelId: channelId as string,
-            channelName: channelName ?? 'canal',
-            messageId,
             prize: titleInput,
+            description: descriptionInput,
+            durationMs: parsedDuration,
             winnerCount: parsedWinners,
-            endsAt,
+            hostTag: `<@${interaction.user.id}>`,
           })
+          const endsAt = created.endsAt
 
           const resultEmbed = new EmbedBuilder()
             .setColor(0x3ba55c)

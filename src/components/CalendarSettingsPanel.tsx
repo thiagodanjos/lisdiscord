@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bell, LayoutList, MessageSquareText, MousePointerClick, Palette, Plus, ShieldCheck, Tags, Trash2, X } from 'lucide-react'
+import { Bell, LayoutList, MessageSquareText, MousePointerClick, Palette, Plus, ShieldCheck, Siren, Tags, Trash2, X } from 'lucide-react'
 import { Button, Card, Toggle } from './ui'
 import { EmojiTextInput } from './EmojiTextInput'
 import { CustomButtonEditor } from './CustomButtonEditor'
@@ -94,6 +94,28 @@ const REPLY_TEXTS: { key: TextKey; label: string }[] = [
   { key: 'replyConflict', label: 'Conflito de horário ({outra} = a outra atividade)' },
   { key: 'replyNoPermission', label: 'Sem permissão (cargo)' },
   { key: 'replyClosed', label: 'Atividade fechada' },
+]
+
+const COVER_TEXTS: { key: TextKey; label: string }[] = [
+  { key: 'replyOwnerConfirmed', label: 'Dono confirmou' },
+  { key: 'replyOwnerDeclined', label: 'Dono disse que não consegue' },
+  { key: 'replyTaken', label: 'Supervisor assumiu' },
+  { key: 'replyAlreadyTaken', label: 'Já foi assumida ({supervisor})' },
+  { key: 'replyNotSupervisor', label: 'Não é supervisor / não é o dono' },
+  { key: 'replyCoverClosed', label: 'Atividade já terminou' },
+  { key: 'coverReasonDeclined', label: '{motivo}: o dono não pode' },
+  { key: 'coverReasonNoAnswer', label: '{motivo}: o dono não respondeu' },
+  { key: 'coverReasonNoOwner', label: '{motivo}: sem dono' },
+  { key: 'coverReasonManual', label: '{motivo}: pedido pela app' },
+]
+
+const COVER_TEMPLATES: { kind: EmbedTemplateKind; label: string }[] = [
+  { kind: 'activityOwnerAsk', label: 'DM ao dono' },
+  { kind: 'activityOwnerConfirmed', label: 'Dono confirmou' },
+  { kind: 'activityOwnerDeclined', label: 'Dono não pode' },
+  { kind: 'activityCoverCall', label: 'Chamada aos supervisores' },
+  { kind: 'activityCoverTaken', label: 'Assumida' },
+  { kind: 'activityCoverUncovered', label: 'Sem supervisor' },
 ]
 
 export function CalendarSettingsPanel({
@@ -362,6 +384,81 @@ export function CalendarSettingsPanel({
           </div>
         </Card>
       </div>
+
+      <Card className={`flex flex-col gap-4 ${draft.coverEnabled ? 'border-success/40' : ''}`}>
+        <SectionTitle
+          icon={Siren}
+          title="Dono da mov + supervisores"
+          subtitle="Antes de começar, o bot pergunta por DM ao dono (o responsável) se vai conseguir. Se não puder — ou não responder, ou não houver dono — manda DM a todos os supervisores; o primeiro que carregar em Eu assumo fica com a mov e as mensagens mudam para todos."
+          action={<Toggle checked={draft.coverEnabled} onChange={(v) => set('coverEnabled', v)} label={draft.coverEnabled ? 'Ligado' : 'Desligado'} />}
+        />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div>
+            <Label>Perguntar ao dono (min antes)</Label>
+            <input type="number" min={5} max={10080} value={draft.coverAskMinutes} onChange={(e) => set('coverAskMinutes', Number(e.target.value))} className={`mt-1.5 ${inputClass}`} />
+          </div>
+          <div>
+            <Label>Sem resposta em (min)</Label>
+            <input type="number" min={0} max={10080} value={draft.coverOwnerTimeoutMinutes} onChange={(e) => set('coverOwnerTimeoutMinutes', Number(e.target.value))} className={`mt-1.5 ${inputClass}`} />
+            <Hint>Depois disto vai aos supervisores. 0 = espera até à hora de início.</Hint>
+          </div>
+          <div>
+            <Label>Mensagem geral (canal, opcional)</Label>
+            <ChannelSelect value={draft.coverChannelId} onChange={(v) => set('coverChannelId', v)} channels={channels} empty="Só por DM" />
+          </div>
+          <div className="flex flex-col justify-end gap-2">
+            <Toggle checked={draft.coverDmSupervisors} onChange={(v) => set('coverDmSupervisors', v)} label="DM a cada supervisor" />
+            <Toggle checked={draft.coverMentionRole} onChange={(v) => set('coverMentionRole', v)} label="Marcar o cargo na mensagem geral" />
+            <Toggle checked={draft.coverAlertAtStart} onChange={(v) => set('coverAlertAtStart', v)} label="Avisar se começar sem ninguém" />
+          </div>
+        </div>
+        <div>
+          <Label>Cargos de supervisor (recebem a DM e podem assumir)</Label>
+          <RoleChips roles={roles} selected={draft.supervisorRoleIds} onChange={(ids) => set('supervisorRoleIds', ids)} />
+        </div>
+        <div>
+          <Label>Só nestas categorias (nenhuma = todas)</Label>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {draft.categories.map((c) => {
+              const on = draft.coverCategoryIds.includes(c.id)
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => set('coverCategoryIds', on ? draft.coverCategoryIds.filter((x) => x !== c.id) : [...draft.coverCategoryIds, c.id])}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${on ? 'border-accent bg-accent-soft text-text' : 'border-border text-muted hover:text-text'}`}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ background: c.color }} />
+                  {c.emoji} {c.name}
+                  {on && <span>✓</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <CustomButtonEditor title="Dono: Vou fazer" value={draft.ownerConfirmButton} fallback="Vou fazer" emojis={emojis} onChange={(v) => set('ownerConfirmButton', v)} />
+          <CustomButtonEditor title="Dono: Não vou conseguir" value={draft.ownerDeclineButton} fallback="Não vou conseguir" emojis={emojis} onChange={(v) => set('ownerDeclineButton', v)} />
+          <CustomButtonEditor title="Supervisor: Eu assumo" value={{ ...draft.supervisorTakeButton, show: true }} fallback="Eu assumo" emojis={emojis} onChange={(v) => set('supervisorTakeButton', { ...v, show: true })} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {COVER_TEMPLATES.map((t) => (
+            <Button key={t.kind} variant="dark" onClick={() => onEditTemplate(t.kind)}>
+              <Palette size={13} /> {t.label}
+            </Button>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {COVER_TEXTS.map((f) => (
+            <div key={f.key}>
+              <Label>{f.label}</Label>
+              <div className="mt-1.5">
+                <EmojiTextInput value={draft[f.key] as string} onChange={(v) => set(f.key, v)} emojis={emojis} maxLength={500} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <Card className="flex flex-col gap-4">
         <SectionTitle icon={MousePointerClick} title="Botões de cada atividade" subtitle="Mostrar ou esconder, texto, emoji (normal ou do bot) e cor." />

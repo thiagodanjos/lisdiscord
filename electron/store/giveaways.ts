@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { Giveaway } from '../../shared/types'
+import type { Giveaway, GiveawaySettings } from '../../shared/types'
+import { defaultGiveawaySettings } from '../../shared/giveaways'
 import { readJsonFile, writeJsonFile } from './fileStore'
 import { paths } from './paths'
 
@@ -15,19 +16,31 @@ export function listGiveaways(): Giveaway[] {
   return readAll().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
 }
 
-export function createGiveaway(input: Omit<Giveaway, 'id' | 'createdAt' | 'ended' | 'winners'>): Giveaway {
-  const giveaway: Giveaway = { ...input, id: randomUUID(), createdAt: new Date().toISOString(), ended: false, winners: [] }
+export function createGiveaway(input: Omit<Giveaway, 'id' | 'createdAt' | 'ended' | 'winners'> & { id?: string }): Giveaway {
+  const giveaway: Giveaway = { ...input, id: input.id ?? randomUUID(), createdAt: new Date().toISOString(), ended: false, winners: [] }
   writeAll([giveaway, ...readAll()])
   return giveaway
 }
 
-export function markConcluded(id: string, winners: string[]): Giveaway | null {
+export function markConcluded(id: string, winners: string[], winnerIds?: string[]): Giveaway | null {
+  return updateGiveaway(id, (g) => {
+    g.ended = true
+    g.winners = winners
+    if (winnerIds) {
+      g.winnerIds = winnerIds
+      g.pastWinnerIds = [...new Set([...(g.pastWinnerIds ?? []), ...winnerIds])]
+    }
+  })
+}
+
+/** Aplica uma alteração lida de fresco (evita perder cliques simultâneos no botão Participar). */
+export function updateGiveaway(id: string, change: (g: Giveaway) => void): Giveaway | null {
   const all = readAll()
-  const idx = all.findIndex((g) => g.id === id)
-  if (idx === -1) return null
-  all[idx] = { ...all[idx], ended: true, winners }
+  const g = all.find((x) => x.id === id)
+  if (!g) return null
+  change(g)
   writeAll(all)
-  return all[idx]
+  return g
 }
 
 export function deleteGiveaway(id: string): void {
@@ -36,4 +49,35 @@ export function deleteGiveaway(id: string): void {
 
 export function getGiveaway(id: string): Giveaway | null {
   return readAll().find((g) => g.id === id) ?? null
+}
+
+// ---- Definições por servidor ----
+
+function readSettings(): Record<string, Partial<GiveawaySettings>> {
+  return readJsonFile<Record<string, Partial<GiveawaySettings>>>(paths.giveawaySettingsFile, {})
+}
+
+export function getGiveawaySettings(guildId: string): GiveawaySettings {
+  const d = defaultGiveawaySettings()
+  const saved = readSettings()[guildId] ?? {}
+  return {
+    ...d,
+    ...saved,
+    joinButton: { ...d.joinButton, ...saved.joinButton },
+    participantsButton: { ...d.participantsButton, ...saved.participantsButton },
+    rerollButton: { ...d.rerollButton, ...saved.rerollButton },
+    start: { ...d.start, ...saved.start },
+    ended: { ...d.ended, ...saved.ended },
+    winners: { ...d.winners, ...saved.winners },
+    reroll: { ...d.reroll, ...saved.reroll },
+    noEntrants: { ...d.noEntrants, ...saved.noEntrants },
+    winnerDm: { ...d.winnerDm, ...saved.winnerDm },
+  }
+}
+
+export function saveGiveawaySettings(guildId: string, settings: GiveawaySettings): GiveawaySettings {
+  const all = readSettings()
+  all[guildId] = settings
+  writeJsonFile(paths.giveawaySettingsFile, all)
+  return getGiveawaySettings(guildId)
 }

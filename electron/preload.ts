@@ -202,6 +202,17 @@ const bridge: LisDiscordBridge = {
   setRemoteLisFilmsSettings: (settings) => ipcRenderer.invoke(IPC.setRemoteLisFilmsSettings, settings),
   testRemoteLisFilms: () => ipcRenderer.invoke(IPC.testRemoteLisFilms),
   searchRemoteLisFilms: (query) => ipcRenderer.invoke(IPC.searchRemoteLisFilms, query),
+  getModerationState: (guildId, remote) => ipcRenderer.invoke(IPC.getModerationState, guildId, remote),
+  getModerationMember: (guildId, userId, remote) => ipcRenderer.invoke(IPC.getModerationMember, guildId, userId, remote),
+  listModerationBans: (guildId, remote) => ipcRenderer.invoke(IPC.listModerationBans, guildId, remote),
+  moderationAction: (guildId, op, remote) => ipcRenderer.invoke(IPC.moderationAction, guildId, op, remote),
+  leaveGuild: (guildId, remote) => ipcRenderer.invoke(IPC.leaveGuild, guildId, remote),
+  getGiveawayState: (guildId, remote) => ipcRenderer.invoke(IPC.getGiveawayState, guildId, remote),
+  setGiveawaySettings: (guildId, settings, remote) => ipcRenderer.invoke(IPC.setGiveawaySettings, guildId, settings, remote),
+  giveawayAction: (guildId, action, remote) => ipcRenderer.invoke(IPC.giveawayAction, guildId, action, remote),
+  getDuties: (guildId, remote) => ipcRenderer.invoke(IPC.getDuties, guildId, remote),
+  setDutiesSettings: (guildId, settings, remote) => ipcRenderer.invoke(IPC.setDutiesSettings, guildId, settings, remote),
+  dutiesAction: (guildId, action, remote) => ipcRenderer.invoke(IPC.dutiesAction, guildId, action, remote),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)
