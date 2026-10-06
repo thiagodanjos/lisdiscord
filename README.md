@@ -23,6 +23,8 @@ Isto abre a app já em modo demonstração — dá para navegar tudo sem prepara
 
 ## Novidades da 3.1
 
+- **3.1.2** — o painel das Funções da gestão passa a sair em **embed** por omissão, com o botão **Personalizar o embed** logo na pré-visualização (cor, autor, título, descrição, campos, imagem, miniatura, rodapé) e a escolha Embed / Texto simples ali mesmo.
+
 - **3.1.1** — o assistente do `/sorteio` também é personalizável na app (Sorteios → Personalizar → Assistente do /sorteio): os embeds de cada passo, o menu de canais, os botões Escrever detalhes / Voltar / **Cancelar**, o formulário (título, campos e exemplos), os erros e a mensagem de sorteio criado.
 
 - **Moderação completa na app** — procura um membro (nome ou ID) e dá/tira cargos, muda o apelido, castiga (timeout), tira da call, silencia/ensurdece, avisa por DM, expulsa ou bane. Separadores para **Cargos** (criar, editar cor/nome, apagar, dar/tirar cargo em massa), **Banidos** (lista, desbanir, banir por ID), **Canais** (bloquear, modo lento, apagar mensagens) e o **Registo** com quem fez o quê. Funciona com o bot remoto.

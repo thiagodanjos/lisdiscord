@@ -43,7 +43,7 @@ export function defaultDutiesSettings(): DutiesSettings {
     channelId: null,
     channelName: null,
     messageId: null,
-    useEmbed: false,
+    useEmbed: true,
     plainTemplate: '**Funções da Gestão** 🐼\n\n{funcoes}',
     lineFormat: '{seta} {funcao}{nota} • {responsaveis}',
     groupLineFormat: '{seta} {funcao}{nota}:',

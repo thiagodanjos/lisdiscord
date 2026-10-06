@@ -429,7 +429,7 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     timestamp: false,
   }),
   dutiesPanel: draft({
-    title: 'Funções da Gestão',
+    title: 'Funções da Gestão 🐼',
     description: '{funcoes}',
     color: '#1ED760',
     footer: 'Atualizado {atualizado}',

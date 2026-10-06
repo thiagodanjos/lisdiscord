@@ -431,9 +431,31 @@ export default function Duties() {
 
         {/* ---- Pré-visualização ---- */}
         <Card className="flex flex-col gap-3 self-start xl:sticky xl:top-4">
-          <p className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.14em] text-faint uppercase">
-            <Eye size={12} /> Pré-visualização do painel
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.14em] text-faint uppercase">
+              <Eye size={12} /> Pré-visualização do painel
+            </p>
+            <div className="inline-flex gap-1 rounded-lg border border-border bg-black/30 p-0.5">
+              {[
+                { on: true, label: 'Embed' },
+                { on: false, label: 'Texto simples' },
+              ].map((o) => (
+                <button
+                  key={o.label}
+                  type="button"
+                  onClick={() => set('useEmbed', o.on)}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${draft.useEmbed === o.on ? 'bg-accent-soft text-accent' : 'text-faint hover:text-muted'}`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {draft.useEmbed && (
+            <Button onClick={() => setEditing(TEMPLATES[0])} disabled={!guildId}>
+              <Palette size={14} /> Personalizar o embed (cor, título, imagem, rodapé…)
+            </Button>
+          )}
           {draft.useEmbed && panelTemplate ? (
             <EmbedPreview draft={sub({ ...panelTemplate, description: previewText(panelTemplate.description) }, { ...panelValues, funcoes: previewText(funcoes) })} botName="LisDiscord" />
           ) : (
