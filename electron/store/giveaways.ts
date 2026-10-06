@@ -72,6 +72,7 @@ export function getGiveawaySettings(guildId: string): GiveawaySettings {
     reroll: { ...d.reroll, ...saved.reroll },
     noEntrants: { ...d.noEntrants, ...saved.noEntrants },
     winnerDm: { ...d.winnerDm, ...saved.winnerDm },
+    participants: { ...d.participants, ...saved.participants },
     wizard: {
       ...d.wizard,
       ...saved.wizard,

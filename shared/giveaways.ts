@@ -20,6 +20,8 @@ export function defaultGiveawaySettings(): GiveawaySettings {
     reroll: { embed: true, content: '🔁 {ganhadores}' },
     noEntrants: { embed: false, content: '😕 Ninguém participou no sorteio de **{premio}**.' },
     winnerDm: { embed: true, content: '' },
+    participants: { embed: true, content: '' },
+    participantsMore: '… e mais {resto}',
     participantLine: '`{posicao}.` {membro}',
     replyJoined: '🎉 Estás a participar em **{premio}**! Boa sorte.',
     replyLeft: '↩️ Saíste do sorteio de **{premio}**.',
@@ -30,6 +32,9 @@ export function defaultGiveawaySettings(): GiveawaySettings {
     replyRerollDone: '🔁 Reroll feito — o novo resultado foi anunciado no canal.',
     replyRerollEmpty: 'ℹ️ Não há mais participantes que ainda não tenham ganho.',
     replyNoParticipants: 'Ainda ninguém está a participar.',
+    replyNotFound: '❌ Já não encontro este sorteio (pode ter sido apagado na app).',
+    replyNotEnded: '❌ Este sorteio ainda não terminou — espera que termine antes de rerolar.',
+    replyRerollError: '❌ Não consegui fazer o reroll: {erro}',
     wizard: defaultGiveawayWizard(),
   }
 }
@@ -52,7 +57,6 @@ export function defaultGiveawayWizard(): GiveawayWizardSettings {
     errorPrize: 'Escreve um título/prémio para o sorteio.',
     errorDuration: 'Duração inválida. Usa um formato como `1h30m`, `2d`, `45m` ou `30s` — entre 30 segundos e 30 dias.',
     errorWinners: 'O número de vencedores tem de ser entre 1 e 50.',
-    creatingText: '⏳ A criar sorteio…',
   }
 }
 

@@ -24,7 +24,7 @@ import { buildEmbedFromDraft, embedHasContent } from './embedTemplate'
 import { customButton } from './profileCommand'
 import { createAndPostGiveaway } from './giveaways'
 
-type WizardTemplate = 'giveawayWizardChannel' | 'giveawayWizardDetails' | 'giveawayWizardError' | 'giveawayWizardCreated' | 'giveawayWizardCancelled' | 'giveawayWizardTimeout'
+type WizardTemplate = 'giveawayWizardChannel' | 'giveawayWizardDetails' | 'giveawayWizardError' | 'giveawayWizardCreated' | 'giveawayWizardCancelled' | 'giveawayWizardTimeout' | 'giveawayWizardCreating'
 
 export { handleGiveawayButtons } from './giveaways'
 
@@ -207,7 +207,7 @@ async function runSorteio(interaction: ChatInputCommandInteraction, guild: Guild
           if (parsedDuration === null) return await fail(w.errorDuration)
           if (parsedWinners === null || parsedWinners < 1 || parsedWinners > 50) return await fail(w.errorWinners)
 
-          await updateFromModal(submitted, interaction, { embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle((w.creatingText || '⏳ A criar sorteio…').slice(0, 256))], components: [] })
+          await updateFromModal(submitted, interaction, { embeds: [embed('giveawayWizardCreating', { premio: titleInput, vencedores: String(parsedWinners) }, '⏳ A criar sorteio…')], components: [] })
 
           const created = await createAndPostGiveaway(guild, {
             channelId: channelId as string,

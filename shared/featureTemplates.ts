@@ -380,6 +380,19 @@ export const FEATURE_TEMPLATE_DEFAULTS = {
     color: '#99AAB5',
     timestamp: false,
   }),
+  giveawayWizardCreating: draft({
+    title: '⏳ A criar sorteio…',
+    description: '',
+    color: '#5865F2',
+    timestamp: false,
+  }),
+  giveawayParticipants: draft({
+    title: '👥 {premio}',
+    description: '{lista}',
+    color: '#5865F2',
+    footer: '{participantes} participante(s)',
+    timestamp: false,
+  }),
   giveawayWizardTimeout: draft({
     title: '⏱️ Tempo esgotado',
     description: 'Criação de sorteio cancelada.',

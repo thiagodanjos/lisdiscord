@@ -31,7 +31,7 @@ const MAX_LIST = 60
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err))
 const editTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
-type TemplateKind = 'giveawayStart' | 'giveawayEnded' | 'giveawayWinners' | 'giveawayReroll' | 'giveawayNoEntrants' | 'giveawayWinnerDm'
+type TemplateKind = 'giveawayStart' | 'giveawayEnded' | 'giveawayWinners' | 'giveawayReroll' | 'giveawayNoEntrants' | 'giveawayWinnerDm' | 'giveawayParticipants'
 
 function link(g: Giveaway): string {
   return g.messageId ? `https://discord.com/channels/${g.guildId}/${g.channelId}/${g.messageId}` : 'https://discord.com'
@@ -343,11 +343,11 @@ export async function handleGiveawayButtons(interaction: ButtonInteraction): Pro
   const say = (text: string) => interaction.editReply({ content: text.slice(0, 2000), allowedMentions: { parse: [] } })
   const g = store.getGiveaway(id.slice(id.lastIndexOf(':') + 1))
   if (!g) {
-    await say('❌ Já não encontro este sorteio (pode ter sido apagado na app).')
+    await say(store.getGiveawaySettings(guild.id).replyNotFound)
     return true
   }
   const settings = store.getGiveawaySettings(guild.id)
-  const values = (x: Giveaway = g) => giveawayValues(guild, x, settings)
+  const values = (x: Giveaway = g, extra: Record<string, string> = {}) => giveawayValues(guild, x, settings, extra)
 
   if (kind === 'join') {
     if (g.ended || new Date(g.endsAt).getTime() <= Date.now()) {
@@ -383,8 +383,9 @@ export async function handleGiveawayButtons(interaction: ButtonInteraction): Pro
       return true
     }
     const lines = ids.slice(0, MAX_LIST).map((u, i) => fillGiveaway(settings.participantLine, { posicao: String(i + 1), membro: `<@${u}>` }))
-    const more = ids.length > MAX_LIST ? `\n-# … e mais ${ids.length - MAX_LIST}` : ''
-    await say(`**${g.prize}** · ${ids.length} participante(s)\n\n${lines.join('\n')}${more}`)
+    const more = ids.length > MAX_LIST ? `\n-# ${fillGiveaway(settings.participantsMore, { resto: String(ids.length - MAX_LIST) })}` : ''
+    const body = buildMessage(guild, 'giveawayParticipants', settings.participants, values(g, { participantes: String(ids.length), lista: `${lines.join('\n')}${more}` }), `**${g.prize}** · ${ids.length} participante(s)\n\n${lines.join('\n')}${more}`)
+    await interaction.editReply({ content: body.content ?? '', embeds: body.embeds ?? [], allowedMentions: { parse: [] } })
     return true
   }
 
@@ -394,14 +395,14 @@ export async function handleGiveawayButtons(interaction: ButtonInteraction): Pro
     return true
   }
   if (!g.ended) {
-    await say('❌ Este sorteio ainda não terminou — espera que termine antes de rerolar.')
+    await say(fillGiveaway(settings.replyNotEnded, values()))
     return true
   }
   try {
     const rerolled = await rerollGiveaway(guild, g)
     await say(fillGiveaway(rerolled ? settings.replyRerollDone : settings.replyRerollEmpty, values(rerolled ?? g)))
   } catch (err) {
-    await say(`❌ Não consegui fazer o reroll: ${errText(err)}`)
+    await say(fillGiveaway(settings.replyRerollError, values(g, { erro: errText(err) })))
   }
   return true
 }
@@ -449,6 +450,8 @@ export async function applyGiveawaySettings(guild: Guild, input: GiveawaySetting
     reroll: msg(input.reroll, d.reroll),
     noEntrants: msg(input.noEntrants, d.noEntrants),
     winnerDm: msg(input.winnerDm, d.winnerDm),
+    participants: msg(input.participants, d.participants),
+    participantsMore: txt(input.participantsMore, 200, d.participantsMore),
     participantLine: txt(input.participantLine, 200, d.participantLine),
     replyJoined: txt(input.replyJoined, 500, d.replyJoined),
     replyLeft: txt(input.replyLeft, 500, d.replyLeft),
@@ -459,6 +462,9 @@ export async function applyGiveawaySettings(guild: Guild, input: GiveawaySetting
     replyRerollDone: txt(input.replyRerollDone, 500, d.replyRerollDone),
     replyRerollEmpty: txt(input.replyRerollEmpty, 500, d.replyRerollEmpty),
     replyNoParticipants: txt(input.replyNoParticipants, 500, d.replyNoParticipants),
+    replyNotFound: txt(input.replyNotFound, 500, d.replyNotFound),
+    replyNotEnded: txt(input.replyNotEnded, 500, d.replyNotEnded),
+    replyRerollError: txt(input.replyRerollError, 500, d.replyRerollError),
     wizard: {
       selectPlaceholder: txt(input.wizard?.selectPlaceholder, 150, d.wizard.selectPlaceholder),
       writeButton: { ...btn(input.wizard?.writeButton, d.wizard.writeButton), show: true },
@@ -477,7 +483,6 @@ export async function applyGiveawaySettings(guild: Guild, input: GiveawaySetting
       errorPrize: txt(input.wizard?.errorPrize, 500, d.wizard.errorPrize),
       errorDuration: txt(input.wizard?.errorDuration, 500, d.wizard.errorDuration),
       errorWinners: txt(input.wizard?.errorWinners, 500, d.wizard.errorWinners),
-      creatingText: txt(input.wizard?.creatingText, 200, d.wizard.creatingText),
     },
   }
   store.saveGiveawaySettings(guild.id, next)

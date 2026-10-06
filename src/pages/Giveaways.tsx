@@ -19,7 +19,7 @@ import { GIVEAWAY_PLACEHOLDERS, GIVEAWAY_WIZARD_PLACEHOLDERS, type GiveawayWizar
 
 const DURATIONS = ['10m', '30m', '1h', '6h', '12h', '1d', '3d', '7d']
 
-type MessageKey = 'start' | 'ended' | 'winners' | 'reroll' | 'noEntrants' | 'winnerDm'
+type MessageKey = 'start' | 'ended' | 'winners' | 'reroll' | 'noEntrants' | 'winnerDm' | 'participants'
 
 const MESSAGES: { key: MessageKey; kind: EmbedTemplateKind; title: string; hint: string }[] = [
   { key: 'start', kind: 'giveawayStart', title: 'Mensagem do sorteio', hint: 'A que é publicada com o botão Participar.' },
@@ -28,11 +28,13 @@ const MESSAGES: { key: MessageKey; kind: EmbedTemplateKind; title: string; hint:
   { key: 'reroll', kind: 'giveawayReroll', title: 'Mensagem do reroll', hint: 'Quando alguém carrega em Rerolar.' },
   { key: 'noEntrants', kind: 'giveawayNoEntrants', title: 'Sem participantes', hint: 'Se ninguém entrou.' },
   { key: 'winnerDm', kind: 'giveawayWinnerDm', title: 'DM ao vencedor', hint: 'Só se "avisar por DM" estiver ligado.' },
+  { key: 'participants', kind: 'giveawayParticipants', title: 'Lista de participantes', hint: 'Botão Participantes (só quem clicou vê). {lista} = os participantes.' },
 ]
 
 const WIZARD_TEMPLATES: { kind: EmbedTemplateKind; title: string; hint: string }[] = [
   { kind: 'giveawayWizardChannel', title: '1. Escolher o canal', hint: 'A primeira mensagem, com o menu de canais.' },
   { kind: 'giveawayWizardDetails', title: '2. Canal escolhido', hint: '{canal} = o canal escolhido.' },
+  { kind: 'giveawayWizardCreating', title: 'A criar…', hint: 'Aparece um instante enquanto o sorteio é publicado. {premio}, {vencedores}.' },
   { kind: 'giveawayWizardCreated', title: 'Sorteio criado', hint: '{premio}, {canal}, {vencedores}, {termina}, {link}.' },
   { kind: 'giveawayWizardError', title: 'Erro', hint: '{erro} = o que correu mal (os textos abaixo).' },
   { kind: 'giveawayWizardCancelled', title: 'Cancelado', hint: 'Quando carregam em Cancelar.' },
@@ -54,7 +56,6 @@ const WIZARD_TEXTS: { key: WizardTextKey; label: string; max: number }[] = [
   { key: 'errorPrize', label: 'Erro: sem prémio', max: 500 },
   { key: 'errorDuration', label: 'Erro: duração inválida', max: 500 },
   { key: 'errorWinners', label: 'Erro: vencedores inválidos', max: 500 },
-  { key: 'creatingText', label: 'Enquanto cria', max: 200 },
 ]
 
 const REPLIES: { key: keyof GiveawaySettings; label: string }[] = [
@@ -67,6 +68,10 @@ const REPLIES: { key: keyof GiveawaySettings; label: string }[] = [
   { key: 'replyRerollDone', label: 'Reroll feito' },
   { key: 'replyRerollEmpty', label: 'Reroll sem ninguém elegível' },
   { key: 'replyNoParticipants', label: 'Lista de participantes vazia' },
+  { key: 'replyNotFound', label: 'Sorteio apagado' },
+  { key: 'replyNotEnded', label: 'Reroll antes de terminar' },
+  { key: 'replyRerollError', label: 'Reroll falhou ({erro})' },
+  { key: 'participantsMore', label: 'Lista grande — {resto} = quantos faltam' },
 ]
 
 const SAMPLE: Record<string, string> = {
