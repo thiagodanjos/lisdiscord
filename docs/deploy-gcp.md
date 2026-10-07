@@ -21,10 +21,11 @@ mas só nestas três regiões dos EUA:
 Fica mais longe de Portugal do que a Oracle em Madrid (mais uns
 milissegundos de latência), mas isso não se nota em comandos do Discord.
 
-**Sobre pagamentos:** o cartão pedido no registo serve só para verificar
-identidade — a Google nunca cobra automaticamente. Como na Oracle, só é
-cobrado alguma coisa se tu próprio clicares num botão explícito de upgrade
-para conta paga.
+**Sobre pagamentos:** o cartão pedido no registo serve para verificar
+identidade. Durante o teste nada é cobrado; depois do upgrade para conta
+completa (necessário para a VM não parar), só pagas o que passar do nível
+gratuito — com as dicas de [Ficar sempre no nível gratuito](#ficar-sempre-no-nível-gratuito-sem-pagar-nada)
+e um alerta de orçamento de 1 €, fica em 0.
 
 ## 1. Criar a conta e o projeto
 
@@ -110,7 +111,7 @@ sudo systemctl enable docker
 Exatamente os mesmos do guia da Oracle:
 
 ```bash
-git pull && docker compose up -d --build   # atualizar para nova versão
+git pull && docker compose up -d --build && docker system prune -f   # atualizar (e limpar imagens velhas)
 docker compose logs -f                      # ver logs em direto
 docker compose restart                      # reiniciar
 docker compose stop / start                 # parar / voltar a ligar
@@ -126,10 +127,45 @@ ficheiros grandes ou imagens pesadas constantemente. Se algum dia
 precisares de mais, a Google cobra o excedente a preços baixos — nunca
 corta o bot sem avisar primeiro por email.
 
-## Importante — o mesmo aviso do guia da Oracle
+## Ficar sempre no nível gratuito (sem pagar nada)
 
-Não ligues a app desktop com o mesmo token enquanto este bot autónomo
-estiver a correr (nem aqui nem lá) — os dois receberiam os mesmos
-comandos em duplicado. Para gestão pela app desktop, para o container
-primeiro (`docker compose stop`), usa a app, e depois volta a arrancar
-(`docker compose start`).
+A `e2-micro` em `us-west1`/`us-central1`/`us-east1` com disco **Standard**
+até 30 GB é grátis para sempre. O que costuma gerar custos é o que vem
+ligado por omissão ou se acumula:
+
+- **Programação de snapshots** — ao criar a VM, a Google pode associar ao
+  disco uma *snapshot schedule* (`default-schedule-1`). Os snapshots **não**
+  entram no nível gratuito. Para a tirar: **Compute Engine → Armazenamento →
+  Snapshots → separador "Programações de snapshots"** → seleciona a
+  programação → **Desanexar** do disco e depois **Eliminar**; apaga também
+  os snapshots que já existam no separador **Snapshots**.
+- **Disco cheio de imagens velhas** — cada `docker compose up -d --build`
+  deixa camadas antigas. Usa sempre `docker system prune -f` depois de
+  atualizar (o disco de 10 GB chega bem assim).
+- **Pouca RAM (1 GB)** — se o build ficar lento ou falhar, cria um swap de 1 GB
+  uma vez:
+
+  ```bash
+  sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile
+  sudo mkswap /swapfile && sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  ```
+
+- **Fim do período de teste (90 dias / 300$)** — antes de acabar, carrega em
+  **Ativar conta completa** (upgrade). Sem isso a VM é **parada** quando o
+  teste termina. O upgrade não te cobra nada enquanto ficares dentro do
+  nível gratuito; os créditos que sobrarem continuam a ser usados primeiro.
+- **Alerta de orçamento** — em **Faturação → Orçamentos e alertas**, cria um
+  orçamento de **1 €** com alertas a 50 %, 90 % e 100 %. Se algo começar a
+  custar dinheiro, recebes um email logo.
+
+Em **Faturação → Relatórios** (agrupar por *SKU*) vês exatamente o que está
+a gastar — com tudo certo, o custo líquido fica em 0.
+
+## Importante — app desktop + bot autónomo
+
+Não ligues a app desktop com o mesmo token **em modo normal** enquanto este
+bot estiver a correr — os dois responderiam aos mesmos comandos. Em vez
+disso, ativa a API remota (`LISDISCORD_API_KEY` no `.env`) e liga a app ao
+bot em **Equipa → Justificativas → Bot remoto**: a ligação local da app fica
+passiva e todas as páginas passam a gerir diretamente este bot.
