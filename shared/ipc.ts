@@ -75,6 +75,9 @@ import type {
   ModerationOp,
   ModerationResult,
   ModerationState,
+  MemberSheetAction,
+  MemberSheetSettings,
+  MemberSheetState,
 } from './types'
 
 /** Nomes dos canais IPC — usados em ambos os lados para nunca ficarem dessincronizados. */
@@ -272,6 +275,10 @@ export const IPC = {
   getDuties: 'duties:get',
   setDutiesSettings: 'duties:settings',
   dutiesAction: 'duties:action',
+  getMemberSheet: 'memberSheet:get',
+  setMemberSheetSettings: 'memberSheet:settings',
+  memberSheetAction: 'memberSheet:action',
+  setGoogleKey: 'memberSheet:googleKey',
 } as const
 
 /** API exposta no `window.lisdiscord` pelo preload — o único contrato entre a UI e o processo principal. */
@@ -497,4 +504,9 @@ export interface LisDiscordBridge {
   getDuties(guildId: string, remote: boolean): Promise<DutiesState>
   setDutiesSettings(guildId: string, settings: DutiesSettings, remote: boolean): Promise<DutiesState>
   dutiesAction(guildId: string, action: DutiesAction, remote: boolean): Promise<DutiesState>
+  getMemberSheet(guildId: string, remote: boolean): Promise<MemberSheetState>
+  setMemberSheetSettings(guildId: string, settings: MemberSheetSettings, remote: boolean): Promise<MemberSheetState>
+  memberSheetAction(guildId: string, action: MemberSheetAction, remote: boolean): Promise<MemberSheetState>
+  /** Guarda a chave .json da conta de serviço do Google no bot (null = apagar). */
+  setGoogleKey(json: string | null, remote: boolean): Promise<{ googleEmail: string | null }>
 }

@@ -19,6 +19,7 @@ import Messaging from './pages/Messaging'
 import Moderation from './pages/Moderation'
 import Giveaways from './pages/Giveaways'
 import Duties from './pages/Duties'
+import MemberSheet from './pages/MemberSheet'
 import Games from './pages/Games'
 import MovPoints from './pages/MovPoints'
 import PointsLog from './pages/PointsLog'
@@ -139,6 +140,7 @@ export default function App() {
         <Route path="/logs-limpeza" element={<CleanLog />} />
         <Route path="/sorteios" element={<Giveaways />} />
         <Route path="/funcoes" element={<Duties />} />
+        <Route path="/planilha" element={<MemberSheet />} />
         <Route path="/jogos" element={<Games />} />
         <Route path="/pontos-mov" element={<MovPoints />} />
         <Route path="/logs-pontos" element={<PointsLog key="points" mode="points" />} />

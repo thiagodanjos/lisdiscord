@@ -26,6 +26,7 @@ import {
   time,
   TimestampStyles,
 } from 'discord.js'
+import { registerVerifiedMember } from './memberSheet'
 import type {
   VerificationButtonStyle,
   VerificationDiagnostics,
@@ -1434,6 +1435,10 @@ async function finishVerification(guild: Guild, entry: VerificationEntry, modera
       await deleteRequestMessages(guild, fresh)
     }
     logEvent(guild.id, 'info', `${fresh.userTag} ${finished ? 'finalizado ✅' : 'cancelado ✖️'} por ${moderator.user.tag}.`)
+    // Registo de membros (vai para a planilha no próximo lote) — com os cargos com que ficou.
+    if (finished && target) {
+      await registerVerifiedMember(guild, fresh.userId, moderator.displayName).catch((err) => logEvent(guild.id, 'warn', `Não consegui gravar no registo de membros: ${errText(err)}`))
+    }
 
     const ticket = fresh.ticketId ? store.closeTicket(fresh.ticketId, finished ? 'approved' : 'rejected', moderator.user.tag) : null
     if (settings.logChannelId) {

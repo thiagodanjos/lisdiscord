@@ -36,3 +36,6 @@ data/
 *.njsproj
 *.sln
 *.sw?
+
+# Chave da conta de serviço do Google (planilha) — nunca no Git
+google-service-account*.json

@@ -37,6 +37,8 @@ export const paths = {
   giveawaysFile: path.join(root, 'giveaways.json'),
   giveawaySettingsFile: path.join(root, 'giveaway-settings.json'),
   dutiesFile: path.join(root, 'duties.json'),
+  memberRegistryFile: path.join(root, 'member-registry.json'),
+  googleKeyFile: path.join(root, 'google-service-account.json'),
   gameSettingsFile: path.join(root, 'game-settings.json'),
   moderationLogFile: path.join(root, 'moderation-log.json'),
   economyFile: path.join(root, 'economy.json'),

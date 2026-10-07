@@ -160,6 +160,8 @@ export function remoteApi({ url, apiKey }: RemoteBotCredentials) {
     guildPost: <T>(guildId: string, path: string, body: unknown = {}) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/${path}`, { method: 'POST', body }),
 
+    setGoogleKey: <T>(json: string | null) => remoteFetch<T>(url, apiKey, '/api/google-key', { method: 'POST', body: { json } }),
+
     sendEmbed: <T>(guildId: string, channelId: string, draft: unknown, options?: unknown) =>
       remoteFetch<T>(url, apiKey, `/api/guilds/${encodeURIComponent(guildId)}/messages`, { method: 'POST', body: { channelId, draft, options } }),
   }

@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import type { Guild } from 'discord.js'
-import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovListOp, type MovListSettings, type VoiceHoursAction, type VoiceHoursSettings, type ProfileSettings, type WeeklyReportAction, type WeeklyReportSettings, type ActivityAction, type ActivityInput, type CalendarSettings, type LisFilmsSettings, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings, type ModerationOp, type GiveawayAction, type GiveawaySettings, type DutiesAction, type DutiesSettings } from '../shared/types'
+import { EMBED_TEMPLATE_KINDS, type ChannelPickerEntry, type EmbedDraft, type EmbedTemplateKind, type JustificationChannelKind, type MovNoticeInput, type MovListOp, type MovListSettings, type VoiceHoursAction, type VoiceHoursSettings, type ProfileSettings, type WeeklyReportAction, type WeeklyReportSettings, type ActivityAction, type ActivityInput, type CalendarSettings, type LisFilmsSettings, type MovPointsEntry, type SendMessageOptions, type ServerLogSettings, type VerificationSettings, type ModerationOp, type GiveawayAction, type GiveawaySettings, type DutiesAction, type DutiesSettings, type MemberSheetAction, type MemberSheetSettings } from '../shared/types'
 import { discordManager } from '../electron/discord/client'
 import { addBotEmoji, deleteBotEmoji, listBotEmojis } from '../electron/discord/botEmojis'
 import { applyJustificationChannel, postJustificationMessage } from '../electron/discord/justifications'
@@ -43,6 +43,7 @@ import * as serverLogsStore from '../electron/store/serverLogs'
 import { listGuildCategories } from '../electron/discord/memberProfile'
 import { applyGiveawayAction, applyGiveawaySettings, getGiveawayState } from '../electron/discord/giveaways'
 import { applyDutiesAction, applyDutiesSettings, getDutiesState } from '../electron/discord/duties'
+import { applyMemberSheetAction, applyMemberSheetSettings, getMemberSheetState, setGoogleKey } from '../electron/discord/memberSheet'
 
 /** Mesma lógica que o IPC da app usa — atualiza logo a mensagem já publicada quando o template muda. */
 async function refreshEmbedTemplateTarget(guild: Guild, kind: EmbedTemplateKind): Promise<void> {
@@ -180,7 +181,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
     (req.method === 'POST' && parts.length === 5 && isGuildRoute && (parts[3] === 'voicehours' || parts[3] === 'weeklyreport' || parts[3] === 'calendar')) ||
     (isGuildRoute && parts[3] === 'moderation') ||
     (req.method === 'POST' && parts.length === 4 && isGuildRoute && parts[3] === 'leave') ||
-    (req.method === 'POST' && parts.length === 5 && isGuildRoute && (parts[3] === 'giveaways' || parts[3] === 'duties'))
+    (req.method === 'POST' && parts.length === 5 && isGuildRoute && (parts[3] === 'giveaways' || parts[3] === 'duties' || parts[3] === 'membersheet'))
 
   if (needsConnection && !discordManager.isConnected()) {
     sendJson(res, 503, { error: 'O bot não está ligado à Discord neste momento.' })
@@ -670,6 +671,43 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, apiKey: 
         sendJson(res, 400, { error: 'Pedido inválido.' })
         return
       }
+    }
+
+    // Registo de membros + planilha
+    //   GET  /api/guilds/:guildId/membersheet
+    //   POST /api/guilds/:guildId/membersheet/settings  { settings }
+    //   POST /api/guilds/:guildId/membersheet/action    { action }
+    if (isGuildRoute && parts[3] === 'membersheet') {
+      const guildId = parts[2]
+      if (req.method === 'GET' && parts.length === 4) {
+        sendJson(res, 200, getMemberSheetState(guildId))
+        return
+      }
+      if (req.method === 'POST' && parts.length === 5) {
+        const body = (await readJsonBody(req)) as { settings?: unknown; action?: { kind?: unknown } }
+        const guild = await discordManager.getClient().guilds.fetch(guildId)
+        if (parts[4] === 'settings' && body.settings && typeof body.settings === 'object') {
+          sendJson(res, 200, await applyMemberSheetSettings(guild, body.settings as MemberSheetSettings))
+          return
+        }
+        if (parts[4] === 'action' && body.action && typeof body.action.kind === 'string') {
+          sendJson(res, 200, await applyMemberSheetAction(guild, body.action as MemberSheetAction))
+          return
+        }
+        sendJson(res, 400, { error: 'Pedido inválido.' })
+        return
+      }
+    }
+
+    // POST /api/google-key  { json: string | null } — chave da conta de serviço (nunca é devolvida)
+    if (req.method === 'POST' && parts.length === 2 && parts[0] === 'api' && parts[1] === 'google-key') {
+      const body = (await readJsonBody(req)) as { json?: unknown }
+      if (body.json !== null && typeof body.json !== 'string') {
+        sendJson(res, 400, { error: 'Falta o campo "json".' })
+        return
+      }
+      sendJson(res, 200, setGoogleKey(body.json as string | null))
+      return
     }
 
     // Horas automáticas · /perfil · relatório semanal

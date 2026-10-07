@@ -213,6 +213,10 @@ const bridge: LisDiscordBridge = {
   getDuties: (guildId, remote) => ipcRenderer.invoke(IPC.getDuties, guildId, remote),
   setDutiesSettings: (guildId, settings, remote) => ipcRenderer.invoke(IPC.setDutiesSettings, guildId, settings, remote),
   dutiesAction: (guildId, action, remote) => ipcRenderer.invoke(IPC.dutiesAction, guildId, action, remote),
+  getMemberSheet: (guildId, remote) => ipcRenderer.invoke(IPC.getMemberSheet, guildId, remote),
+  setMemberSheetSettings: (guildId, settings, remote) => ipcRenderer.invoke(IPC.setMemberSheetSettings, guildId, settings, remote),
+  memberSheetAction: (guildId, action, remote) => ipcRenderer.invoke(IPC.memberSheetAction, guildId, action, remote),
+  setGoogleKey: (json, remote) => ipcRenderer.invoke(IPC.setGoogleKey, json, remote),
 }
 
 contextBridge.exposeInMainWorld('lisdiscord', bridge)

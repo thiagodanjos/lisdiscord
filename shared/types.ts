@@ -1807,3 +1807,105 @@ export const DUTIES_PANEL_PLACEHOLDERS = ['{funcoes}', '{total}', '{atualizado}'
 export const DUTIES_SUMMARY_PLACEHOLDERS = ['{resumo}', '{semResponsavel}', '{total}', '{pessoas}', '{servidor}'] as const
 export const DUTIES_MINE_PLACEHOLDERS = ['{membro}', '{funcoes}', '{total}', '{servidor}'] as const
 export const DUTY_DETAIL_PLACEHOLDERS = ['{funcao}', '{nota}', '{descricao}', '{responsaveis}', '{divisoes}', '{servidor}'] as const
+
+// ==========================================================================
+// Registo de membros + planilha (Google Sheets)
+// ==========================================================================
+
+/** Um membro no registo (o "banco de dados" — a planilha é só uma cópia para consulta). */
+export interface MemberRecord {
+  userId: string
+  tag: string
+  displayName: string
+  /** Últimos cargos conhecidos (usados também para repor cargos). */
+  roleIds: string[]
+  roleNames: string[]
+  verifiedAt: string | null
+  verifiedByTag: string | null
+  joinedAt: string | null
+  /** Como entrou no registo. */
+  source: 'verificacao' | 'importado' | 'manual'
+  inServer: boolean
+  leftAt: string | null
+  updatedAt: string
+}
+
+export type SheetColumnKey =
+  | 'nome'
+  | 'utilizador'
+  | 'id'
+  | 'cargo'
+  | 'cargos'
+  | 'verificadoEm'
+  | 'verificadoPor'
+  | 'entrouEm'
+  | 'pontos'
+  | 'horas'
+  | 'estado'
+
+export interface SheetColumn {
+  key: SheetColumnKey
+  header: string
+  show: boolean
+}
+
+/** Uma aba da planilha ligada a um cargo (a ordem decide o "cargo principal"). */
+export interface SheetSection {
+  id: string
+  roleId: string
+  tabName: string
+}
+
+export interface MemberSheetSettings {
+  /** Regista sozinho quem é verificado (botão Finalizar do ticket). */
+  autoRegister: boolean
+  spreadsheetId: string
+  /** Planilha em lote: de quantos em quantos minutos (0 = só manual). */
+  syncMinutes: number
+  sections: SheetSection[]
+  /** 'first' = o membro só aparece na aba do primeiro cargo da lista que tem; 'all' = em todas as abas dos cargos que tem. */
+  placement: 'first' | 'all'
+  allTab: { enabled: boolean; name: string }
+  otherTab: { enabled: boolean; name: string }
+  /** Mostrar quem saiu do servidor (com estado "Saiu"). */
+  includeLeft: boolean
+  columns: SheetColumn[]
+  sortBy: 'nome' | 'verificadoEm' | 'pontos'
+  /** Cargos que aparecem na coluna "Cargos" (vazio = todos). */
+  trackedRoleIds: string[]
+  timezone: string
+  textActive: string
+  textLeft: string
+  /** Backup automático do registo num canal (ficheiro .json). */
+  backupChannelId: string | null
+  backupHours: number
+}
+
+export interface MemberSheetStatus {
+  lastSyncAt: string | null
+  lastSyncOk: boolean | null
+  lastSyncMessage: string
+  lastBackupAt: string | null
+}
+
+export interface MemberSheetState {
+  settings: MemberSheetSettings
+  status: MemberSheetStatus
+  records: MemberRecord[]
+  /** Email da conta de serviço do Google (a chave privada nunca sai do bot). */
+  googleEmail: string | null
+  message?: string
+  /** Só na ação "export". */
+  exportJson?: string
+}
+
+export type MemberSheetAction =
+  | { kind: 'sync' }
+  | { kind: 'test' }
+  | { kind: 'importMembers'; roleIds: string[] }
+  | { kind: 'restoreRoles'; userId: string | null }
+  | { kind: 'remove'; userId: string }
+  | { kind: 'register'; userId: string }
+  | { kind: 'backupNow' }
+  | { kind: 'export' }
+  | { kind: 'import'; json: string }

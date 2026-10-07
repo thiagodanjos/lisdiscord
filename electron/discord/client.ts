@@ -16,6 +16,7 @@ import { handleActivityAutocomplete, handleActivityButtons, startActivityLoop } 
 import { handleLisFilmsAutocomplete, handleLisFilmsInteraction } from './lisfilms'
 import { handleActivityCoverButtons } from './activityCover'
 import { handleDutiesInteraction } from './duties'
+import { startMemberSheetLoop } from './memberSheet'
 import {
   handleVerificationButtons,
   handleVerificationChannelDelete,
@@ -46,6 +47,7 @@ class DiscordManager {
   private stopVoiceHours: (() => void) | null = null
   private stopWeeklyReport: (() => void) | null = null
   private stopActivities: (() => void) | null = null
+  private stopMemberSheet: (() => void) | null = null
   private stopPointsLog: (() => void) | null = null
   private messageContentEnabled = false
   private guildMembersEnabled = false
@@ -198,6 +200,7 @@ class DiscordManager {
       this.stopVoiceHours = startVoiceHoursLoop(client)
       this.stopWeeklyReport = startWeeklyReportLoop(client)
       this.stopActivities = startActivityLoop(client)
+      this.stopMemberSheet = startMemberSheetLoop(client)
       this.stopPointsLog = onMovPointsLogged((entry) => {
         if (isPassive()) return
         postMovPointsLog(client, entry).catch((err) => console.error('Erro no log de pontos/horas:', err))
@@ -256,6 +259,8 @@ class DiscordManager {
     this.stopWeeklyReport = null
     this.stopActivities?.()
     this.stopActivities = null
+    this.stopMemberSheet?.()
+    this.stopMemberSheet = null
     this.stopPointsLog?.()
     this.stopPointsLog = null
     await this.client.destroy().catch(() => undefined)

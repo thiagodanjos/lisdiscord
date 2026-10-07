@@ -75,6 +75,9 @@ import type {
   ModerationOp,
   ModerationResult,
   ModerationState,
+  MemberSheetAction,
+  MemberSheetSettings,
+  MemberSheetState,
 } from '../../shared/types'
 import { IPC } from '../../shared/ipc'
 import { discordManager } from '../discord/client'
@@ -86,6 +89,7 @@ import { sendEmbedMessage } from '../discord/messaging'
 import * as moderation from '../discord/moderation'
 import { applyGiveawayAction, applyGiveawaySettings, createAndPostGiveaway, getGiveawayState } from '../discord/giveaways'
 import { applyDutiesAction, applyDutiesSettings, getDutiesState } from '../discord/duties'
+import { applyMemberSheetAction, applyMemberSheetSettings, getMemberSheetState, setGoogleKey } from '../discord/memberSheet'
 import { registerCommandsForGuild } from '../discord/games'
 import { GAMES } from '../discord/games/catalog'
 import { refreshBoard } from '../discord/movcall'
@@ -612,6 +616,19 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   )
   ipcMain.handle(IPC.dutiesAction, async (_e, guildId: string, action: DutiesAction, isRemote: boolean): Promise<DutiesState> =>
     isRemote ? remote().guildPost(guildId, 'duties/action', { action }) : applyDutiesAction(await localGuild(guildId), action),
+  )
+
+  ipcMain.handle(IPC.getMemberSheet, async (_e, guildId: string, isRemote: boolean): Promise<MemberSheetState> =>
+    isRemote ? remote().guildGet(guildId, 'membersheet') : getMemberSheetState(guildId),
+  )
+  ipcMain.handle(IPC.setMemberSheetSettings, async (_e, guildId: string, settings: MemberSheetSettings, isRemote: boolean): Promise<MemberSheetState> =>
+    isRemote ? remote().guildPost(guildId, 'membersheet/settings', { settings }) : applyMemberSheetSettings(await localGuild(guildId), settings),
+  )
+  ipcMain.handle(IPC.memberSheetAction, async (_e, guildId: string, action: MemberSheetAction, isRemote: boolean): Promise<MemberSheetState> =>
+    isRemote ? remote().guildPost(guildId, 'membersheet/action', { action }) : applyMemberSheetAction(await localGuild(guildId), action),
+  )
+  ipcMain.handle(IPC.setGoogleKey, async (_e, json: string | null, isRemote: boolean): Promise<{ googleEmail: string | null }> =>
+    isRemote ? remote().setGoogleKey(json) : setGoogleKey(json),
   )
 
   ipcMain.handle(IPC.getRemoteLisFilms, async (): Promise<LisFilmsState> => remoteApi(requireRemoteCredentials()).getLisFilms())

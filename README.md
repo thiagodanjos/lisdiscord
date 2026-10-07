@@ -21,6 +21,13 @@ Isto abre a app já em modo demonstração — dá para navegar tudo sem prepara
 
 **Queres o bot online 24/7, sem depender do teu computador estar ligado?** Há um bot autónomo (`server/`) que corre sem Electron nem interface, pronto a pôr num servidor grátis com Docker — dois guias à escolha: **[Oracle Cloud Always Free](docs/deploy-oracle.md)** (máquina maior, mas por vezes sem capacidade disponível) ou **[Google Cloud Always Free](docs/deploy-gcp.md)** (máquina mais pequena, mas quase sempre disponível na hora).
 
+## Novidades da 3.2 — Registo de membros & Planilha (Google Sheets)
+
+- **Registo de membros (o "banco de dados")** — quando a staff carrega em **Finalizar** num ticket de verificação, o bot grava o membro no registo com os cargos com que ficou (quem verificou, quando). Só o bot escreve no registo.
+- **Planilha em lote** — de tempos a tempos (5 min a 1 dia, ou só manual) o bot reescreve uma planilha do Google a partir do registo: uma aba **Todos** e uma aba **por cargo** (a ordem decide o cargo principal), colunas configuráveis (nome, utilizador, ID, cargo principal, cargos, verificado em/por, entrada, pontos, horas, estado). Se alguém apagar ou mexer na planilha, o lote seguinte volta a pô-la certa. Escreve sempre como texto (nada vira fórmula) e só mexe nas abas dele.
+- **Segurança** — backup automático do registo (.json) para um canal privado, descarregar/restaurar na app, **repor cargos** a partir do registo (de um membro ou de todos) e proteção: se muita gente perder cargos de uma vez, os cargos guardados não são mexidos.
+- **Ligar ao Google (grátis):** console.cloud.google.com → criar projeto → ativar *Google Sheets API* → *IAM → Contas de serviço* → criar → *Chaves → JSON*. Na app (Equipa → **Registo & Planilha**) carrega o .json, partilha a planilha com o email da conta de serviço como **Editor** e cola o link. A chave fica só no bot (`data/google-service-account.json`, nunca vai para o Git).
+
 ## Novidades da 3.1
 
 - **3.1.4** — Funções da gestão: cada função (e cada divisão, ex.: cada dia) pode ter a **sua própria seta ou emoji** — clica na seta à esquerda e escolhe uma rápida, um emoji do bot ou escreve o que quiseres. Vazio = a seta geral.

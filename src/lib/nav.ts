@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CircleUser,
   ClipboardList,
+  FileSpreadsheet,
   Clapperboard,
   Clock3,
   Eraser,
@@ -84,6 +85,7 @@ export const NAV: NavSection[] = [
     items: [
       { to: '/funcoes', label: 'Funções da gestão', icon: ClipboardList, keywords: 'responsaveis tarefas quem cuida painel' },
       { to: '/verificacao', label: 'Verificação', icon: BadgeCheck, keywords: 'ticket print' },
+      { to: '/planilha', label: 'Registo & Planilha', icon: FileSpreadsheet, keywords: 'google sheets banco dados backup cargos verificados' },
       { to: '/justificativas', label: 'Justificativas', icon: MessageSquareWarning },
       { to: '/metas', label: 'Metas', icon: Target },
       { to: '/upamentos', label: 'Upamentos', icon: TrendingUp, keywords: 'promocoes subir cargo' },

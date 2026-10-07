@@ -50,6 +50,8 @@ import type {
   ModerationBan,
   ModerationMember,
   ModerationRole,
+  MemberRecord,
+  MemberSheetSettings,
 } from '../../shared/types'
 import { DEFAULT_BOARD_LIST_FORMAT, DEFAULT_INACTIVE_LIST_FORMAT } from '../../shared/leaderboardFormat'
 import { defaultMovListSettings } from '../../shared/movList'
@@ -58,6 +60,38 @@ import { defaultCalendarSettings, findConflicts, shortDate, zonedParts, zonedToU
 import { defaultLisFilmsSettings } from '../../shared/lisfilms'
 import { defaultGiveawaySettings } from '../../shared/giveaways'
 import { defaultDutiesSettings } from '../../shared/duties'
+import { defaultMemberSheetSettings } from '../../shared/memberSheet'
+
+let demoSheetSettings: MemberSheetSettings = {
+  ...defaultMemberSheetSettings(),
+  spreadsheetId: '1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789',
+  sections: [
+    { id: 'sec1', roleId: 'r3', tabName: 'Veteranos' },
+    { id: 'sec2', roleId: 'r2', tabName: 'Membros Ativos' },
+    { id: 'sec3', roleId: 'r1', tabName: 'Membros' },
+  ],
+}
+let demoGoogleEmail: string | null = 'lisdiscord-bot@meu-projeto.iam.gserviceaccount.com'
+const demoRecord = (userId: string, name: string, roleIds: string[], roleNames: string[], days: number, inServer = true): MemberRecord => ({
+  userId,
+  tag: name,
+  displayName: name,
+  roleIds,
+  roleNames,
+  verifiedAt: daysAgo(days),
+  verifiedByTag: 'Nivia',
+  joinedAt: daysAgo(days + 1),
+  source: 'verificacao',
+  inServer,
+  leftAt: inServer ? null : daysAgo(1),
+  updatedAt: daysAgo(0),
+})
+let demoRecords: MemberRecord[] = [
+  demoRecord('411223344556677881', 'ana.dev', ['r2', 'r1'], ['Membro Ativo', 'Membro'], 20),
+  demoRecord('411223344556677882', 'sofia_gamer', ['r3', 'r2'], ['Veterano', 'Membro Ativo'], 60),
+  demoRecord('411223344556677883', 'ricardo_c', ['r1'], ['Membro'], 3),
+  demoRecord('411223344556677884', 'joao99', ['r1'], ['Membro'], 9, false),
+]
 
 const giveawaySettingsData = new Map<string, GiveawaySettings>()
 const dutiesData = new Map<string, DutiesSettings>()
@@ -1895,5 +1929,41 @@ export const demoBridge: LisDiscordBridge = {
     const s = dutiesData.get(guildId) ?? defaultDutiesSettings()
     dutiesData.set(guildId, { ...s, messageId: action.kind === 'publish' ? 'demo-panel' : null })
     return { settings: dutiesData.get(guildId)!, message: action.kind === 'publish' ? 'Painel publicado (demonstração).' : 'Painel apagado (demonstração).' }
+  },
+  async getMemberSheet() {
+    await delay()
+    return {
+      settings: demoSheetSettings,
+      status: { lastSyncAt: daysAgo(0), lastSyncOk: true, lastSyncMessage: 'Planilha "Mov Call — membros" atualizada: 4 aba(s), 7 linha(s).', lastBackupAt: daysAgo(0) },
+      records: demoRecords,
+      googleEmail: demoGoogleEmail,
+    }
+  },
+  async setMemberSheetSettings(guildId, settings) {
+    await delay()
+    demoSheetSettings = settings
+    return demoBridge.getMemberSheet(guildId, false)
+  },
+  async memberSheetAction(guildId, action) {
+    await delay(500)
+    if (action.kind === 'remove') demoRecords = demoRecords.filter((r) => r.userId !== action.userId)
+    const messages: Record<string, string> = {
+      sync: 'Planilha atualizada (demonstração).',
+      test: 'Ligado à planilha "Mov Call — membros" (demonstração).',
+      importMembers: 'Membros importados (demonstração).',
+      restoreRoles: 'Ninguém precisava de cargos repostos (demonstração).',
+      remove: 'Membro tirado do registo.',
+      register: 'Membro adicionado (demonstração).',
+      backupNow: 'Backup enviado (demonstração).',
+      export: 'Cópia pronta.',
+      import: 'Backup restaurado (demonstração).',
+    }
+    const state = await demoBridge.getMemberSheet(guildId, false)
+    return { ...state, message: messages[action.kind], exportJson: action.kind === 'export' ? JSON.stringify({ kind: 'lisdiscord-member-registry', version: 1, records: demoRecords }, null, 2) : undefined }
+  },
+  async setGoogleKey(json) {
+    await delay()
+    demoGoogleEmail = json ? 'lisdiscord-bot@meu-projeto.iam.gserviceaccount.com' : null
+    return { googleEmail: demoGoogleEmail }
   },
 }
