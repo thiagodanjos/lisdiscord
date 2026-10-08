@@ -3,7 +3,7 @@ import type { MemberRecord, MemberSheetAction, MemberSheetSettings, MemberSheetS
 import { buildSheetTabs, defaultMemberSheetSettings, parseSpreadsheetId, SHEET_COLUMN_LABELS } from '../../shared/memberSheet'
 import * as store from '../store/memberRegistry'
 import * as movPoints from '../store/movPoints'
-import { spreadsheetInfo, writeTabs } from './googleSheets'
+import { foreignTabs, writeTabs } from './googleSheets'
 
 // Registo de membros + planilha: quem é verificado fica gravado no registo do bot (com os cargos),
 // e de tempos a tempos o bot reescreve a planilha do Google a partir do registo. A planilha é só uma
@@ -94,6 +94,19 @@ function extras(guild: Guild) {
   }
 }
 
+function skippedText(names: string[], before = false): string {
+  const one = names.length === 1
+  const list = names.map((n) => `"${n}"`).join(', ')
+  const head = before
+    ? `⚠️ ${one ? 'A aba' : 'As abas'} ${list} já ${one ? 'existe' : 'existem'} na planilha com dados teus — o bot não ${one ? 'lhe' : 'lhes'} vai tocar.`
+    : `⚠️ Não mexi ${one ? 'na aba' : 'nas abas'} ${list}: já ${one ? 'existia' : 'existiam'} na planilha com dados teus.`
+  return `${head} Dá outro nome ${one ? 'a essa aba' : 'a essas abas'} aqui na app (Abas por cargo / aba "Todos") ou muda o nome ${one ? 'da tua' : 'das tuas'} na planilha.`
+}
+
+function sheetTabs(guild: Guild) {
+  return buildSheetTabs(store.getSheetSettings(guild.id), store.listRecords(guild.id), extras(guild))
+}
+
 export async function syncSheet(guild: Guild): Promise<string> {
   if (syncing.has(guild.id)) return 'Já está a sincronizar.'
   syncing.add(guild.id)
@@ -104,11 +117,12 @@ export async function syncSheet(guild: Guild): Promise<string> {
     if (!settings.spreadsheetId) throw new Error('Falta o link da planilha.')
     await guild.roles.fetch().catch(() => undefined)
     const warning = await refreshRecords(guild)
-    const tabs = buildSheetTabs(settings, store.listRecords(guild.id), extras(guild))
+    const tabs = sheetTabs(guild)
     if (tabs.length === 0) throw new Error('Não há nenhuma aba ligada — liga a aba "Todos" ou adiciona cargos.')
     const r = await writeTabs(key, settings.spreadsheetId, tabs)
-    const message = `Planilha "${r.title}" atualizada: ${tabs.length} aba(s), ${r.rows} linha(s).${warning ? ` ${warning}` : ''}`
-    store.setSheetStatus(guild.id, { lastSyncAt: new Date().toISOString(), lastSyncOk: true, lastSyncMessage: message })
+    const written = tabs.length - r.skipped.length
+    const message = `Planilha "${r.title}" atualizada: ${written} aba(s), ${r.rows} linha(s).${r.skipped.length ? ` ${skippedText(r.skipped)}` : ''}${warning ? ` ${warning}` : ''}`
+    store.setSheetStatus(guild.id, { lastSyncAt: new Date().toISOString(), lastSyncOk: r.skipped.length === 0, lastSyncMessage: message })
     return message
   } catch (err) {
     store.setSheetStatus(guild.id, { lastSyncAt: new Date().toISOString(), lastSyncOk: false, lastSyncMessage: errText(err) })
@@ -314,8 +328,9 @@ export async function applyMemberSheetAction(guild: Guild, action: MemberSheetAc
       if (!key) throw new Error('Falta a chave da conta de serviço do Google.')
       const settings = store.getSheetSettings(guild.id)
       if (!settings.spreadsheetId) throw new Error('Falta o link da planilha.')
-      const info = await spreadsheetInfo(key, settings.spreadsheetId)
-      return done(`Ligado à planilha "${info.title}" (${info.tabs.length} aba(s)).`)
+      const info = await foreignTabs(key, settings.spreadsheetId, sheetTabs(guild))
+      const base = `Ligado à planilha "${info.title}" (${info.tabs.length} aba(s)).`
+      return done(info.foreign.length ? `${base} ${skippedText(info.foreign, true)}` : `${base} As tuas abas ficam como estão — o bot só escreve nas dele.`)
     }
     case 'importMembers':
       return done(await importMembers(guild, Array.isArray(action.roleIds) ? action.roleIds : []))

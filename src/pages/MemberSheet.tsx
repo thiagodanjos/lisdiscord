@@ -309,7 +309,7 @@ export default function MemberSheet() {
                   </Button>
                 </div>
                 <p className="mt-1 text-[11px] text-faint">
-                  O bot só mexe nas abas dele (as outras ficam como estão). Partilha a planilha com os membros como <b>só leitura</b> — se alguém apagar ou mudar algo, o lote seguinte volta a pôr tudo certo a partir do registo.
+                  Pode ser uma planilha que já tens: o bot só mexe nas abas dele — se já houver uma aba tua com o mesmo nome e com dados, ele não lhe toca e avisa. Partilha a planilha com os membros como <b>só leitura</b> — se alguém apagar ou mudar algo, o lote seguinte volta a pôr tudo certo a partir do registo.
                 </p>
               </div>
             </Card>

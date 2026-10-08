@@ -6,7 +6,7 @@ Corre no teu computador ou, se quiseres o bot **online 24/7**, num servidor grá
 
 ![Visão Geral](docs/screenshots/painel.png)
 
-> Versão atual: **3.2.0** · [Releases](https://github.com/thiagodanjos/lisdiscord/releases) · Created by **@thiagoanjoss**
+> Versão atual: **3.2.1** · [Releases](https://github.com/thiagodanjos/lisdiscord/releases) · Created by **@thiagoanjoss**
 
 ---
 
@@ -46,6 +46,8 @@ No ecrã de entrada, **"Só explorar em modo demonstração"** abre a app inteir
 ## Novidades
 
 ### 3.2: Registo de membros e planilha (Google Sheets)
+
+- **3.2.1**: pode ser uma **planilha que já tens**. As abas do bot ficam marcadas com uma etiqueta invisível. Se já houver uma aba tua com o mesmo nome e com dados, o bot não lhe toca e avisa (no **Testar** e no lote). Abas vazias são aproveitadas.
 
 - **Registo de membros.** Quando a staff carrega em **Finalizar** num ticket de verificação, o bot grava o membro no registo com os cargos com que ficou, quem o verificou e quando. Só o bot escreve no registo.
 - **Planilha em lote.** De tempos a tempos (de 5 minutos a 1 dia, ou só à mão) o bot reescreve uma planilha do Google a partir do registo:
@@ -309,7 +311,7 @@ cd ~/lisdiscord && git pull && docker compose up -d --build && docker system pru
 Sobre a chave e a planilha:
 
 - A chave fica só no bot (`data/google-service-account.json`, com permissões restritas). Nunca volta para a app e nunca vai para o Git.
-- O bot só escreve nas abas que ele próprio gere; as outras abas da planilha ficam como estão.
+- Pode ser uma planilha que já tens: o bot só escreve nas abas que ele próprio criou. Se uma aba tua tiver o mesmo nome e dados, ele não lhe toca e avisa.
 - Só entra nas planilhas que partilhares com a conta de serviço.
 
 ---

@@ -1,4 +1,5 @@
-import { chmodSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 import type { MemberRecord, MemberSheetSettings, MemberSheetStatus } from '../../shared/types'
 import { defaultMemberSheetSettings } from '../../shared/memberSheet'
 import { readJsonFile, writeJsonFile } from './fileStore'
@@ -110,6 +111,7 @@ export function saveGoogleKey(raw: string): GoogleServiceAccount {
     throw new Error('Isto não parece a chave de uma conta de serviço do Google (falta "client_email" ou "private_key").')
   }
   const key: GoogleServiceAccount = { client_email: parsed.client_email, private_key: parsed.private_key, token_uri: parsed.token_uri || 'https://oauth2.googleapis.com/token' }
+  mkdirSync(path.dirname(paths.googleKeyFile), { recursive: true })
   writeFileSync(paths.googleKeyFile, JSON.stringify(key), { encoding: 'utf-8', mode: 0o600 })
   try {
     chmodSync(paths.googleKeyFile, 0o600)
