@@ -1879,6 +1879,16 @@ export interface MemberSheetSettings {
   /** Backup automático do registo num canal (ficheiro .json). */
   backupChannelId: string | null
   backupHours: number
+  /** Abas que já existiam com dados e que o dono autorizou o bot a usar (o conteúdo é substituído). */
+  claimedTabs: string[]
+}
+
+/** De quem é cada aba da planilha: do bot, vazia ou de outra pessoa (com dados). */
+export type SheetTabOwner = 'mine' | 'empty' | 'theirs'
+
+export interface SpreadsheetInspect {
+  title: string
+  tabs: { name: string; owner: SheetTabOwner }[]
 }
 
 export interface MemberSheetStatus {
@@ -1897,6 +1907,8 @@ export interface MemberSheetState {
   message?: string
   /** Só na ação "export". */
   exportJson?: string
+  /** Só na ação "test": as abas da planilha e de quem é cada uma. */
+  sheet?: SpreadsheetInspect
 }
 
 export type MemberSheetAction =

@@ -6,7 +6,7 @@ Corre no teu computador ou, se quiseres o bot **online 24/7**, num servidor grá
 
 ![Visão Geral](docs/screenshots/painel.png)
 
-> Versão atual: **3.2.1** · [Releases](https://github.com/thiagodanjos/lisdiscord/releases) · Created by **@thiagoanjoss**
+> Versão atual: **3.2.2** · [Releases](https://github.com/thiagodanjos/lisdiscord/releases) · Created by **@thiagoanjoss**
 
 ---
 
@@ -47,6 +47,7 @@ No ecrã de entrada, **"Só explorar em modo demonstração"** abre a app inteir
 
 ### 3.2: Registo de membros e planilha (Google Sheets)
 
+- **3.2.2**: depois de **Testar**, a app mostra todas as abas da planilha e de quem é cada uma (do bot, vazia ou tua). Em cada aba dá para **escolher da planilha** em vez de escrever o nome. Para o bot escrever numa aba tua que já tem dados, carrega em **Usar esta aba** e confirma (o conteúdo dessa aba é substituído).
 - **3.2.1**: pode ser uma **planilha que já tens**. As abas do bot ficam marcadas com uma etiqueta invisível. Se já houver uma aba tua com o mesmo nome e com dados, o bot não lhe toca e avisa (no **Testar** e no lote). Abas vazias são aproveitadas.
 
 - **Registo de membros.** Quando a staff carrega em **Finalizar** num ticket de verificação, o bot grava o membro no registo com os cargos com que ficou, quem o verificou e quando. Só o bot escreve no registo.
@@ -306,7 +307,8 @@ cd ~/lisdiscord && git pull && docker compose up -d --build && docker system pru
 2. Em **IAM e administrador → Contas de serviço**, cria uma conta. Depois vai a **Chaves → Adicionar chave → JSON** e descarrega o ficheiro.
 3. Na app, em **Equipa → Registo & Planilha**, carrega esse `.json`.
 4. Partilha a planilha com o email da conta de serviço (aparece na app, com botão **Copiar**) como **Editor**.
-5. Cola o link da planilha, carrega em **Testar** e depois em **Sincronizar agora**.
+5. Cola o link da planilha e carrega em **Testar**. A app mostra as abas dessa planilha.
+6. Em **Abas por cargo**, escolhe para que aba vai cada grupo: uma aba nova (o bot cria-a) ou uma que já existe (**Escolher da planilha…**). Depois **Guardar** e **Sincronizar agora**.
 
 Sobre a chave e a planilha:
 

@@ -3,7 +3,7 @@ import type { MemberRecord, MemberSheetAction, MemberSheetSettings, MemberSheetS
 import { buildSheetTabs, defaultMemberSheetSettings, parseSpreadsheetId, SHEET_COLUMN_LABELS } from '../../shared/memberSheet'
 import * as store from '../store/memberRegistry'
 import * as movPoints from '../store/movPoints'
-import { foreignTabs, writeTabs } from './googleSheets'
+import { inspectSpreadsheet, writeTabs } from './googleSheets'
 
 // Registo de membros + planilha: quem é verificado fica gravado no registo do bot (com os cargos),
 // e de tempos a tempos o bot reescreve a planilha do Google a partir do registo. A planilha é só uma
@@ -100,7 +100,7 @@ function skippedText(names: string[], before = false): string {
   const head = before
     ? `⚠️ ${one ? 'A aba' : 'As abas'} ${list} já ${one ? 'existe' : 'existem'} na planilha com dados teus — o bot não ${one ? 'lhe' : 'lhes'} vai tocar.`
     : `⚠️ Não mexi ${one ? 'na aba' : 'nas abas'} ${list}: já ${one ? 'existia' : 'existiam'} na planilha com dados teus.`
-  return `${head} Dá outro nome ${one ? 'a essa aba' : 'a essas abas'} aqui na app (Abas por cargo / aba "Todos") ou muda o nome ${one ? 'da tua' : 'das tuas'} na planilha.`
+  return `${head} Na app, em "Abas", escolhe outra aba ou carrega em "Usar esta aba" se queres mesmo que o bot escreva lá (o que lá está é substituído).`
 }
 
 function sheetTabs(guild: Guild) {
@@ -119,7 +119,7 @@ export async function syncSheet(guild: Guild): Promise<string> {
     const warning = await refreshRecords(guild)
     const tabs = sheetTabs(guild)
     if (tabs.length === 0) throw new Error('Não há nenhuma aba ligada — liga a aba "Todos" ou adiciona cargos.')
-    const r = await writeTabs(key, settings.spreadsheetId, tabs)
+    const r = await writeTabs(key, settings.spreadsheetId, tabs, settings.claimedTabs)
     const written = tabs.length - r.skipped.length
     const message = `Planilha "${r.title}" atualizada: ${written} aba(s), ${r.rows} linha(s).${r.skipped.length ? ` ${skippedText(r.skipped)}` : ''}${warning ? ` ${warning}` : ''}`
     store.setSheetStatus(guild.id, { lastSyncAt: new Date().toISOString(), lastSyncOk: r.skipped.length === 0, lastSyncMessage: message })
@@ -271,7 +271,10 @@ export async function applyMemberSheetSettings(guild: Guild, input: MemberSheetS
   const d = defaultMemberSheetSettings()
   await guild.roles.fetch().catch(() => undefined)
   const txt = (v: unknown, max: number, fb: string) => (typeof v === 'string' ? v.slice(0, max).trim() || fb : fb)
-  const tab = (v: string) => v.replace(/[[\]*?:/\\]/g, '').slice(0, 90).trim()
+  // O Google aceita quase tudo no nome de uma aba (o nome vai sempre entre aspas) — só se tiram
+  // caracteres de controlo, para poder escolher abas que já existem com o nome exato.
+  // eslint-disable-next-line no-control-regex
+  const tab = (v: string) => v.replace(/[\u0000-\u001f]/g, '').slice(0, 100).trim()
   const keys = Object.keys(SHEET_COLUMN_LABELS) as SheetColumnKey[]
   const spreadsheetId = input.spreadsheetId ? parseSpreadsheetId(input.spreadsheetId) : ''
   if (input.spreadsheetId && !spreadsheetId) throw new Error('Não percebi o link da planilha — cola o link completo (https://docs.google.com/spreadsheets/d/…).')
@@ -300,8 +303,12 @@ export async function applyMemberSheetSettings(guild: Guild, input: MemberSheetS
     textLeft: txt(input.textLeft, 40, d.textLeft),
     backupChannelId: input.backupChannelId || null,
     backupHours: Math.min(720, Math.max(0, Math.round(Number(input.backupHours) || 0))),
+    claimedTabs: [],
   }
   for (const k of keys) if (!next.columns.some((c) => c.key === k)) next.columns.push({ key: k, header: SHEET_COLUMN_LABELS[k], show: false })
+  // Autorizações só valem para abas que o bot vai mesmo usar.
+  const used = new Set([...(next.allTab.enabled ? [next.allTab.name] : []), ...next.sections.map((x) => x.tabName), ...(next.otherTab.enabled ? [next.otherTab.name] : [])])
+  next.claimedTabs = [...new Set((Array.isArray(input.claimedTabs) ? input.claimedTabs : []).filter((n): n is string => typeof n === 'string').map(tab))].filter((n) => used.has(n)).slice(0, 40)
   try {
     new Intl.DateTimeFormat('pt-BR', { timeZone: next.timezone })
   } catch {
@@ -328,9 +335,12 @@ export async function applyMemberSheetAction(guild: Guild, action: MemberSheetAc
       if (!key) throw new Error('Falta a chave da conta de serviço do Google.')
       const settings = store.getSheetSettings(guild.id)
       if (!settings.spreadsheetId) throw new Error('Falta o link da planilha.')
-      const info = await foreignTabs(key, settings.spreadsheetId, sheetTabs(guild))
-      const base = `Ligado à planilha "${info.title}" (${info.tabs.length} aba(s)).`
-      return done(info.foreign.length ? `${base} ${skippedText(info.foreign, true)}` : `${base} As tuas abas ficam como estão — o bot só escreve nas dele.`)
+      const tabs = sheetTabs(guild)
+      const sheet = await inspectSpreadsheet(key, settings.spreadsheetId, tabs[0]?.rows[0] ?? [])
+      const theirs = new Set(sheet.tabs.filter((t) => t.owner === 'theirs').map((t) => t.name))
+      const foreign = tabs.map((t) => t.name).filter((n) => theirs.has(n) && !settings.claimedTabs.includes(n))
+      const base = `Ligado à planilha "${sheet.title}" (${sheet.tabs.length} aba(s)).`
+      return done(foreign.length ? `${base} ${skippedText(foreign, true)}` : `${base} Está tudo pronto — as tuas outras abas ficam como estão.`, { sheet })
     }
     case 'importMembers':
       return done(await importMembers(guild, Array.isArray(action.roleIds) ? action.roleIds : []))

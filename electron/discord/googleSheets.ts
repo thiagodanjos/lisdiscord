@@ -1,6 +1,7 @@
 import { createSign } from 'node:crypto'
 import type { GoogleServiceAccount } from '../store/memberRegistry'
 import type { SheetTab } from '../../shared/memberSheet'
+import type { SpreadsheetInspect } from '../../shared/types'
 
 // Cliente mínimo do Google Sheets (sem bibliotecas): conta de serviço → token (JWT RS256) → API v4.
 // Só mexe nas abas que o bot gere (marcadas com uma etiqueta invisível); as outras abas da
@@ -56,64 +57,64 @@ interface SpreadsheetMeta {
 const OWNER_KEY = 'lisdiscord'
 const META_FIELDS = 'properties.title,sheets(properties(sheetId,title),developerMetadata(metadataKey))'
 
-export async function spreadsheetInfo(key: GoogleServiceAccount, spreadsheetId: string): Promise<{ title: string; tabs: string[] }> {
-  const meta = await call<SpreadsheetMeta>(key, `${API}/${encodeURIComponent(spreadsheetId)}?fields=properties.title,sheets.properties`)
-  return { title: meta.properties.title, tabs: meta.sheets.map((s) => s.properties.title) }
-}
-
 const quoteTab = (name: string) => `'${name.replace(/'/g, "''")}'`
 const sameRow = (a: unknown[] = [], b: unknown[] = []) => a.length === b.length && a.every((v, i) => String(v) === String(b[i]))
 
-type TabCheck = { name: string; sheetId: number | null; state: 'new' | 'mine' | 'adopt' | 'foreign' }
+type Owner = 'tagged' | 'header' | 'empty' | 'theirs'
 
-/** Para cada aba que o bot quer escrever: nova, já dele, livre para adotar (vazia ou com o cabeçalho
- * do bot) ou de outra pessoa (com dados — fica intocada). */
-async function checkTabs(key: GoogleServiceAccount, id: string, tabs: SheetTab[]): Promise<{ title: string; checks: TabCheck[] }> {
-  const meta = await call<SpreadsheetMeta>(key, `${API}/${id}?fields=${encodeURIComponent(META_FIELDS)}`)
+const batchGet = (key: GoogleServiceAccount, id: string, ranges: string[]) =>
+  call<{ valueRanges?: { values?: unknown[][] }[] }>(key, `${API}/${id}/values:batchGet?${ranges.map((r) => `ranges=${encodeURIComponent(r)}`).join('&')}`)
+
+/** De quem é cada aba: etiquetada pelo bot, com o cabeçalho do bot (versões antigas), vazia ou de
+ * outra pessoa (com dados). Lê as primeiras linhas de todas as abas de uma vez. */
+async function ownership(key: GoogleServiceAccount, id: string, meta: SpreadsheetMeta, names: string[], header: unknown[]): Promise<Map<string, Owner>> {
+  const out = new Map<string, Owner>()
   const byName = new Map(meta.sheets.map((s) => [s.properties.title, s]))
-  const checks: TabCheck[] = []
-  for (const t of tabs) {
-    const sheet = byName.get(t.name)
-    if (!sheet) {
-      checks.push({ name: t.name, sheetId: null, state: 'new' })
-      continue
-    }
-    const sheetId = sheet.properties.sheetId
-    if (sheet.developerMetadata?.some((m) => m.metadataKey === OWNER_KEY)) {
-      checks.push({ name: t.name, sheetId, state: 'mine' })
-      continue
-    }
-    // Sem etiqueta: só se adota se estiver vazia ou se a 1.ª linha for exatamente o cabeçalho do bot.
-    const first = await call<{ valueRanges?: { values?: unknown[][] }[] }>(key, `${API}/${id}/values:batchGet?ranges=${encodeURIComponent(`${quoteTab(t.name)}!1:1`)}`)
-    const firstRow = first.valueRanges?.[0]?.values?.[0]
-    let state: TabCheck['state']
-    if (firstRow?.length) state = sameRow(firstRow, t.rows[0]) ? 'adopt' : 'foreign'
-    else {
-      const all = await call<{ valueRanges?: { values?: unknown[][] }[] }>(key, `${API}/${id}/values:batchGet?ranges=${encodeURIComponent(quoteTab(t.name))}`)
-      state = all.valueRanges?.[0]?.values?.some((r) => r.some((c) => String(c ?? '').trim())) ? 'foreign' : 'adopt'
-    }
-    checks.push({ name: t.name, sheetId, state })
+  const untagged: string[] = []
+  for (const n of new Set(names)) {
+    const sheet = byName.get(n)
+    if (!sheet) continue
+    if (sheet.developerMetadata?.some((m) => m.metadataKey === OWNER_KEY)) out.set(n, 'tagged')
+    else untagged.push(n)
   }
-  return { title: meta.properties.title, checks }
+  if (!untagged.length) return out
+  const first = await batchGet(key, id, untagged.map((n) => `${quoteTab(n)}!1:1`))
+  const blankFirst: string[] = []
+  untagged.forEach((n, i) => {
+    const row = first.valueRanges?.[i]?.values?.[0]
+    if (row?.some((c) => String(c ?? '').trim())) out.set(n, header.length && sameRow(row, header) ? 'header' : 'theirs')
+    else blankFirst.push(n)
+  })
+  if (blankFirst.length) {
+    // 1.ª linha vazia: só é "vazia" se não houver nada em lado nenhum da aba.
+    const all = await batchGet(key, id, blankFirst.map(quoteTab))
+    blankFirst.forEach((n, i) => out.set(n, all.valueRanges?.[i]?.values?.some((r) => r.some((c) => String(c ?? '').trim())) ? 'theirs' : 'empty'))
+  }
+  return out
 }
 
-/** Nomes das abas do bot que já existem na planilha com dados de outra pessoa. */
-export async function foreignTabs(key: GoogleServiceAccount, spreadsheetId: string, tabs: SheetTab[]): Promise<{ title: string; tabs: string[]; foreign: string[] }> {
+/** Todas as abas da planilha e de quem é cada uma (para a app deixar escolher). */
+export async function inspectSpreadsheet(key: GoogleServiceAccount, spreadsheetId: string, header: unknown[]): Promise<SpreadsheetInspect> {
   const id = encodeURIComponent(spreadsheetId)
-  const [{ title, checks }, info] = await Promise.all([checkTabs(key, id, tabs), spreadsheetInfo(key, spreadsheetId)])
-  return { title, tabs: info.tabs, foreign: checks.filter((c) => c.state === 'foreign').map((c) => c.name) }
+  const meta = await call<SpreadsheetMeta>(key, `${API}/${id}?fields=${encodeURIComponent(META_FIELDS)}`)
+  const names = meta.sheets.map((s) => s.properties.title)
+  const owners = await ownership(key, id, meta, names, header)
+  return { title: meta.properties.title, tabs: names.map((name) => ({ name, owner: ({ tagged: 'mine', header: 'mine', empty: 'empty', theirs: 'theirs' } as const)[owners.get(name) ?? 'empty'] })) }
 }
 
 /** Reescreve as abas do bot (cria as que faltam, com o cabeçalho a negrito e congelado). Abas com o
- * mesmo nome que já tinham dados de outra pessoa não são tocadas — vêm em `skipped`. */
-export async function writeTabs(key: GoogleServiceAccount, spreadsheetId: string, tabs: SheetTab[]): Promise<{ title: string; rows: number; skipped: string[] }> {
+ * mesmo nome que já tinham dados de outra pessoa só são usadas se estiverem em `claimed` (o dono
+ * autorizou na app); as outras não são tocadas e vêm em `skipped`. */
+export async function writeTabs(key: GoogleServiceAccount, spreadsheetId: string, tabs: SheetTab[], claimed: string[] = []): Promise<{ title: string; rows: number; skipped: string[] }> {
   const id = encodeURIComponent(spreadsheetId)
-  const { title, checks } = await checkTabs(key, id, tabs)
-  const skipped = checks.filter((c) => c.state === 'foreign').map((c) => c.name)
+  const meta = await call<SpreadsheetMeta>(key, `${API}/${id}?fields=${encodeURIComponent(META_FIELDS)}`)
+  const sheetIdOf = new Map(meta.sheets.map((s) => [s.properties.title, s.properties.sheetId]))
+  const owners = await ownership(key, id, meta, tabs.map((t) => t.name), tabs[0]?.rows[0] ?? [])
+  const skipped = tabs.filter((t) => owners.get(t.name) === 'theirs' && !claimed.includes(t.name)).map((t) => t.name)
   const writable = tabs.filter((t) => !skipped.includes(t.name))
 
-  const missing = checks.filter((c) => c.state === 'new')
-  const toTag: number[] = checks.filter((c) => c.state === 'adopt' && c.sheetId !== null).map((c) => c.sheetId as number)
+  const missing = writable.filter((t) => !sheetIdOf.has(t.name))
+  const toTag: number[] = writable.filter((t) => sheetIdOf.has(t.name) && owners.get(t.name) !== 'tagged').map((t) => sheetIdOf.get(t.name)!)
   if (missing.length) {
     const created = await call<{ replies: { addSheet?: { properties: { sheetId: number } } }[] }>(key, `${API}/${id}:batchUpdate`, {
       method: 'POST',
@@ -143,5 +144,5 @@ export async function writeTabs(key: GoogleServiceAccount, spreadsheetId: string
       body: { valueInputOption: 'RAW', data: writable.map((t) => ({ range: `${quoteTab(t.name)}!A1`, values: t.rows })) },
     })
   }
-  return { title, rows: writable.reduce((n, t) => n + Math.max(0, t.rows.length - 1), 0), skipped }
+  return { title: meta.properties.title, rows: writable.reduce((n, t) => n + Math.max(0, t.rows.length - 1), 0), skipped }
 }

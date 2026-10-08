@@ -30,11 +30,74 @@ import { useGuildContext } from '../lib/useGuildContext'
 import { Badge, Button, Card, ConfirmDialog, Modal, PageHeader, Tabs, Toggle } from '../components/ui'
 import { GuildSelect, Label, RemoteBadge, RolePills, SectionTitle } from '../components/form'
 import { REPORT_TIMEZONES } from '../../shared/movFeatures'
-import { buildSheetTabs, defaultMemberSheetSettings, mainSection, SHEET_COLUMN_LABELS } from '../../shared/memberSheet'
-import type { MemberRecord, MemberSearchResult, MemberSheetAction, MemberSheetSettings, MemberSheetState } from '../../shared/types'
+import { buildSheetTabs, defaultMemberSheetSettings, mainSection, parseSpreadsheetId, SHEET_COLUMN_LABELS } from '../../shared/memberSheet'
+import type { MemberRecord, MemberSearchResult, MemberSheetAction, MemberSheetSettings, MemberSheetState, SheetTabOwner, SpreadsheetInspect } from '../../shared/types'
 
 /** O `inputClass` tem `w-full` — aqui as caixas ficam lado a lado. */
 const narrowInput = inputClass.replace('w-full', 'w-56')
+const pickInput = inputClass.replace('w-full', 'w-52')
+
+const OWNER_TEXT: Record<SheetTabOwner, string> = { mine: 'do bot', empty: 'vazia', theirs: 'tem dados' }
+
+/** Nome da aba + escolher uma aba que já existe na planilha + de quem é essa aba. */
+function TabField({
+  value,
+  onChange,
+  sheet,
+  claimed,
+  onClaim,
+  onUnclaim,
+}: {
+  value: string
+  onChange: (v: string) => void
+  sheet: SpreadsheetInspect | null
+  claimed: string[]
+  onClaim: (name: string) => void
+  onUnclaim: (name: string) => void
+}) {
+  const name = value.trim()
+  const found = sheet?.tabs.find((t) => t.name === name)
+  let status = null
+  if (sheet && name) {
+    if (!found) status = <Badge tone="cyan">nova — o bot cria</Badge>
+    else if (found.owner === 'mine') status = <Badge tone="success">do bot</Badge>
+    else if (found.owner === 'empty') status = <Badge tone="accent">vazia — o bot usa</Badge>
+    else if (claimed.includes(name))
+      status = (
+        <>
+          <Badge tone="warning">autorizada — o conteúdo vai ser substituído</Badge>
+          <button type="button" onClick={() => onUnclaim(name)} className="text-[11px] text-faint underline hover:text-text">
+            desfazer
+          </button>
+        </>
+      )
+    else
+      status = (
+        <>
+          <Badge tone="danger">tem dados teus — o bot não mexe</Badge>
+          <Button variant="dark" className="px-2.5 py-1 text-xs" onClick={() => onClaim(name)}>
+            Usar esta aba
+          </Button>
+        </>
+      )
+  }
+  return (
+    <>
+      <input value={value} onChange={(e) => onChange(e.target.value)} maxLength={100} className={`py-1.5 ${narrowInput}`} />
+      {sheet && sheet.tabs.length > 0 && (
+        <select value="" onChange={(e) => e.target.value && onChange(e.target.value)} className={`py-1.5 ${pickInput}`} title="Escolher uma aba que já existe na planilha">
+          <option value="">Escolher da planilha…</option>
+          {sheet.tabs.map((t) => (
+            <option key={t.name} value={t.name}>
+              {t.name} — {OWNER_TEXT[t.owner]}
+            </option>
+          ))}
+        </select>
+      )}
+      {status}
+    </>
+  )
+}
 
 const SYNC_OPTIONS = [
   [0, 'Só quando carrego em Sincronizar'],
@@ -85,12 +148,15 @@ export default function MemberSheet() {
   const [addQuery, setAddQuery] = useState('')
   const [addResults, setAddResults] = useState<MemberSearchResult[]>([])
   const [confirm, setConfirm] = useState<{ title: string; text: string; action: MemberSheetAction } | null>(null)
+  const [sheetInfo, setSheetInfo] = useState<SpreadsheetInspect | null>(null)
+  const [claimAsk, setClaimAsk] = useState<string | null>(null)
   const keyInput = useRef<HTMLInputElement>(null)
   const backupInput = useRef<HTMLInputElement>(null)
 
   function apply(s: MemberSheetState, keepDraft = false) {
     setState(s)
     if (!keepDraft) setDraft(s.settings)
+    if (s.sheet) setSheetInfo(s.sheet)
     if (s.message) setNote(s.message)
   }
 
@@ -98,9 +164,19 @@ export default function MemberSheet() {
     if (!guildId) return
     setError('')
     setNote('')
+    setSheetInfo(null)
     bridge
       .getMemberSheet(guildId, isRemote)
-      .then((s) => apply(s))
+      .then((s) => {
+        apply(s)
+        // Lê logo as abas da planilha (em silêncio) para os seletores de aba.
+        if (s.googleEmail && s.settings.spreadsheetId) {
+          bridge
+            .memberSheetAction(guildId, { kind: 'test' }, isRemote)
+            .then((r) => setSheetInfo(r.sheet ?? null))
+            .catch(() => undefined)
+        }
+      })
       .catch((err) => setError(cleanIpcError(err)))
   }, [guildId, isRemote])
 
@@ -151,6 +227,13 @@ export default function MemberSheet() {
       if ((action.kind === 'sync' || action.kind === 'test') && dirty) apply(await bridge.setMemberSheetSettings(guildId, draft, isRemote))
       const s = await bridge.memberSheetAction(guildId, action, isRemote)
       apply(s, dirty && action.kind !== 'sync' && action.kind !== 'test')
+      // Depois de um lote, as abas mudam de dono (ficam "do bot") — lê-as outra vez em silêncio.
+      if (action.kind === 'sync') {
+        bridge
+          .memberSheetAction(guildId, { kind: 'test' }, isRemote)
+          .then((r) => setSheetInfo(r.sheet ?? null))
+          .catch(() => undefined)
+      }
       if (action.kind === 'export' && s.exportJson) download(`registo-membros-${new Date().toISOString().slice(0, 10)}.json`, s.exportJson)
       return true
     } catch (err) {
@@ -213,6 +296,19 @@ export default function MemberSheet() {
       return { ...d, columns: list }
     })
   const unusedRoles = roles.filter((r) => !draft.sections.some((s) => s.roleId === r.id))
+  // As abas lidas só valem para a planilha que está guardada (se mudares o link, carrega em Testar).
+  const linkedSheet = sheetInfo && state && parseSpreadsheetId(draft.spreadsheetId) === state.settings.spreadsheetId ? sheetInfo : null
+  const claimed = draft.claimedTabs ?? []
+  const tabField = (value: string, onChange: (v: string) => void) => (
+    <TabField
+      value={value}
+      onChange={onChange}
+      sheet={linkedSheet}
+      claimed={claimed}
+      onClaim={setClaimAsk}
+      onUnclaim={(n) => set('claimedTabs', claimed.filter((x) => x !== n))}
+    />
+  )
   const status = state?.status
 
   return (
@@ -301,13 +397,29 @@ export default function MemberSheet() {
               )}
               <input ref={keyInput} type="file" accept=".json,application/json" className="hidden" onChange={(e) => void uploadKey(e.target.files?.[0])} />
               <div>
-                <Label>Link da planilha</Label>
+                <Label>Planilha — cola o link do Google Sheets</Label>
                 <div className="mt-1.5 flex gap-2">
                   <input value={draft.spreadsheetId} onChange={(e) => set('spreadsheetId', e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" className={inputClass} />
                   <Button variant="dark" onClick={() => void act({ kind: 'test' })} loading={busy === 'test'} disabled={!state?.googleEmail || !draft.spreadsheetId}>
                     Testar
                   </Button>
                 </div>
+                {linkedSheet && (
+                  <div className="mt-2 rounded-lg border border-border bg-black/20 p-2.5 text-xs">
+                    <p className="text-muted">
+                      📄 Ligado a <b className="text-text">{linkedSheet.title}</b> — {linkedSheet.tabs.length} aba(s):
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {linkedSheet.tabs.map((t) => (
+                        <Badge key={t.name} tone={t.owner === 'mine' ? 'success' : t.owner === 'empty' ? 'accent' : 'default'}>
+                          {t.name}
+                          {t.owner !== 'theirs' && <span className="font-normal opacity-70">· {OWNER_TEXT[t.owner]}</span>}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-faint">Escolhe mais abaixo, em "Abas", para que aba(s) vão os membros.</p>
+                  </div>
+                )}
                 <p className="mt-1 text-[11px] text-faint">
                   Pode ser uma planilha que já tens: o bot só mexe nas abas dele — se já houver uma aba tua com o mesmo nome e com dados, ele não lhe toca e avisa. Partilha a planilha com os membros como <b>só leitura</b> — se alguém apagar ou mudar algo, o lote seguinte volta a pôr tudo certo a partir do registo.
                 </p>
@@ -404,7 +516,7 @@ export default function MemberSheet() {
               <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-black/20 px-3 py-2">
                 <Toggle checked={draft.allTab.enabled} onChange={(enabled) => set('allTab', { ...draft.allTab, enabled })} />
                 <span className="text-sm text-muted">Aba com toda a gente:</span>
-                <input value={draft.allTab.name} onChange={(e) => set('allTab', { ...draft.allTab, name: e.target.value })} maxLength={90} className={`py-1.5 ${narrowInput}`} />
+                {tabField(draft.allTab.name, (name) => set('allTab', { ...draft.allTab, name }))}
               </div>
               {draft.sections.map((sec, i) => (
                 <div key={sec.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-black/20 px-3 py-2">
@@ -423,7 +535,7 @@ export default function MemberSheet() {
                       ))}
                   </select>
                   <span className="text-xs text-faint">→ aba</span>
-                  <input value={sec.tabName} onChange={(e) => set('sections', draft.sections.map((x) => (x.id === sec.id ? { ...x, tabName: e.target.value } : x)))} maxLength={90} className={`py-1.5 ${narrowInput}`} />
+                  {tabField(sec.tabName, (tabName) => set('sections', draft.sections.map((x) => (x.id === sec.id ? { ...x, tabName } : x))))}
                   <div className="ml-auto flex">
                     <button type="button" onClick={() => moveSection(i, -1)} disabled={i === 0} className="rounded p-1 text-faint hover:text-text disabled:opacity-30">
                       <ArrowUp size={14} />
@@ -440,7 +552,7 @@ export default function MemberSheet() {
               <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-black/20 px-3 py-2">
                 <Toggle checked={draft.otherTab.enabled} onChange={(enabled) => set('otherTab', { ...draft.otherTab, enabled })} />
                 <span className="text-sm text-muted">Aba para quem não tem nenhum destes cargos:</span>
-                <input value={draft.otherTab.name} onChange={(e) => set('otherTab', { ...draft.otherTab, name: e.target.value })} maxLength={90} className={`py-1.5 ${narrowInput}`} />
+                {tabField(draft.otherTab.name, (name) => set('otherTab', { ...draft.otherTab, name }))}
               </div>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -714,6 +826,17 @@ export default function MemberSheet() {
         description={confirm?.text ?? ''}
         confirmLabel="Confirmar"
         danger={confirm?.action.kind === 'remove'}
+      />
+      <ConfirmDialog
+        open={claimAsk !== null}
+        onClose={() => setClaimAsk(null)}
+        onConfirm={() => {
+          if (claimAsk) set('claimedTabs', [...new Set([...claimed, claimAsk])])
+        }}
+        title={`Usar a aba "${claimAsk ?? ''}"?`}
+        description="Esta aba já tem dados. No próximo lote, o bot apaga o que lá está e escreve a lista do registo — e a partir daí passa a ser a aba dele. Se precisares do conteúdo atual, faz antes uma cópia (na planilha: clique direito na aba → Duplicar). Depois carrega em Guardar."
+        confirmLabel="Usar esta aba"
+        danger
       />
     </div>
   )

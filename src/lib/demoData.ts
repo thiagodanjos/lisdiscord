@@ -1959,7 +1959,21 @@ export const demoBridge: LisDiscordBridge = {
       import: 'Backup restaurado (demonstração).',
     }
     const state = await demoBridge.getMemberSheet(guildId, false)
-    return { ...state, message: messages[action.kind], exportJson: action.kind === 'export' ? JSON.stringify({ kind: 'lisdiscord-member-registry', version: 1, records: demoRecords }, null, 2) : undefined }
+    const sheet =
+      action.kind === 'test'
+        ? {
+            title: 'Mov Call — membros',
+            tabs: [
+              { name: 'Todos', owner: 'mine' as const },
+              { name: 'Supervisores', owner: 'mine' as const },
+              { name: 'Rec', owner: 'theirs' as const },
+              { name: 'Passtime', owner: 'theirs' as const },
+              { name: 'Mov chat', owner: 'theirs' as const },
+              { name: 'Página2', owner: 'empty' as const },
+            ],
+          }
+        : undefined
+    return { ...state, sheet, message: messages[action.kind], exportJson: action.kind === 'export' ? JSON.stringify({ kind: 'lisdiscord-member-registry', version: 1, records: demoRecords }, null, 2) : undefined }
   },
   async setGoogleKey(json) {
     await delay()

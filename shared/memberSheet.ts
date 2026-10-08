@@ -40,6 +40,7 @@ export function defaultMemberSheetSettings(): MemberSheetSettings {
     textLeft: 'Saiu',
     backupChannelId: null,
     backupHours: 24,
+    claimedTabs: [],
   }
 }
 
