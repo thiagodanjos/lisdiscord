@@ -1,9 +1,11 @@
 import { AttachmentBuilder, type Client, type Guild, type GuildMember, PermissionFlagsBits } from 'discord.js'
-import type { MemberRecord, MemberSheetAction, MemberSheetSettings, MemberSheetState, SheetColumnKey } from '../../shared/types'
+import type { LinkedSource, LinkedTab, MemberRecord, MemberSheetAction, MemberSheetSettings, MemberSheetState, SheetColumnKey } from '../../shared/types'
 import { buildSheetTabs, defaultMemberSheetSettings, parseSpreadsheetId, SHEET_COLUMN_LABELS } from '../../shared/memberSheet'
 import * as store from '../store/memberRegistry'
 import * as movPoints from '../store/movPoints'
+import { colLetter } from '../../shared/linkedSheet'
 import { inspectSpreadsheet, writeTabs } from './googleSheets'
+import { detectLinked, runLinked, undoLinked, viewLinked } from './linkedSheet'
 
 // Registo de membros + planilha: quem é verificado fica gravado no registo do bot (com os cargos),
 // e de tempos a tempos o bot reescreve a planilha do Google a partir do registo. A planilha é só uma
@@ -117,12 +119,39 @@ export async function syncSheet(guild: Guild): Promise<string> {
     if (!settings.spreadsheetId) throw new Error('Falta o link da planilha.')
     await guild.roles.fetch().catch(() => undefined)
     const warning = await refreshRecords(guild)
-    const tabs = sheetTabs(guild)
-    if (tabs.length === 0) throw new Error('Não há nenhuma aba ligada — liga a aba "Todos" ou adiciona cargos.')
-    const r = await writeTabs(key, settings.spreadsheetId, tabs, settings.claimedTabs)
-    const written = tabs.length - r.skipped.length
-    const message = `Planilha "${r.title}" atualizada: ${written} aba(s), ${r.rows} linha(s).${r.skipped.length ? ` ${skippedText(r.skipped)}` : ''}${warning ? ` ${warning}` : ''}`
-    store.setSheetStatus(guild.id, { lastSyncAt: new Date().toISOString(), lastSyncOk: r.skipped.length === 0, lastSyncMessage: message })
+    const linked = settings.linkedTabs.filter((t) => t.enabled)
+    const linkedNames = new Set(linked.map((t) => t.tabName))
+    const allTabs = sheetTabs(guild)
+    // Uma aba ligada nunca é reescrita como "aba do bot".
+    const clash = allTabs.filter((t) => linkedNames.has(t.name)).map((t) => t.name)
+    const tabs = allTabs.filter((t) => !linkedNames.has(t.name))
+    if (tabs.length === 0 && linked.length === 0) throw new Error('Não há nenhuma aba — liga uma aba da planilha (Abas ligadas), a aba "Todos" ou adiciona cargos.')
+    const parts: string[] = []
+    let ok = true
+    let title = ''
+    if (tabs.length) {
+      const r = await writeTabs(key, settings.spreadsheetId, tabs, settings.claimedTabs)
+      title = r.title
+      parts.push(`${tabs.length - r.skipped.length} aba(s) do bot, ${r.rows} linha(s).`)
+      if (r.skipped.length) {
+        ok = false
+        parts.push(skippedText(r.skipped))
+      }
+    }
+    if (clash.length) {
+      ok = false
+      parts.push(`⚠️ ${clash.map((n) => `"${n}"`).join(', ')} já é uma aba ligada — desliga essa aba em "Abas por cargo" ou dá-lhe outro nome.`)
+    }
+    for (const t of linked) {
+      try {
+        parts.push(await runLinked(guild, t, 'auto'))
+      } catch (err) {
+        ok = false
+        parts.push(`❌ Aba "${t.tabName}": ${errText(err)}`)
+      }
+    }
+    const message = `${title ? `Planilha "${title}": ` : ''}${parts.join(' ')}${warning ? ` ${warning}` : ''}`
+    store.setSheetStatus(guild.id, { lastSyncAt: new Date().toISOString(), lastSyncOk: ok, lastSyncMessage: message })
     return message
   } catch (err) {
     store.setSheetStatus(guild.id, { lastSyncAt: new Date().toISOString(), lastSyncOk: false, lastSyncMessage: errText(err) })
@@ -264,7 +293,88 @@ export function startMemberSheetLoop(client: Client): () => void {
 
 export function getMemberSheetState(guildId: string): MemberSheetState {
   const records = store.listRecords(guildId).sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt'))
-  return { settings: store.getSheetSettings(guildId), status: store.getSheetStatus(guildId), records, googleEmail: store.getGoogleKey()?.client_email ?? null }
+  return {
+    settings: store.getSheetSettings(guildId),
+    status: store.getSheetStatus(guildId),
+    records,
+    googleEmail: store.getGoogleKey()?.client_email ?? null,
+    linkedUndo: store.linkedUndoSummary(guildId),
+  }
+}
+
+const LINKED_SOURCES: LinkedSource[] = ['keep', 'name', 'username', 'id', 'role', 'nextRole', 'date', 'status', 'points', 'hours', 'fixed']
+
+function cleanLinkedTabs(guild: Guild, input: unknown, tab: (v: string) => string, txt: (v: unknown, max: number, fb: string) => string): LinkedTab[] {
+  const int = (v: unknown, min: number, max: number, fb: number) => {
+    const n = Math.round(Number(v))
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fb
+  }
+  const optCol = (v: unknown) => (v === null || v === undefined || v === '' ? null : int(v, 0, 51, 0))
+  const hex = (v: unknown) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : '')
+  const list = Array.isArray(input) ? (input as Partial<LinkedTab>[]) : []
+  const names = new Set<string>()
+  const ids = new Set<string>()
+  const out: LinkedTab[] = []
+  for (const [i, t] of list.slice(0, 8).entries()) {
+    if (!t || typeof t.tabName !== 'string') continue
+    const tabName = tab(t.tabName)
+    if (!tabName || names.has(tabName)) continue
+    names.add(tabName)
+    let id = typeof t.id === 'string' && t.id ? t.id.slice(0, 40) : `lk${i}`
+    if (ids.has(id)) id = `${id}-${i}`
+    ids.add(id)
+    const seen = new Set<number>()
+    const columns = (Array.isArray(t.columns) ? t.columns : [])
+      .filter((c) => c && Number.isInteger(c.col) && c.col >= 0 && c.col < 52 && !seen.has(c.col) && Boolean(seen.add(c.col)))
+      .slice(0, 52)
+      .map((c) => ({
+        col: c.col,
+        header: txt(c.header, 100, colLetter(c.col)),
+        source: LINKED_SOURCES.includes(c.source) ? c.source : ('keep' as const),
+        updateExisting: Boolean(c.updateExisting),
+        optionRoles: Object.fromEntries(
+          Object.entries(c.optionRoles && typeof c.optionRoles === 'object' ? c.optionRoles : {})
+            .filter(([o, r]) => o.length <= 200 && typeof r === 'string' && guild.roles.cache.has(r))
+            .slice(0, 300),
+        ),
+        fallback: typeof c.fallback === 'string' ? c.fallback.slice(0, 200) : '',
+        fromCol: optCol(c.fromCol),
+        dateOf: c.dateOf === 'verified' || c.dateOf === 'roleChange' ? c.dateOf : ('added' as const),
+        dateFormat: txt(c.dateFormat, 30, 'dd/MM/yy'),
+        activeValue: typeof c.activeValue === 'string' ? c.activeValue.slice(0, 100) : '',
+        leftValue: typeof c.leftValue === 'string' ? c.leftValue.slice(0, 100) : '',
+      }))
+      .sort((a, b) => a.col - b.col)
+    const fromCol = int(t.colors?.fromCol, 0, 51, 0)
+    out.push({
+      id,
+      enabled: t.enabled !== false,
+      tabName,
+      headerRow: int(t.headerRow, 1, 50, 1),
+      idCol: int(t.idCol, 0, 51, 0),
+      idFormat: t.idFormat === 'plain' ? 'plain' : 'mention',
+      columns,
+      roleIds: [...new Set(Array.isArray(t.roleIds) ? t.roleIds : [])].filter((r) => typeof r === 'string' && guild.roles.cache.has(r)),
+      autoAdd: t.autoAdd !== false,
+      colors: {
+        enabled: Boolean(t.colors?.enabled),
+        col: optCol(t.colors?.col),
+        fromCol,
+        toCol: Math.max(fromCol, int(t.colors?.toCol, 0, 51, fromCol)),
+        rules: (Array.isArray(t.colors?.rules) ? t.colors.rules : [])
+          .slice(0, 40)
+          .map((r) => ({ value: typeof r?.value === 'string' ? r.value.slice(0, 100) : '', bg: hex(r?.bg), fg: hex(r?.fg) }))
+          .filter((r) => r.value.trim()),
+      },
+    })
+  }
+  return out
+}
+
+function linkedTabOf(guildId: string, tabId: string): LinkedTab {
+  const t = store.getSheetSettings(guildId).linkedTabs.find((x) => x.id === tabId)
+  if (!t) throw new Error('Essa aba ligada não está guardada — carrega em Guardar primeiro.')
+  return t
 }
 
 export async function applyMemberSheetSettings(guild: Guild, input: MemberSheetSettings): Promise<MemberSheetState> {
@@ -304,10 +414,12 @@ export async function applyMemberSheetSettings(guild: Guild, input: MemberSheetS
     backupChannelId: input.backupChannelId || null,
     backupHours: Math.min(720, Math.max(0, Math.round(Number(input.backupHours) || 0))),
     claimedTabs: [],
+    linkedTabs: [],
   }
   for (const k of keys) if (!next.columns.some((c) => c.key === k)) next.columns.push({ key: k, header: SHEET_COLUMN_LABELS[k], show: false })
   // Autorizações só valem para abas que o bot vai mesmo usar.
   const used = new Set([...(next.allTab.enabled ? [next.allTab.name] : []), ...next.sections.map((x) => x.tabName), ...(next.otherTab.enabled ? [next.otherTab.name] : [])])
+  next.linkedTabs = cleanLinkedTabs(guild, input.linkedTabs, tab, txt)
   next.claimedTabs = [...new Set((Array.isArray(input.claimedTabs) ? input.claimedTabs : []).filter((n): n is string => typeof n === 'string').map(tab))].filter((n) => used.has(n)).slice(0, 40)
   try {
     new Intl.DateTimeFormat('pt-BR', { timeZone: next.timezone })
@@ -341,6 +453,24 @@ export async function applyMemberSheetAction(guild: Guild, action: MemberSheetAc
       const foreign = tabs.map((t) => t.name).filter((n) => theirs.has(n) && !settings.claimedTabs.includes(n))
       const base = `Ligado à planilha "${sheet.title}" (${sheet.tabs.length} aba(s)).`
       return done(foreign.length ? `${base} ${skippedText(foreign, true)}` : `${base} Está tudo pronto — as tuas outras abas ficam como estão.`, { sheet })
+    }
+    case 'linkDetect': {
+      const { tab: draft, view } = await detectLinked(guild, typeof action.tabName === 'string' ? action.tabName : '')
+      return done(`Li a aba "${draft.tabName}": cabeçalhos na linha ${draft.headerRow}, ID na coluna ${colLetter(draft.idCol)}. Confere o que vai em cada coluna e carrega em Guardar.`, { linkedDraft: draft, linkedView: view })
+    }
+    case 'linkedView': {
+      const t = linkedTabOf(guild.id, action.tabId)
+      return done('', { linkedView: await viewLinked(guild, t) })
+    }
+    case 'linkedAddMissing': {
+      const t = linkedTabOf(guild.id, action.tabId)
+      const message = await runLinked(guild, t, 'missing')
+      return done(message, { linkedView: await viewLinked(guild, t) })
+    }
+    case 'linkedUndo': {
+      const t = linkedTabOf(guild.id, action.tabId)
+      const message = await undoLinked(guild, t)
+      return done(message, { linkedView: await viewLinked(guild, t) })
     }
     case 'importMembers':
       return done(await importMembers(guild, Array.isArray(action.roleIds) ? action.roleIds : []))

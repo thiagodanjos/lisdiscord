@@ -1881,6 +1881,90 @@ export interface MemberSheetSettings {
   backupHours: number
   /** Abas que já existiam com dados e que o dono autorizou o bot a usar (o conteúdo é substituído). */
   claimedTabs: string[]
+  /** Abas ligadas: o bot trabalha dentro de uma aba que já existe, com o formato e as listas dela. */
+  linkedTabs: LinkedTab[]
+}
+
+// ---- Abas ligadas -----------------------------------------------------------------------------
+
+/** O que o bot escreve numa coluna de uma aba ligada. */
+export type LinkedSource = 'keep' | 'name' | 'username' | 'id' | 'role' | 'nextRole' | 'date' | 'status' | 'points' | 'hours' | 'fixed'
+
+export interface LinkedColumn {
+  /** Coluna da planilha (0 = A). */
+  col: number
+  /** Cabeçalho lido da planilha (só para mostrar). */
+  header: string
+  source: LinkedSource
+  /** Escrever também nas linhas que já estão na aba (desligado = só nas linhas novas). */
+  updateExisting: boolean
+  /** role: opção da lista da planilha → cargo do Discord. */
+  optionRoles: Record<string, string>
+  /** Valor quando não há outro (sem cargo ligado, texto fixo, …). Vazio = fica vazio / como está. */
+  fallback: string
+  /** nextRole: a coluna de cargo de onde se parte. */
+  fromCol: number | null
+  /** date: que data vai — o dia em que entrou na aba, a verificação, ou o último up (quando o cargo muda). */
+  dateOf: 'added' | 'verified' | 'roleChange'
+  dateFormat: string
+  /** status: o valor para quem está e para quem saiu do servidor. */
+  activeValue: string
+  leftValue: string
+}
+
+export interface LinkedColorRule {
+  /** Valor da coluna (ex.: LIDER). */
+  value: string
+  /** Cor de fundo (#rrggbb) — vazio = não muda. */
+  bg: string
+  /** Cor do texto (#rrggbb) — vazio = não muda. */
+  fg: string
+}
+
+export interface LinkedTab {
+  id: string
+  enabled: boolean
+  tabName: string
+  /** Linha dos cabeçalhos (1 = primeira); os dados começam na linha a seguir. */
+  headerRow: number
+  idCol: number
+  /** Como o ID está escrito: <@123…> ou só o número. */
+  idFormat: 'mention' | 'plain'
+  columns: LinkedColumn[]
+  /** Quem pertence a esta aba (vazio = quem tem algum cargo ligado nas colunas de cargo). */
+  roleIds: string[]
+  /** No lote, acrescenta quem é verificado e ainda não está na aba. */
+  autoAdd: boolean
+  /** Pintar cada linha conforme o valor de uma coluna (ex.: Hierarquia). */
+  colors: { enabled: boolean; col: number | null; fromCol: number; toCol: number; rules: LinkedColorRule[] }
+}
+
+export interface LinkedCellView {
+  v: string
+  bg?: string
+  fg?: string
+  b?: boolean
+}
+
+export interface LinkedTabView {
+  tabId: string
+  spreadsheetTitle: string
+  tabName: string
+  url: string
+  headerRow: number
+  /** A aba tal como está (da linha 1 à última usada). */
+  rows: LinkedCellView[][]
+  merges: { r0: number; r1: number; c0: number; c1: number }[]
+  /** Estado pelo ID, por índice de linha. */
+  rowStatus: Record<number, 'in' | 'out'>
+  /** Opções das listas (validação da planilha), por coluna. */
+  options: Record<number, string[]>
+  /** Quem entraria no próximo lote (verificados) e quem falta no total (botão "Adicionar quem falta"). */
+  autoAdd: { userId: string; name: string }[]
+  missing: { userId: string; name: string }[]
+  /** Células que o próximo lote mudaria nas linhas existentes, e linhas a pintar. */
+  updates: number
+  recolor: number
 }
 
 /** De quem é cada aba da planilha: do bot, vazia ou de outra pessoa (com dados). */
@@ -1909,6 +1993,12 @@ export interface MemberSheetState {
   exportJson?: string
   /** Só na ação "test": as abas da planilha e de quem é cada uma. */
   sheet?: SpreadsheetInspect
+  /** Último lote de cada aba ligada que dá para desfazer. */
+  linkedUndo: Record<string, { at: string; cells: number }>
+  /** Só na ação "linkDetect": a ligação sugerida (ainda por guardar). */
+  linkedDraft?: LinkedTab
+  /** Ações das abas ligadas: a vista da aba. */
+  linkedView?: LinkedTabView
 }
 
 export type MemberSheetAction =
@@ -1921,3 +2011,7 @@ export type MemberSheetAction =
   | { kind: 'backupNow' }
   | { kind: 'export' }
   | { kind: 'import'; json: string }
+  | { kind: 'linkDetect'; tabName: string }
+  | { kind: 'linkedView'; tabId: string }
+  | { kind: 'linkedAddMissing'; tabId: string }
+  | { kind: 'linkedUndo'; tabId: string }

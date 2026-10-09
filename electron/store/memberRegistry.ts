@@ -9,10 +9,28 @@ import { paths } from './paths'
 // planilha, por servidor. A chave da conta de serviço do Google fica num ficheiro à parte, só com
 // permissão de leitura para o dono, e nunca é devolvida à app.
 
+/** Uma célula como estava antes de um lote numa aba ligada (para desfazer). */
+export interface LinkedUndoCell {
+  row: number
+  col: number
+  value: string | number | boolean
+  formula: boolean
+  /** O que o bot lá escreveu — só se desfaz se a célula ainda tiver isto. */
+  after?: string | number
+}
+
+export interface LinkedUndoEntry {
+  at: string
+  tabName: string
+  cells: LinkedUndoCell[]
+}
+
 interface GuildRegistry {
   settings?: Partial<MemberSheetSettings>
   status?: Partial<MemberSheetStatus>
   records: Record<string, MemberRecord>
+  /** Por aba ligada: os últimos lotes (mais recente no fim). */
+  linkedUndo?: Record<string, LinkedUndoEntry[]>
 }
 
 type Data = Record<string, GuildRegistry>
@@ -54,6 +72,39 @@ export function setSheetStatus(guildId: string, patch: Partial<MemberSheetStatus
   const g = guildOf(data, guildId)
   g.status = { ...g.status, ...patch }
   writeJsonFile(paths.memberRegistryFile, data)
+}
+
+const UNDO_KEEP = 10
+
+export function pushLinkedUndo(guildId: string, tabId: string, entry: LinkedUndoEntry): void {
+  if (!entry.cells.length) return
+  const data = readAll()
+  const g = guildOf(data, guildId)
+  g.linkedUndo ??= {}
+  g.linkedUndo[tabId] = [...(g.linkedUndo[tabId] ?? []), entry].slice(-UNDO_KEEP)
+  writeJsonFile(paths.memberRegistryFile, data)
+}
+
+export function peekLinkedUndo(guildId: string, tabId: string): LinkedUndoEntry | null {
+  return readAll()[guildId]?.linkedUndo?.[tabId]?.at(-1) ?? null
+}
+
+export function popLinkedUndo(guildId: string, tabId: string): void {
+  const data = readAll()
+  const list = data[guildId]?.linkedUndo?.[tabId]
+  if (!list?.length) return
+  list.pop()
+  writeJsonFile(paths.memberRegistryFile, data)
+}
+
+export function linkedUndoSummary(guildId: string): Record<string, { at: string; cells: number }> {
+  const all = readAll()[guildId]?.linkedUndo ?? {}
+  const out: Record<string, { at: string; cells: number }> = {}
+  for (const [tabId, list] of Object.entries(all)) {
+    const last = list.at(-1)
+    if (last) out[tabId] = { at: last.at, cells: last.cells.length }
+  }
+  return out
 }
 
 export function listRecords(guildId: string): MemberRecord[] {

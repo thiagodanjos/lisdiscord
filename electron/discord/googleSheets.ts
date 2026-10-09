@@ -2,6 +2,7 @@ import { createSign } from 'node:crypto'
 import type { GoogleServiceAccount } from '../store/memberRegistry'
 import type { SheetTab } from '../../shared/memberSheet'
 import type { SpreadsheetInspect } from '../../shared/types'
+import { colLetter, type Grid, type GridCell } from '../../shared/linkedSheet'
 
 // Cliente mínimo do Google Sheets (sem bibliotecas): conta de serviço → token (JWT RS256) → API v4.
 // Só mexe nas abas que o bot gere (marcadas com uma etiqueta invisível); as outras abas da
@@ -145,4 +146,127 @@ export async function writeTabs(key: GoogleServiceAccount, spreadsheetId: string
     })
   }
   return { title: meta.properties.title, rows: writable.reduce((n, t) => n + Math.max(0, t.rows.length - 1), 0), skipped }
+}
+
+// ==========================================================================
+// Abas ligadas: ler a grelha (valores, cores, listas) e escrever célula a célula
+// ==========================================================================
+
+type GColor = { red?: number; green?: number; blue?: number }
+const toHex = (c: GColor | undefined, fallback: string) => {
+  if (!c) return fallback
+  const h = (v = 0) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')
+  return `#${h(c.red)}${h(c.green)}${h(c.blue)}`
+}
+const fromHex = (hex: string): GColor => ({ red: parseInt(hex.slice(1, 3), 16) / 255, green: parseInt(hex.slice(3, 5), 16) / 255, blue: parseInt(hex.slice(5, 7), 16) / 255 })
+
+interface GCellData {
+  formattedValue?: string
+  userEnteredValue?: { stringValue?: string; numberValue?: number; boolValue?: boolean; formulaValue?: string }
+  effectiveFormat?: { backgroundColor?: GColor; textFormat?: { foregroundColor?: GColor; bold?: boolean } }
+  dataValidation?: { condition?: { type?: string; values?: { userEnteredValue?: string }[] } }
+}
+
+const GRID_FIELDS =
+  'properties.title,sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)),merges,data(rowData(values(formattedValue,userEnteredValue,effectiveFormat(backgroundColor,textFormat(foregroundColor,bold)),dataValidation(condition(type,values(userEnteredValue)))))))'
+
+/** Lê uma aba tal como está: valores, cores, negrito, células juntas e as opções das listas. */
+export async function readGrid(key: GoogleServiceAccount, spreadsheetId: string, tabName: string, maxCols: number, maxRows = 1000): Promise<Grid & { spreadsheetTitle: string }> {
+  const id = encodeURIComponent(spreadsheetId)
+  const range = `${quoteTab(tabName)}!A1:${colLetter(Math.max(0, maxCols - 1))}${maxRows}`
+  const res = await call<{
+    properties: { title: string }
+    sheets?: {
+      properties: { sheetId: number; title: string; gridProperties?: { rowCount?: number } }
+      merges?: { startRowIndex?: number; endRowIndex?: number; startColumnIndex?: number; endColumnIndex?: number }[]
+      data?: { rowData?: { values?: GCellData[] }[] }[]
+    }[]
+  }>(key, `${API}/${id}?ranges=${encodeURIComponent(range)}&fields=${encodeURIComponent(GRID_FIELDS)}`)
+  const sheet = res.sheets?.[0]
+  if (!sheet) throw new Error(`Não encontrei a aba "${tabName}" na planilha.`)
+  const rangeRefs: { col: number; ref: string }[] = []
+  const options: Record<number, string[]> = {}
+  const rows: GridCell[][] = (sheet.data?.[0]?.rowData ?? []).map((row) =>
+    (row.values ?? []).map((c, col) => {
+      const u = c.userEnteredValue
+      const raw = u?.formulaValue ?? u?.stringValue ?? u?.numberValue ?? u?.boolValue
+      const cond = c.dataValidation?.condition
+      if (cond && options[col] === undefined) {
+        if (cond.type === 'ONE_OF_LIST') options[col] = (cond.values ?? []).map((v) => v.userEnteredValue ?? '').filter(Boolean)
+        else if (cond.type === 'ONE_OF_RANGE' && cond.values?.[0]?.userEnteredValue) {
+          options[col] = []
+          rangeRefs.push({ col, ref: cond.values[0].userEnteredValue.replace(/^=/, '').replace(/\$/g, '') })
+        }
+      }
+      return {
+        v: c.formattedValue ?? '',
+        raw,
+        formula: u?.formulaValue !== undefined,
+        bg: toHex(c.effectiveFormat?.backgroundColor, '#ffffff'),
+        fg: toHex(c.effectiveFormat?.textFormat?.foregroundColor, '#000000'),
+        b: c.effectiveFormat?.textFormat?.bold || undefined,
+      }
+    }),
+  )
+  // Listas que vêm de um intervalo (ex.: =Listas!A2:A40).
+  if (rangeRefs.length) {
+    const refs = rangeRefs.map((r) => (r.ref.includes('!') ? r.ref : `${quoteTab(tabName)}!${r.ref}`))
+    const got = await batchGet(key, id, refs).catch(() => ({ valueRanges: [] as { values?: unknown[][] }[] }))
+    rangeRefs.forEach((r, i) => {
+      options[r.col] = (got.valueRanges?.[i]?.values ?? []).flat().map((v) => String(v ?? '').trim()).filter(Boolean)
+    })
+  }
+  return {
+    spreadsheetTitle: res.properties.title,
+    sheetId: sheet.properties.sheetId,
+    title: sheet.properties.title,
+    rowCount: sheet.properties.gridProperties?.rowCount ?? rows.length,
+    rows,
+    merges: (sheet.merges ?? []).map((m) => ({ r0: m.startRowIndex ?? 0, r1: m.endRowIndex ?? 0, c0: m.startColumnIndex ?? 0, c1: m.endColumnIndex ?? 0 })),
+    options,
+  }
+}
+
+/** Escreve só estas células (o resto da aba fica igual). Fórmulas vão como fórmula; o resto em RAW. */
+export async function writeCells(key: GoogleServiceAccount, spreadsheetId: string, tabName: string, cells: { row: number; col: number; value: string | number | boolean; formula?: boolean }[]): Promise<void> {
+  const id = encodeURIComponent(spreadsheetId)
+  const range = (c: { row: number; col: number }) => `${quoteTab(tabName)}!${colLetter(c.col)}${c.row + 1}`
+  for (const [mode, list] of [
+    ['RAW', cells.filter((c) => !c.formula)],
+    ['USER_ENTERED', cells.filter((c) => c.formula)],
+  ] as const) {
+    if (!list.length) continue
+    await call(key, `${API}/${id}/values:batchUpdate`, { method: 'POST', body: { valueInputOption: mode, data: list.map((c) => ({ range: range(c), values: [[c.value]] })) } })
+  }
+}
+
+/** Linhas novas no fim da tabela: garante que existem e copia o formato e as listas da linha-modelo. */
+export async function prepareRows(key: GoogleServiceAccount, spreadsheetId: string, grid: { sheetId: number; rowCount: number }, templateRow: number, from: number, count: number, width: number): Promise<void> {
+  if (count <= 0) return
+  const requests: unknown[] = []
+  if (from + count > grid.rowCount) requests.push({ appendDimension: { sheetId: grid.sheetId, dimension: 'ROWS', length: from + count - grid.rowCount } })
+  const source = { sheetId: grid.sheetId, startRowIndex: templateRow, endRowIndex: templateRow + 1, startColumnIndex: 0, endColumnIndex: width }
+  const destination = { sheetId: grid.sheetId, startRowIndex: from, endRowIndex: from + count, startColumnIndex: 0, endColumnIndex: width }
+  for (const pasteType of ['PASTE_FORMAT', 'PASTE_DATA_VALIDATION']) requests.push({ copyPaste: { source, destination, pasteType, pasteOrientation: 'NORMAL' } })
+  await call(key, `${API}/${encodeURIComponent(spreadsheetId)}:batchUpdate`, { method: 'POST', body: { requests } })
+}
+
+/** Pinta linhas (fundo e/ou texto) de uma coluna a outra. Não mexe em mais nada da formatação. */
+export async function colorRows(key: GoogleServiceAccount, spreadsheetId: string, sheetId: number, c0: number, c1: number, items: { row: number; bg: string; fg: string }[]): Promise<void> {
+  if (!items.length) return
+  const requests = items.map((it) => {
+    const fields: string[] = []
+    const format: Record<string, unknown> = {}
+    if (it.bg) {
+      format.backgroundColor = fromHex(it.bg)
+      format.backgroundColorStyle = { rgbColor: fromHex(it.bg) }
+      fields.push('userEnteredFormat.backgroundColor', 'userEnteredFormat.backgroundColorStyle')
+    }
+    if (it.fg) {
+      format.textFormat = { foregroundColor: fromHex(it.fg), foregroundColorStyle: { rgbColor: fromHex(it.fg) } }
+      fields.push('userEnteredFormat.textFormat.foregroundColor', 'userEnteredFormat.textFormat.foregroundColorStyle')
+    }
+    return { repeatCell: { range: { sheetId, startRowIndex: it.row, endRowIndex: it.row + 1, startColumnIndex: c0, endColumnIndex: c1 + 1 }, cell: { userEnteredFormat: format }, fields: fields.join(',') } }
+  })
+  await call(key, `${API}/${encodeURIComponent(spreadsheetId)}:batchUpdate`, { method: 'POST', body: { requests } })
 }

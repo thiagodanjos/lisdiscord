@@ -11,6 +11,8 @@ import {
   FileSpreadsheet,
   KeyRound,
   Layers,
+  Link2,
+  Undo2,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -29,9 +31,10 @@ import { inputClass } from '../lib/styles'
 import { useGuildContext } from '../lib/useGuildContext'
 import { Badge, Button, Card, ConfirmDialog, Modal, PageHeader, Tabs, Toggle } from '../components/ui'
 import { GuildSelect, Label, RemoteBadge, RolePills, SectionTitle } from '../components/form'
+import { LinkedTabEditor, SheetGrid } from '../components/LinkedTab'
 import { REPORT_TIMEZONES } from '../../shared/movFeatures'
 import { buildSheetTabs, defaultMemberSheetSettings, mainSection, parseSpreadsheetId, SHEET_COLUMN_LABELS } from '../../shared/memberSheet'
-import type { MemberRecord, MemberSearchResult, MemberSheetAction, MemberSheetSettings, MemberSheetState, SheetTabOwner, SpreadsheetInspect } from '../../shared/types'
+import type { LinkedTabView, MemberRecord, MemberSearchResult, MemberSheetAction, MemberSheetSettings, MemberSheetState, SheetTabOwner, SpreadsheetInspect } from '../../shared/types'
 
 /** O `inputClass` tem `w-full` — aqui as caixas ficam lado a lado. */
 const narrowInput = inputClass.replace('w-full', 'w-56')
@@ -150,6 +153,9 @@ export default function MemberSheet() {
   const [confirm, setConfirm] = useState<{ title: string; text: string; action: MemberSheetAction } | null>(null)
   const [sheetInfo, setSheetInfo] = useState<SpreadsheetInspect | null>(null)
   const [claimAsk, setClaimAsk] = useState<string | null>(null)
+  const [linkedView, setLinkedView] = useState<LinkedTabView | null>(null)
+  const [selLinked, setSelLinked] = useState<string | null>(null)
+  const [linkedAsk, setLinkedAsk] = useState<'add' | 'undo' | null>(null)
   const keyInput = useRef<HTMLInputElement>(null)
   const backupInput = useRef<HTMLInputElement>(null)
 
@@ -157,6 +163,7 @@ export default function MemberSheet() {
     setState(s)
     if (!keepDraft) setDraft(s.settings)
     if (s.sheet) setSheetInfo(s.sheet)
+    if (s.linkedView) setLinkedView(s.linkedView)
     if (s.message) setNote(s.message)
   }
 
@@ -165,10 +172,23 @@ export default function MemberSheet() {
     setError('')
     setNote('')
     setSheetInfo(null)
+    setLinkedView(null)
+    setSelLinked(null)
     bridge
       .getMemberSheet(guildId, isRemote)
       .then((s) => {
         apply(s)
+        // Aba ligada: mostra logo a primeira, com a vista da planilha (em silêncio).
+        const first = s.settings.linkedTabs[0]
+        if (first) {
+          setSelLinked(first.id)
+          if (s.googleEmail && s.settings.spreadsheetId) {
+            bridge
+              .memberSheetAction(guildId, { kind: 'linkedView', tabId: first.id }, isRemote)
+              .then((r) => setLinkedView(r.linkedView ?? null))
+              .catch(() => undefined)
+          }
+        }
         // Lê logo as abas da planilha (em silêncio) para os seletores de aba.
         if (s.googleEmail && s.settings.spreadsheetId) {
           bridge
@@ -223,22 +243,53 @@ export default function MemberSheet() {
     setError('')
     setNote('')
     try {
-      // Sincronizar/testar usam as definições guardadas — guarda primeiro o que está no ecrã.
-      if ((action.kind === 'sync' || action.kind === 'test') && dirty) apply(await bridge.setMemberSheetSettings(guildId, draft, isRemote))
+      // Sincronizar/testar/abas ligadas usam as definições guardadas — guarda primeiro o que está no ecrã.
+      const saveFirst = ['sync', 'test', 'linkedView', 'linkedAddMissing', 'linkedUndo'].includes(action.kind)
+      if (saveFirst && dirty) apply(await bridge.setMemberSheetSettings(guildId, draft, isRemote))
       const s = await bridge.memberSheetAction(guildId, action, isRemote)
-      apply(s, dirty && action.kind !== 'sync' && action.kind !== 'test')
+      apply(s, dirty && !saveFirst)
       // Depois de um lote, as abas mudam de dono (ficam "do bot") — lê-as outra vez em silêncio.
       if (action.kind === 'sync') {
         bridge
           .memberSheetAction(guildId, { kind: 'test' }, isRemote)
           .then((r) => setSheetInfo(r.sheet ?? null))
           .catch(() => undefined)
+        if (selLinked && s.settings.linkedTabs.some((t) => t.id === selLinked)) {
+          bridge
+            .memberSheetAction(guildId, { kind: 'linkedView', tabId: selLinked }, isRemote)
+            .then((r) => setLinkedView(r.linkedView ?? null))
+            .catch(() => undefined)
+        }
       }
       if (action.kind === 'export' && s.exportJson) download(`registo-membros-${new Date().toISOString().slice(0, 10)}.json`, s.exportJson)
       return true
     } catch (err) {
       setError(cleanIpcError(err))
       return false
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /** Liga uma aba que já existe: o bot lê-a e sugere o que vai em cada coluna (fica por guardar). */
+  async function linkTab(tabName: string) {
+    if (!tabName) return
+    setBusy('link')
+    setError('')
+    setNote('')
+    try {
+      if (dirty) await bridge.setMemberSheetSettings(guildId, draft, isRemote)
+      const s = await bridge.memberSheetAction(guildId, { kind: 'linkDetect', tabName }, isRemote)
+      setState(s)
+      const t = s.linkedDraft
+      if (t) {
+        setDraft((d) => ({ ...d, linkedTabs: [...d.linkedTabs.filter((x) => x.tabName !== t.tabName), t] }))
+        setSelLinked(t.id)
+      }
+      if (s.linkedView) setLinkedView(s.linkedView)
+      if (s.message) setNote(s.message)
+    } catch (err) {
+      setError(cleanIpcError(err))
     } finally {
       setBusy(null)
     }
@@ -299,6 +350,11 @@ export default function MemberSheet() {
   // As abas lidas só valem para a planilha que está guardada (se mudares o link, carrega em Testar).
   const linkedSheet = sheetInfo && state && parseSpreadsheetId(draft.spreadsheetId) === state.settings.spreadsheetId ? sheetInfo : null
   const claimed = draft.claimedTabs ?? []
+  const linked = draft.linkedTabs ?? []
+  const curLinked = linked.find((t) => t.id === selLinked) ?? null
+  const curView = linkedView && curLinked && linkedView.tabId === curLinked.id ? linkedView : null
+  const linkable = (linkedSheet?.tabs ?? []).filter((t) => t.owner !== 'mine' && !linked.some((l) => l.tabName === t.name))
+  const undoInfo = curLinked ? state?.linkedUndo?.[curLinked.id] : undefined
   const tabField = (value: string, onChange: (v: string) => void) => (
     <TabField
       value={value}
@@ -493,12 +549,91 @@ export default function MemberSheet() {
             </Card>
           </div>
 
+          {/* ---- Abas ligadas ---- */}
+          <Card className="flex flex-col gap-4">
+            <SectionTitle
+              icon={Link2}
+              title="Abas ligadas — o bot trabalha numa aba tua, com o formato dela"
+              subtitle="Mantém o título, as cores, as listas (Cargo, Hierarquia…) e tudo o que lá está. O bot só acrescenta quem falta nas linhas vazias e, se quiseres, atualiza as colunas que escolheres."
+              action={
+                <select value="" onChange={(e) => void linkTab(e.target.value)} disabled={!linkedSheet || busy === 'link'} className={`py-1.5 ${inputClass.replace('w-full', 'w-72')}`}>
+                  <option value="">{busy === 'link' ? 'A ler a aba…' : linkedSheet ? '+ Ligar uma aba da planilha…' : 'Carrega em Testar primeiro'}</option>
+                  {linkable.map((t) => (
+                    <option key={t.name} value={t.name}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              }
+            />
+            {linked.length === 0 ? (
+              <p className="text-sm text-faint">
+                Nenhuma aba ligada. Escolhe acima a aba da tua área (ex.: <b>Mov Call</b>) — o bot lê os cabeçalhos, a coluna do ID, as listas e as cores, e sugere tudo. Nada muda na planilha até carregares em Guardar e depois num dos botões.
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  {linked.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        setSelLinked(t.id)
+                        if (state?.settings.linkedTabs.some((x) => x.id === t.id)) void act({ kind: 'linkedView', tabId: t.id }, 'view')
+                      }}
+                      className={`rounded-lg border px-3 py-1.5 text-sm font-semibold ${t.id === selLinked ? 'border-accent bg-accent-soft text-text' : 'border-border text-muted hover:text-text'}`}
+                    >
+                      {t.tabName} {!t.enabled && <span className="text-xs font-normal text-faint">(desligada)</span>}
+                    </button>
+                  ))}
+                </div>
+                {curLinked && (
+                  <>
+                    <LinkedTabEditor
+                      tab={curLinked}
+                      view={curView}
+                      roles={roles}
+                      onChange={(t) => set('linkedTabs', linked.map((x) => (x.id === t.id ? t : x)))}
+                      onRemove={() => {
+                        set('linkedTabs', linked.filter((x) => x.id !== curLinked.id))
+                        setSelLinked(linked.find((x) => x.id !== curLinked.id)?.id ?? null)
+                      }}
+                    />
+                    <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                      <Button variant="dark" onClick={() => void act({ kind: 'linkedView', tabId: curLinked.id }, 'view')} loading={busy === 'view'}>
+                        <RefreshCw size={14} /> Atualizar vista
+                      </Button>
+                      <Button onClick={() => setLinkedAsk('add')} disabled={!curView || curView.missing.length === 0} loading={busy === 'linkedAddMissing'}>
+                        <UserPlus size={14} /> Adicionar quem falta agora{curView ? ` (${curView.missing.length})` : ''}
+                      </Button>
+                      <Button variant="dark" onClick={() => setLinkedAsk('undo')} disabled={!undoInfo} loading={busy === 'linkedUndo'}>
+                        <Undo2 size={14} /> Desfazer último lote{undoInfo ? ` (${undoInfo.cells} célula(s), ${formatRelativeDate(undoInfo.at)})` : ''}
+                      </Button>
+                      {curView && (
+                        <span className="text-xs text-faint">
+                          Próximo lote automático: {curLinked.autoAdd ? `+${curView.autoAdd.length} verificado(s)` : 'não acrescenta ninguém'} · {curView.updates} célula(s) a atualizar · {curView.recolor} linha(s) a pintar
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </Card>
+
+          {curLinked && (
+            <Card className="flex min-w-0 flex-col gap-3">
+              <SectionTitle icon={FileSpreadsheet} title={`A aba "${curLinked.tabName}" na planilha`} subtitle="Tal como está no Google Sheets agora — e quem está no servidor, pela coluna do ID." />
+              {curView ? <SheetGrid view={curView} /> : <p className="text-sm text-faint">Carrega em "Atualizar vista" para ver a aba.</p>}
+            </Card>
+          )}
+
           {/* ---- Abas ---- */}
           <Card className="flex flex-col gap-4">
             <SectionTitle
               icon={Layers}
-              title="Abas por cargo"
-              subtitle="Uma aba por cargo, pela ordem da lista (a de cima manda): é assim que o membro verificado vai parar à aba certa de acordo com os cargos."
+              title="Abas do bot (geradas)"
+              subtitle="Abas que o bot cria e reescreve sozinho: uma com toda a gente e/ou uma por cargo (a de cima manda). Se só usas abas ligadas, deixa estas desligadas."
               action={
                 <Button
                   variant="dark"
@@ -826,6 +961,25 @@ export default function MemberSheet() {
         description={confirm?.text ?? ''}
         confirmLabel="Confirmar"
         danger={confirm?.action.kind === 'remove'}
+      />
+      <ConfirmDialog
+        open={linkedAsk !== null && curLinked !== null}
+        onClose={() => setLinkedAsk(null)}
+        onConfirm={() => {
+          if (!curLinked) return
+          void act({ kind: linkedAsk === 'undo' ? 'linkedUndo' : 'linkedAddMissing', tabId: curLinked.id })
+        }}
+        title={linkedAsk === 'undo' ? `Desfazer o último lote em "${curLinked?.tabName}"?` : `Adicionar quem falta em "${curLinked?.tabName}"?`}
+        description={
+          linkedAsk === 'undo'
+            ? 'As células que o bot mudou no último lote voltam ao que estavam (as que alguém já mudou à mão depois ficam como estão). As cores não voltam atrás.'
+            : `Vão entrar ${curView?.missing.length ?? 0} membro(s) do servidor que pertencem a esta aba e ainda não estão lá: ${(curView?.missing ?? [])
+                .slice(0, 25)
+                .map((m) => m.name)
+                .join(', ')}${(curView?.missing.length ?? 0) > 25 ? '…' : ''}. Ficam nas linhas vazias da tabela (ou no fim, com o mesmo formato). Nada do que já lá está muda — e dá para desfazer.`
+        }
+        confirmLabel={linkedAsk === 'undo' ? 'Desfazer' : 'Adicionar'}
+        danger={linkedAsk === 'undo'}
       />
       <ConfirmDialog
         open={claimAsk !== null}

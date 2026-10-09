@@ -41,6 +41,7 @@ export function defaultMemberSheetSettings(): MemberSheetSettings {
     backupChannelId: null,
     backupHours: 24,
     claimedTabs: [],
+    linkedTabs: [],
   }
 }
 

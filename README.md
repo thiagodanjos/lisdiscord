@@ -6,7 +6,7 @@ Corre no teu computador ou, se quiseres o bot **online 24/7**, num servidor grá
 
 ![Visão Geral](docs/screenshots/painel.png)
 
-> Versão atual: **3.2.2** · [Releases](https://github.com/thiagodanjos/lisdiscord/releases) · Created by **@thiagoanjoss**
+> Versão atual: **3.3.0** · [Releases](https://github.com/thiagodanjos/lisdiscord/releases) · Created by **@thiagoanjoss**
 
 ---
 
@@ -44,6 +44,19 @@ No ecrã de entrada, **"Só explorar em modo demonstração"** abre a app inteir
 ---
 
 ## Novidades
+
+### 3.3: Abas ligadas: o bot trabalha numa aba que já existe
+
+Para planilhas partilhadas por várias áreas (Mov Call, Mov Chat, Recrutamento, Suporte…), onde cada aba tem o seu formato:
+
+- **Ligar uma aba.** Escolhe a aba (ex.: "Mov Call") e o bot lê-a sozinho: a linha dos cabeçalhos, a coluna do ID (`<@…>` ou só o número), as listas de cada coluna e as cores atuais.
+- **Cada coluna tem uma regra.** Nome, ID, data (o último up, a entrada ou a verificação, com o formato `dd/MM/yy`), **lista ligada a cargos**, **próximo cargo**, estado no servidor, pontos, horas, texto fixo, ou **não mexer**.
+- **Opções das listas ligadas a cargos.** Cada opção (ex.: "1 pearl", "LIDER") liga-se a um cargo do Discord, com sugestão automática pelo nome. Quem tem vários fica com o mais alto. O próximo cargo segue o número no início da opção.
+- **Nada se perde.** O bot nunca limpa a aba. Escreve célula a célula nas linhas vazias da tabela (ou no fim, com o mesmo formato e as mesmas listas). Nas linhas que já existem só mexe nas colunas onde ligares "também nas linhas que já existem".
+- **Quem está no servidor.** A vista da aba na app mostra ✅/❌ pela coluna do ID.
+- **Adicionar quem falta.** **Adicionar quem falta agora** mostra a lista e pede confirmação. Depois, o lote automático acrescenta quem for verificado.
+- **Cores por hierarquia.** Cores de fundo e de texto para Líder, Sub-líder, Gerente, Supervisor, Staff…, de uma coluna à outra.
+- **Desfazer o último lote.** Repõe as células como estavam, exceto as que alguém já tinha mudado à mão.
 
 ### 3.2: Registo de membros e planilha (Google Sheets)
 
@@ -220,6 +233,10 @@ Todas as capturas usam o **modo demonstração**, com dados fictícios.
     <td><img src="docs/screenshots/verificacao.png" alt="Verificação" /><br/><sub>Verificação por ticket</sub></td>
   </tr>
   <tr>
+    <td><img src="docs/screenshots/planilha-ligada-colunas.png" alt="Aba ligada: colunas" /><br/><sub>Aba ligada: o que vai em cada coluna e opções ↔ cargos</sub></td>
+    <td><img src="docs/screenshots/planilha-ligada.png" alt="Aba ligada: vista" /><br/><sub>Aba ligada: cores por hierarquia e vista com quem está no servidor</sub></td>
+  </tr>
+  <tr>
     <td><img src="docs/screenshots/moderacao.png" alt="Moderação" /><br/><sub>Moderação: membro aberto</sub></td>
     <td><img src="docs/screenshots/sorteios.png" alt="Sorteios" /><br/><sub>Sorteios: personalizar</sub></td>
   </tr>
@@ -308,12 +325,16 @@ cd ~/lisdiscord && git pull && docker compose up -d --build && docker system pru
 3. Na app, em **Equipa → Registo & Planilha**, carrega esse `.json`.
 4. Partilha a planilha com o email da conta de serviço (aparece na app, com botão **Copiar**) como **Editor**.
 5. Cola o link da planilha e carrega em **Testar**. A app mostra as abas dessa planilha.
-6. Em **Abas por cargo**, escolhe para que aba vai cada grupo: uma aba nova (o bot cria-a) ou uma que já existe (**Escolher da planilha…**). Depois **Guardar** e **Sincronizar agora**.
+6. Escolhe uma de duas formas (ou as duas):
+   - **Abas ligadas**: liga uma aba que já tens (ex.: "Mov Call"). O bot mantém o formato dela e só acrescenta ou atualiza o que escolheres.
+   - **Abas do bot (geradas)**: o bot cria e reescreve abas dele (uma com toda a gente e/ou uma por cargo).
+7. **Guardar**. Depois **Adicionar quem falta agora** (abas ligadas) ou **Sincronizar agora**.
 
 Sobre a chave e a planilha:
 
 - A chave fica só no bot (`data/google-service-account.json`, com permissões restritas). Nunca volta para a app e nunca vai para o Git.
-- Pode ser uma planilha que já tens: o bot só escreve nas abas que ele próprio criou. Se uma aba tua tiver o mesmo nome e dados, ele não lhe toca e avisa.
+- Pode ser uma planilha que já tens: o bot só escreve nas abas ligadas e nas que ele próprio criou. Se uma aba tua tiver o mesmo nome e dados, ele não lhe toca e avisa.
+- Numa aba ligada o bot nunca limpa nada: escreve só célula a célula, e cada lote dá para desfazer.
 - Só entra nas planilhas que partilhares com a conta de serviço.
 
 ---
@@ -357,6 +378,7 @@ electron/
 │   ├── verification.ts     # verificação por ticket
 │   ├── memberSheet.ts      # registo de membros, lote para a planilha, backups, repor cargos
 │   ├── googleSheets.ts     # cliente mínimo da Google Sheets API (conta de serviço, sem bibliotecas)
+│   ├── linkedSheet.ts      # abas ligadas: ler a aba, ver quem está no servidor, acrescentar, pintar, desfazer
 │   ├── moderation.ts       # moderação completa + sair de servidor
 │   ├── giveaways.ts        # sorteios (botão/reação, reroll, lista)
 │   ├── giveawayCommand.ts  # assistente /sorteio

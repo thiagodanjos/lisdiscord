@@ -61,6 +61,7 @@ import { defaultLisFilmsSettings } from '../../shared/lisfilms'
 import { defaultGiveawaySettings } from '../../shared/giveaways'
 import { defaultDutiesSettings } from '../../shared/duties'
 import { defaultMemberSheetSettings } from '../../shared/memberSheet'
+import { DEMO_LINKED_ROLES, demoLinkedDetect, demoLinkedRun, demoLinkedUndo, demoLinkedUndoSummary, demoLinkedView } from './demoLinkedSheet'
 
 let demoSheetSettings: MemberSheetSettings = {
   ...defaultMemberSheetSettings(),
@@ -498,6 +499,7 @@ const demoRoles: RolePickerEntry[] = [
   { id: '700000000000000004', name: 'Supervisor', color: '#5865F2' },
   { id: '700000000000000005', name: 'Gestão', color: '#ED4245' },
   { id: '700000000000000006', name: 'Novato', color: '#22D3EE' },
+  ...DEMO_LINKED_ROLES,
 ]
 
 const memberRolesData: Record<string, RolePickerEntry[]> = {
@@ -1937,6 +1939,7 @@ export const demoBridge: LisDiscordBridge = {
       status: { lastSyncAt: daysAgo(0), lastSyncOk: true, lastSyncMessage: 'Planilha "Mov Call — membros" atualizada: 4 aba(s), 7 linha(s).', lastBackupAt: daysAgo(0) },
       records: demoRecords,
       googleEmail: demoGoogleEmail,
+      linkedUndo: demoLinkedUndoSummary(),
     }
   },
   async setMemberSheetSettings(guildId, settings) {
@@ -1946,6 +1949,17 @@ export const demoBridge: LisDiscordBridge = {
   },
   async memberSheetAction(guildId, action) {
     await delay(500)
+    if (action.kind === 'linkDetect' || action.kind === 'linkedView' || action.kind === 'linkedAddMissing' || action.kind === 'linkedUndo') {
+      if (action.kind === 'linkDetect') {
+        const { tab, view } = demoLinkedDetect(action.tabName, demoRoles)
+        return { ...(await demoBridge.getMemberSheet(guildId, false)), linkedDraft: tab, linkedView: view, message: `Li a aba "${tab.tabName}": cabeçalhos na linha ${tab.headerRow}. Confere o que vai em cada coluna e carrega em Guardar.` }
+      }
+      const tab = demoSheetSettings.linkedTabs.find((t) => t.id === action.tabId)
+      if (!tab) throw new Error('Essa aba ligada não está guardada — carrega em Guardar primeiro.')
+      const message = action.kind === 'linkedAddMissing' ? demoLinkedRun(tab, 'missing') : action.kind === 'linkedUndo' ? demoLinkedUndo(tab) : ''
+      return { ...(await demoBridge.getMemberSheet(guildId, false)), linkedView: demoLinkedView(tab), message }
+    }
+    if (action.kind === 'sync') for (const t of demoSheetSettings.linkedTabs.filter((x) => x.enabled)) demoLinkedRun(t, 'auto')
     if (action.kind === 'remove') demoRecords = demoRecords.filter((r) => r.userId !== action.userId)
     const messages: Record<string, string> = {
       sync: 'Planilha atualizada (demonstração).',
@@ -1962,14 +1976,14 @@ export const demoBridge: LisDiscordBridge = {
     const sheet =
       action.kind === 'test'
         ? {
-            title: 'Mov Call — membros',
+            title: 'Planilha Staff',
             tabs: [
-              { name: 'Todos', owner: 'mine' as const },
-              { name: 'Supervisores', owner: 'mine' as const },
-              { name: 'Rec', owner: 'theirs' as const },
+              { name: 'Mov Chat', owner: 'theirs' as const },
+              { name: 'Mov Call', owner: 'theirs' as const },
               { name: 'Passtime', owner: 'theirs' as const },
-              { name: 'Mov chat', owner: 'theirs' as const },
-              { name: 'Página2', owner: 'empty' as const },
+              { name: 'Rec & Mig', owner: 'theirs' as const },
+              { name: 'Suporte', owner: 'theirs' as const },
+              { name: 'Todos', owner: 'mine' as const },
             ],
           }
         : undefined
